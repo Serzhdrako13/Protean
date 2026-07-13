@@ -1,0 +1,50 @@
+{
+  "backToHome": "Home",
+  "sections": {
+    "howItWorks": {
+      "title": "How it works",
+      "body": "The panel manages VPN on remote hosts over SSH — the panel itself does not run any VPN. Add a server (address + SSH access) on the \"Servers\" page, then go to its \"Providers\" and install the VPN you need (WireGuard / AmneziaWG / OpenVPN / IKEv2 / Xray) on that server."
+    },
+    "quickStart": {
+      "title": "Quick start",
+      "step1": "1. \"Servers\" → \"Add server\" (address + SSH user + one-time password — the panel will prepare the host itself).",
+      "step2": "2. In the server row → \"Install VPN\" → choose the type and install.",
+      "step3": "3. In the server row → \"Providers\" → open the installed provider.",
+      "step4": "4. On the provider's \"Overview\" tab → add a client → download the config or scan the QR code."
+    },
+    "providerTabs": {
+      "title": "Provider: the \"Overview\" and \"Settings\" tabs",
+      "overviewLabel": "Overview",
+      "overviewText": "— interface status, client list (add/disable/reissue key/QR/download config), traffic graph.",
+      "settingsLabel": "Settings",
+      "settingsText": "— things that belong to the server itself rather than to a specific client: port/address/DNS (plus extra obfuscation parameters for AmneziaWG), mesh participation and internet egress, service restart, importing an external CA (for OpenVPN/IKEv2), config backups."
+    },
+    "multipleInstances": {
+      "title": "Multiple instances on one server",
+      "body": "On a given server's \"Providers\" page you can add another VPN instance (for example, a second WireGuard interface for a different site) with the \"Add instance\" button — the software for it needs to be installed separately via \"Install VPN\" if it isn't already. IKEv2 and Xray are limited to one instance per server (a shared daemon/service on the host); WireGuard/AmneziaWG/OpenVPN have no such limit."
+    },
+    "xray": {
+      "title": "Xray",
+      "body": "A separate provider page with a set of proven strategies (Reality-VLESS, VMess-WS, Trojan, Shadowsocks-2022, VLESS-gRPC/Vision) for bypassing DPI, multi-client support, a subscription link and per-client QR code, plus relay — paste an external server's client link, and all outbound traffic from this Xray instance will go through it."
+    },
+    "menuSections": {
+      "title": "Menu sections",
+      "serversText": "— the panel's list of hosts, their providers, VPN installation.",
+      "meshLabel": "Mesh",
+      "meshText": "— a single NAT-free network between different VPN providers and site subnets.",
+      "subnetsText": "— site networks that participate in the mesh.",
+      "notificationsText": "— Telegram/Mattermost/Rocket.Chat/VoceChat/XMPP/Email about events and a periodic report.",
+      "auditText": "— log of administrator actions.",
+      "accountText": "(in the profile menu) — password change, two-factor authentication (TOTP)."
+    },
+    "dockerSameHost": {
+      "title": "Server and panel on the same machine (Docker)",
+      "body": "If the VPN is deployed on the same machine where the panel itself runs, the SSH host field cannot be set to 127.0.0.1/localhost when adding a server — inside the panel's container that address points to the container itself, not the host. You need the host machine's real LAN IP (see the hint next to the \"SSH host\" field on the \"Servers\" page)."
+    },
+    "license": {
+      "title": "License",
+      "body": "Protean is distributed under the Elastic License 2.0 — free for personal and commercial use, including deploying it inside a company for your own infrastructure. Not permitted: offering it as a hosted/managed service to third parties.",
+      "viewFull": "View the full license text"
+    }
+  }
+}

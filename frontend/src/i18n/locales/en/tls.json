@@ -1,0 +1,84 @@
+{
+  "title": "Certificates",
+  "status": {
+    "servingLabel": "Currently serving connections:",
+    "degradedTag": "does not match the selected mode \"{{mode}}\"",
+    "selfSignedExpires": "Fallback self-signed certificate valid until {{date}}"
+  },
+  "messages": {
+    "saved": "TLS settings saved",
+    "reissued": "Self-signed certificate reissued"
+  },
+  "cardTitle": "Certificate issuance method",
+  "modeField": {
+    "label": "Mode"
+  },
+  "modeOptions": {
+    "selfSigned": "Self-signed",
+    "acme": "ACME (Let's Encrypt / custom server)",
+    "manual": "Manual (own file)",
+    "proxy": "Behind reverse proxy (Traefik)"
+  },
+  "modeInfo": {
+    "self_signed": "The panel issues and renews the certificate itself. Works immediately, with no external dependencies — the browser will show \"not secure\", which is expected. Always available as a fallback, even if another mode is selected.",
+    "acme": "Automatic issuance via the ACME protocol — Let's Encrypt or any compatible server (e.g. a private step-ca). Requires a real domain pointing at this server.",
+    "manual": "Paste a certificate and key obtained by any other means (manual certbot, corporate CA, etc.) — if automatic issuance is unavailable from this network.",
+    "proxy": "TLS is terminated by an external reverse proxy (Traefik, etc.), and the panel responds over plain HTTP only to the proxy itself. Requires TRUST_PROXY enabled on the server. Switching to this mode and back only takes effect after the panel container is restarted (the HTTPS listener itself is only recreated at process start)."
+  },
+  "selfSigned": {
+    "keyAlgo": {
+      "label": "Key algorithm",
+      "tip": "From the most compatible/fastest (RSA-2048) to the strictest (ECDSA P-384). ECDSA P-256 is a sensible default."
+    },
+    "keyAlgoOptions": {
+      "rsa2048": "RSA 2048 (compatibility)",
+      "rsa4096": "RSA 4096 (stricter, slower)",
+      "ecdsaP256": "ECDSA P-256 (recommended)",
+      "ecdsaP384": "ECDSA P-384 (strictest)"
+    },
+    "validityDays": "Validity period (days)",
+    "renewBefore": {
+      "label": "Reissue ahead of time (days before expiry)",
+      "tip": "How many days before expiry the panel will automatically reissue the certificate. You can set a fixed number of days or a fraction of the validity period — if the validity period is short, use a smaller value."
+    },
+    "sans": {
+      "label": "Certificate domains/IPs (comma-separated)",
+      "tip": "How you actually access the panel — a domain and/or an IP. Empty = localhost/127.0.0.1/::1 (only suitable for testing on this same machine)."
+    },
+    "reissueButton": "Reissue now"
+  },
+  "acme": {
+    "presetLabel": "ACME server preset",
+    "presets": {
+      "letsEncryptProd": "Let's Encrypt (production)",
+      "letsEncryptStaging": "Let's Encrypt (staging — for testing, no limits on real certificates)",
+      "custom": "Custom ACME server (step-ca, etc.)"
+    },
+    "directoryUrl": {
+      "label": "Directory URL",
+      "tip": "The ACME server address. For a private server (e.g. step-ca), specify its directory endpoint explicitly."
+    },
+    "domains": "Domains (comma-separated)",
+    "email": "Email (for expiry notifications from the CA)",
+    "challenge": {
+      "label": "Domain verification method",
+      "tip": "TLS-ALPN-01 — doesn't require an open port 80, works right through the same port as the panel. HTTP-01 — the classic method, but requires an externally reachable port 80."
+    },
+    "challengeOptions": {
+      "tlsAlpn01": "TLS-ALPN-01 (recommended, no port 80)",
+      "http01": "HTTP-01 (requires port 80)"
+    },
+    "trustRoot": {
+      "label": "Trusted root certificate (optional)",
+      "tip": "Only needed for a private ACME server with its own root that isn't part of the system's trusted CAs (typical for step-ca)."
+    }
+  },
+  "manual": {
+    "alreadyUploaded": "Certificate and key already uploaded",
+    "certPem": "Certificate (PEM, including chain)",
+    "keyPem": {
+      "label": "Private key (PEM)",
+      "tip": "Leave empty to keep the already uploaded key and replace only the certificate — otherwise you must provide the full pair (the key is not shown again after saving)."
+    }
+  }
+}

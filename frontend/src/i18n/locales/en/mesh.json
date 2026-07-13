@@ -1,0 +1,31 @@
+{
+  "title": "Network (Mesh)",
+  "columns": {
+    "server": "Server",
+    "provider": "Provider",
+    "status": "Status",
+    "port": "Port",
+    "peerCount": "Clients",
+    "name": "Name",
+    "address": "Address"
+  },
+  "tunnelNetwork": {
+    "label": "Tunnel network",
+    "tip": "Address range of this VPN interface (e.g. 10.10.0.0/24) — part of the mesh's shared address space; must not overlap with other interfaces/subnets"
+  },
+  "forwarding": {
+    "label": "Forwarding",
+    "tip": "Allows traffic to be routed BETWEEN this VPN and the rest of the mesh (without it, this interface's clients won't see subnets/clients on other servers and providers)",
+    "enabled": "enabled",
+    "enable": "Enable"
+  },
+  "warnings": {
+    "title": "Address overlaps"
+  },
+  "cards": {
+    "interfaces": "Interfaces",
+    "subnets": "Site subnets",
+    "peers": "Network clients"
+  },
+  "noSubnets": "No subnets"
+}

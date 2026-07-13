@@ -1,0 +1,28 @@
+{
+  "backToHome": "Back to home",
+  "title": "Account",
+  "userCard": {
+    "title": "User: {{username}}"
+  },
+  "password": {
+    "currentPassword": "Current password",
+    "newPassword": "New password",
+    "changeButton": "Change password",
+    "changeSuccess": "Password changed",
+    "expired": "Your password has expired -- change it to keep using the panel."
+  },
+  "totp": {
+    "cardTitle": "Two-factor authentication (TOTP)",
+    "status": "Status:",
+    "enabled": "enabled",
+    "disabled": "disabled",
+    "enableButton": "Enable 2FA",
+    "disableButton": "Disable 2FA",
+    "enableModalTitle": "Enable 2FA",
+    "disableModalTitle": "Disable 2FA",
+    "codeLabel": "Code from authenticator app",
+    "passwordLabel": "Password",
+    "enableSuccess": "Two-factor authentication enabled",
+    "disableSuccess": "Two-factor authentication disabled"
+  }
+}

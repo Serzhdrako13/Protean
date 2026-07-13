@@ -1,0 +1,22 @@
+{
+  "title": "История подключений",
+  "description": "Постоянный журнал подключений/отключений клиентов — в отличие от live-уведомлений, эти записи не исчезают и не зависят от настроек оповещений.",
+  "filters": {
+    "providerPlaceholder": "Провайдер (server:instance)",
+    "devicePlaceholder": "Поиск по устройству",
+    "hours_one": "{{count}} час",
+    "hours_few": "{{count}} часа",
+    "hours_many": "{{count}} часов",
+    "hours_other": "{{count}} часа"
+  },
+  "columns": {
+    "ts": "Время",
+    "provider": "Провайдер",
+    "peer": "Клиент",
+    "event": "Событие"
+  },
+  "event": {
+    "connect": "подключение",
+    "disconnect": "отключение"
+  }
+}

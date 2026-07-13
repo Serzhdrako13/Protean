@@ -1,0 +1,26 @@
+{
+  "title": "Портал",
+  "description": "Все уже выданные подключения по всем серверам, включая сети, скрытые от пользовательского портала.",
+  "columns": {
+    "username": "Пользователь",
+    "device": "Устройство",
+    "provider": "Провайдер",
+    "server": "Сервер",
+    "visibility": "Видимость",
+    "online": "Онлайн"
+  },
+  "visibility": {
+    "visible": "в портале",
+    "hidden": "скрыта"
+  },
+  "onlineStatus": {
+    "online": "● онлайн",
+    "offline": "● офлайн"
+  },
+  "actions": {
+    "qr": "QR"
+  },
+  "qrModal": {
+    "title": "QR-код"
+  }
+}

@@ -1,0 +1,16 @@
+{
+  "modalTitle": "How to connect",
+  "selectOs": "Operating system",
+  "linuxVariant": "Method (Linux)",
+  "linuxNm": "NetworkManager (GUI)",
+  "linuxCli": "Command line",
+  "openSite": "Open website",
+  "loadError": "Failed to load instructions",
+  "os": {
+    "windows": "Windows",
+    "macos": "macOS",
+    "linux": "Linux",
+    "ios": "iOS",
+    "android": "Android"
+  }
+}

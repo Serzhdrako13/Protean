@@ -1,0 +1,134 @@
+{
+  "wireguard": {
+    "app": "WireGuard",
+    "appUrl": "https://www.wireguard.com/install/",
+    "appNote": "Official WireGuard app.",
+    "windows": [
+      "Download WireGuard for Windows from https://www.wireguard.com/install/ and install it.",
+      "In the app, click \"Add Tunnel\" → \"Import from file\".",
+      "Pick the downloaded configuration file (.conf)."
+    ],
+    "macos": [
+      "Install WireGuard from the Mac App Store (or https://www.wireguard.com/install/).",
+      "\"Import tunnel(s) from file\" → pick the downloaded .conf."
+    ],
+    "linux_nm": [
+      "NetworkManager 1.16 and newer supports WireGuard natively.",
+      "GNOME: Settings → Network → \"+\" → \"Import from file\".",
+      "KDE Plasma: Connection settings (or nm-applet) → \"Add VPN\" → \"Import from file\".",
+      "Pick the downloaded .conf."
+    ],
+    "linux_cli": [
+      "Install the wireguard-tools package (apt/dnf/pacman: wireguard-tools).",
+      "Place the downloaded .conf at /etc/wireguard/wg0.conf.",
+      "One-off start: sudo wg-quick up wg0.",
+      "Start on boot: sudo systemctl enable --now wg-quick@wg0."
+    ],
+    "ios": [
+      "Install WireGuard from the App Store.",
+      "Tap \"+\" → \"Create from QR code\" and scan the QR (from another screen).",
+      "Or \"+\" → \"Import from file/archive\" if the config was downloaded as a file."
+    ],
+    "android": [
+      "Install WireGuard from Google Play (or F-Droid).",
+      "Tap \"+\" → scan the QR code, or import the .conf file."
+    ]
+  },
+  "amneziawg": {
+    "app": "Amnezia VPN",
+    "appUrl": "https://amnezia.org/",
+    "appNote": "Important: the regular WireGuard app does not understand the obfuscation fields (Jc/Jmin/Jmax/S1/S2/H1-4) — you need an AmneziaWG-aware client: the Amnezia VPN app (amnezia.org) or the amneziawg-tools package on Linux.",
+    "windows": [
+      "Install Amnezia VPN from https://amnezia.org/.",
+      "Import the downloaded .conf — the obfuscation fields come along automatically."
+    ],
+    "macos": [
+      "Install Amnezia VPN from https://amnezia.org/.",
+      "Import the downloaded .conf."
+    ],
+    "linux_nm": [
+      "NetworkManager doesn't natively understand AmneziaWG's obfuscation fields.",
+      "Use the Amnezia VPN app if a build exists for your distro.",
+      "Otherwise switch to the \"Command line\" tab."
+    ],
+    "linux_cli": [
+      "Install amneziawg-tools — a wireguard-tools fork with obfuscation support.",
+      "Place the downloaded .conf at /etc/amnezia/amneziawg/awg0.conf.",
+      "One-off start: sudo awg-quick up awg0.",
+      "Start on boot: sudo systemctl enable --now awg-quick@awg0."
+    ],
+    "ios": [
+      "Install Amnezia VPN from the App Store.",
+      "Import the downloaded config."
+    ],
+    "android": [
+      "Install Amnezia VPN from Google Play.",
+      "Import the downloaded config."
+    ]
+  },
+  "openvpn": {
+    "app": "OpenVPN Connect",
+    "appUrl": "https://openvpn.net/client/",
+    "appNote": "Official client — works the same way on every platform.",
+    "windows": [
+      "Download OpenVPN Connect from https://openvpn.net/client/ and install it.",
+      "Import the downloaded .ovpn (Import Profile → From file), or just open the file directly and the app will pick it up."
+    ],
+    "macos": [
+      "Download OpenVPN Connect from https://openvpn.net/client/ (or the Mac App Store).",
+      "Import the downloaded .ovpn."
+    ],
+    "linux_nm": [
+      "Make sure the network-manager-openvpn plugin is installed (usually already present on Ubuntu/Fedora).",
+      "Network Settings → \"Add VPN\" → \"Import a saved VPN configuration\".",
+      "Pick the downloaded .ovpn."
+    ],
+    "linux_cli": [
+      "Install the openvpn package.",
+      "One-off: sudo openvpn --config client.ovpn.",
+      "As a service: place the file at /etc/openvpn/client/client.conf, then sudo systemctl enable --now openvpn-client@client."
+    ],
+    "ios": [
+      "Download OpenVPN Connect from the App Store.",
+      "Open the downloaded .ovpn file (e.g. shared from Mail/Files) — the app will offer to import it."
+    ],
+    "android": [
+      "Download OpenVPN Connect from Google Play.",
+      "Open the downloaded .ovpn file — the app will offer to import it."
+    ]
+  },
+  "ikev2": {
+    "app": "Built-in OS VPN client",
+    "appUrl": "",
+    "appNote": "Windows/macOS/iOS use the system's own VPN client — no third-party app needed, but the issued .p12 certificate must be installed first. Android/Linux need a separate app.",
+    "windows": [
+      "Double-click the downloaded .p12 file and install the certificate (enter the issued password).",
+      "Settings → Network → VPN → \"Add a VPN connection\".",
+      "Connection type — IKEv2, enter the server address."
+    ],
+    "macos": [
+      "Easiest: open the provided .mobileconfig — the VPN profile configures itself automatically, including the certificate.",
+      "Manually: System Settings → Network → \"+\" → type IKEv2."
+    ],
+    "linux_nm": [
+      "Install the network-manager-strongswan plugin if available for your distro.",
+      "Network Settings → \"Add VPN\" → strongSwan → enter the server and import the .p12.",
+      "Exact steps vary by distro."
+    ],
+    "linux_cli": [
+      "Install strongSwan (the strongswan package).",
+      "Configure /etc/ipsec.conf and /etc/ipsec.secrets manually, importing the .p12.",
+      "Steps vary by strongSwan version — see strongswan.org's documentation."
+    ],
+    "ios": [
+      "Open the provided .mobileconfig directly on the device (via Mail/AirDrop/Files).",
+      "Settings will show \"Profile Downloaded\" → tap \"Install\".",
+      "The certificate and VPN profile are configured automatically."
+    ],
+    "android": [
+      "Install the strongSwan VPN Client from Google Play.",
+      "In the app, import the .p12 certificate (with the issued password).",
+      "Add a VPN profile with the server address."
+    ]
+  }
+}

@@ -1,0 +1,124 @@
+{
+  "ranges": {
+    "1h": "1h",
+    "6h": "6h",
+    "24h": "24h",
+    "3d": "3d"
+  },
+  "time": {
+    "never": "never",
+    "secondsAgo": "{{n}}s ago",
+    "minutesAgo": "{{n}}m ago",
+    "hoursAgo": "{{n}}h ago"
+  },
+  "messages": {
+    "serverConfigured": "Server configured"
+  },
+  "notFound": "Provider not found",
+  "backToProviders": "Back to server's providers",
+  "notImplemented": "This provider type is not implemented yet.",
+  "needsSetup": "Server isn't set up yet: CA, certificates and config need to be generated.",
+  "interfaceDown": "Interface is down.",
+  "setupServerButton": "Set up server",
+  "tabs": {
+    "overview": "Overview",
+    "settings": "Settings"
+  },
+  "table": {
+    "searchPlaceholder": "Search by client name",
+    "columns": {
+      "name": "Name",
+      "status": "Status",
+      "endpoint": {
+        "label": "Endpoint",
+        "tip": "Network address (IP:port) the client actually connected from last time"
+      },
+      "handshake": {
+        "label": "Handshake",
+        "tip": "When the client last exchanged keys with the server — essentially, the last time it was seen"
+      },
+      "traffic": "Rx / Tx",
+      "owner": {
+        "label": "Owner",
+        "tip": "Portal user this device is assigned to — they'll be able to download the config/QR and see it in self-service (/portal). Only accounts with the \"user\" role can be assigned."
+      },
+      "enabled": "Enabled"
+    },
+    "siteTag": "🖧 site",
+    "status": {
+      "disabled": "⛔ disabled",
+      "online": "🟢 online",
+      "offline": "⚪ offline"
+    },
+    "owner": {
+      "unassigned": "unassigned",
+      "groupUsers": "Users",
+      "groupNodes": "Nodes"
+    },
+    "enableSwitch": {
+      "enableTitle": "Enable client",
+      "disableTitle": "Disable client (can be re-enabled)"
+    },
+    "actions": {
+      "confirmDeleteDisabled": "Delete disabled client {{name}}?",
+      "deletePermanently": "Delete permanently",
+      "downloadConfig": "Download config file",
+      "showQr": "Show config QR code",
+      "manualSetup": "Manual setup (view config fields)",
+      "confirmRotate": "Reissue keys for {{name}}? The client's current config will stop working.",
+      "rotateKeys": "Reissue keys (e.g. if the client was added outside the panel)",
+      "muteOff": "Notifications are off — click to turn on",
+      "muteOn": "Notifications are on — click to mute",
+      "confirmDelete": "Delete client {{name}}?"
+    }
+  },
+  "banners": {
+    "pendingApproved": {
+      "message": "User \"{{username}}\" was approved, but the client hasn't been created yet",
+      "description": "It couldn't be created automatically (or this provider type only supports manual setup) — create the client below and the panel will link it to the user.",
+      "createButton": "Create client"
+    }
+  },
+  "overview": {
+    "descriptions": {
+      "endpoint": {
+        "label": "Endpoint",
+        "tip": "Server address (host:port) written into the client config"
+      },
+      "publicKey": {
+        "label": "Public key",
+        "tip": "Server's public key — the client uses it to verify it's connecting to this exact server"
+      },
+      "address": "Address",
+      "peersOnline": "Clients online"
+    },
+    "trafficCardTitle": "Traffic",
+    "topClientsCardTitle": "Top clients by traffic",
+    "addClientButton": "Add client"
+  },
+  "modals": {
+    "form": {
+      "createTitle": "New client",
+      "editTitle": "Edit {{name}}",
+      "fields": {
+        "name": "Name",
+        "clientAddress": "Client address (IP/CIDR)",
+        "keepalive": "Persistent keepalive (sec)",
+        "expireDays": "Expires in (days, 0 = never)",
+        "category": "Category",
+        "ownPublicKey": "Own public key (optional)"
+      },
+      "categoryOptions": {
+        "client": "Client",
+        "site": "Site (mesh)"
+      },
+      "ownPublicKeyPlaceholder": "leave empty for the panel to generate a key"
+    },
+    "qr": {
+      "title": "QR — {{name}}"
+    },
+    "manualSetup": {
+      "title": "Manual setup — {{name}}"
+    }
+  }
+}

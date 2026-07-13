@@ -1,0 +1,23 @@
+{
+  "usernamePlaceholder": "Имя пользователя",
+  "usernameRequired": "Введите имя пользователя",
+  "passwordPlaceholder": "Пароль",
+  "passwordRequired": "Введите пароль",
+  "totpPlaceholder": "Код из приложения 2FA",
+  "totpRequired": "Введите код 2FA",
+  "loginError": "Ошибка входа",
+  "loginForm": {
+    "usernamePlaceholder": "Имя пользователя",
+    "usernameRequired": "Введите имя пользователя",
+    "passwordPlaceholder": "Пароль",
+    "passwordRequired": "Введите пароль",
+    "totpPlaceholder": "Код из приложения 2FA",
+    "totpRequired": "Введите код 2FA",
+    "loginError": "Ошибка входа",
+    "oidcButton": "Войти через OIDC",
+    "oidcError": "Не удалось войти через OIDC. Попробуйте снова или другим способом.",
+    "methodLocal": "Пароль",
+    "methodLdap": "LDAP",
+    "methodOidc": "OIDC"
+  }
+}

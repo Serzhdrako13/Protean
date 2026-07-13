@@ -1,0 +1,26 @@
+{
+  "title": "Portal",
+  "description": "All connections already issued across every server, including networks hidden from the self-service portal.",
+  "columns": {
+    "username": "User",
+    "device": "Device",
+    "provider": "Provider",
+    "server": "Server",
+    "visibility": "Visibility",
+    "online": "Online"
+  },
+  "visibility": {
+    "visible": "in portal",
+    "hidden": "hidden"
+  },
+  "onlineStatus": {
+    "online": "● online",
+    "offline": "● offline"
+  },
+  "actions": {
+    "qr": "QR"
+  },
+  "qrModal": {
+    "title": "QR code"
+  }
+}

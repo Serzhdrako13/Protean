@@ -1,0 +1,21 @@
+{
+  "title": "Subnets",
+  "addSubnet": "Add subnet",
+  "description": "Local networks of sites (offices/data centers behind a VPN client with the \"Site\" category) that should be accessible to other mesh participants without NAT. Used in the Mesh section to check for address overlaps and routing.",
+  "columns": {
+    "cidr": "CIDR",
+    "cidrTip": "Address range of the site's local network (e.g. 192.168.10.0/24) that should be visible to other mesh participants through this site's VPN gateway",
+    "label": "Label"
+  },
+  "deleteConfirm": "Delete subnet {{cidr}}?",
+  "deleteTitle": "Delete subnet",
+  "form": {
+    "cidrLabel": "CIDR",
+    "cidrPlaceholder": "10.20.0.0/24",
+    "labelLabel": "Label",
+    "labelPlaceholder": "Moscow office"
+  },
+  "messages": {
+    "created": "Subnet added"
+  }
+}

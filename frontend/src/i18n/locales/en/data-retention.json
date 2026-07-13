@@ -1,0 +1,25 @@
+{
+  "title": "Data Retention",
+  "intro": "Configure automatic cleanup of stale data, or run a cleanup manually right now. Active/in-progress data (pending requests, active bans, active sessions) is never deleted regardless of the retention period.",
+  "card": {
+    "title": "Automatic cleanup",
+    "enabled": "Enabled",
+    "days": "Retain (days)"
+  },
+  "categories": {
+    "accessRequests": "Denied access requests",
+    "accessRequestsTip": "Only requests with status \"denied\" are deleted. Pending, approved, and granted requests are never deleted.",
+    "auditLog": "Audit log",
+    "auditLogTip": "Records of admin actions.",
+    "loginAttempts": "Login attempts",
+    "loginAttemptsTip": "The login attempt log (successful and failed), used for statistics.",
+    "loginBans": "Ban history",
+    "loginBansTip": "Only already-expired bans are deleted. An active or future ban is never deleted."
+  },
+  "cleanupNow": {
+    "button": "Clean up now",
+    "confirmTitle": "Run cleanup now?",
+    "confirmContent": "This deletes denied requests, and old audit/login-attempt/ban rows per the retention periods above (regardless of the toggles), plus expired login sessions.",
+    "result": "Done: requests — {{accessRequests}}, audit — {{auditLog}}, login attempts — {{loginAttempts}}, bans — {{loginBans}}, sessions — {{sessions}}"
+  }
+}

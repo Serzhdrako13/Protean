@@ -1,0 +1,28 @@
+{
+  "backToHome": "На главную",
+  "title": "Аккаунт",
+  "userCard": {
+    "title": "Пользователь: {{username}}"
+  },
+  "password": {
+    "currentPassword": "Текущий пароль",
+    "newPassword": "Новый пароль",
+    "changeButton": "Сменить пароль",
+    "changeSuccess": "Пароль изменён",
+    "expired": "Срок действия пароля истёк — необходимо сменить его, чтобы продолжить пользоваться панелью."
+  },
+  "totp": {
+    "cardTitle": "Двухфакторная аутентификация (TOTP)",
+    "status": "Статус:",
+    "enabled": "включена",
+    "disabled": "выключена",
+    "enableButton": "Включить 2FA",
+    "disableButton": "Выключить 2FA",
+    "enableModalTitle": "Включение 2FA",
+    "disableModalTitle": "Выключить 2FA",
+    "codeLabel": "Код из приложения-аутентификатора",
+    "passwordLabel": "Пароль",
+    "enableSuccess": "Двухфакторная аутентификация включена",
+    "disableSuccess": "Двухфакторная аутентификация выключена"
+  }
+}

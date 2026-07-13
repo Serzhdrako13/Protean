@@ -1,0 +1,54 @@
+{
+  "createButton": "Create user",
+  "searchPlaceholder": "Search by username",
+  "createModalTitle": "Create user",
+  "resetModalTitle": "Reset password — {{username}}",
+  "confirmDelete": "Delete user {{username}}?",
+  "confirmDisable": "Disable account {{username}}? VPN providers will stop working for this user — all their devices will be revoked.",
+  "resetPasswordTooltip": "Reset password",
+  "fields": {
+    "username": "Username",
+    "usernamePlaceholder": "ivanov",
+    "password": "Password",
+    "newPassword": "New password",
+    "role": "Role",
+    "createdAt": "Created",
+    "status": "Active",
+    "portalAccess": "Portal access"
+  },
+  "portalAccessTip": "If disabled, the user can't log into the self-service portal, but their existing VPN devices keep working (unlike disabling the whole account).",
+  "access": {
+    "name": "Name",
+    "server": "Server",
+    "type": "Type",
+    "interface": "Interface",
+    "description": "Description",
+    "access": "Access",
+    "state": {
+      "granted": "granted",
+      "approved": "awaiting setup",
+      "pending": "user has requested this",
+      "denied": "denied",
+      "none": ""
+    }
+  },
+  "roleTip": "\"Admin\" — full access to the panel. \"User\" — self-service portal only: download your assigned configs/QR, change password.",
+  "roleTooltip": "\"User\" — self-service portal access only. \"Admin\" — full access to the panel.",
+  "roleLabels": {
+    "admin": "admin",
+    "user": "user"
+  },
+  "roleOptions": {
+    "user": "User (self-service portal)",
+    "admin": "Admin (full access)"
+  },
+  "passwordMinLength": "Minimum 8 characters",
+  "filters": {
+    "active": "Active",
+    "inactive": "Disabled"
+  },
+  "messages": {
+    "created": "User created",
+    "passwordReset": "Password reset"
+  }
+}

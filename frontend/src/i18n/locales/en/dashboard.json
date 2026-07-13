@@ -1,0 +1,54 @@
+{
+  "heading": "Dashboard",
+  "emptyServers": "No servers yet",
+  "addFirstServer": "Add first server",
+  "pollBadge": "the whole page refreshes every {{interval}}",
+  "pollTooltip": "One setting for the whole page: tiles, server list and the \"Total load\" chart below are polled at this interval. Less often means less load on the panel and on the network to managed hosts.",
+  "tiles": {
+    "serversOnline": {
+      "label": "Servers online",
+      "tooltip": "A server is considered online if at least one VPN provider installed on it is currently active (interface is up)"
+    },
+    "peersOnline": {
+      "label": "Clients online",
+      "tooltip": "A client is considered online if it had a recent handshake (for WireGuard/AmneziaWG) or has an active session"
+    },
+    "totalRx": {
+      "label": "Total received",
+      "tooltip": "Sum of traffic across all active VPN interfaces on all servers in the panel — the panel itself doesn't generate traffic, it only reads counters from the managed hosts"
+    },
+    "totalTx": {
+      "label": "Total sent",
+      "tooltip": "Sum of traffic across all active VPN interfaces on all servers in the panel"
+    }
+  },
+  "trafficCard": {
+    "title": "Total load",
+    "ranges": {
+      "1h": "1h",
+      "6h": "6h",
+      "24h": "24h",
+      "3d": "3d"
+    }
+  },
+  "noProviders": "No providers",
+  "allProvidersHidden": "All providers are offline (hidden)",
+  "hideDownProviders": "Hide offline",
+  "serverPeersSummary": "{{online}}/{{total}} clients online",
+  "serverProvidersSummary": "{{up}}/{{total}} providers active",
+  "density": {
+    "expanded": "Expanded",
+    "compact": "Compact",
+    "rowView": "View: row",
+    "tileView": "View: tile"
+  },
+  "noTrafficData": "No data",
+  "providerStatus": {
+    "up": "● UP · {{online}}/{{total}}",
+    "down": "● DOWN",
+    "confirmStop": "Stop {{label}}?",
+    "confirmStart": "Start {{label}}?",
+    "stopped": "Provider stopped",
+    "started": "Provider started"
+  }
+}

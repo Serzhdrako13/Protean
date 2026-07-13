@@ -1,0 +1,71 @@
+{
+  "title": "Login Security",
+  "passwordPolicyCard": {
+    "title": "Password policy",
+    "minLength": "Minimum length",
+    "maxAge": "Max age (days)",
+    "maxAgeTip": "0 = no forced expiry. Once expired, the panel only allows changing the password until a new one is set.",
+    "sessionTTL": "Session lifetime (hours)",
+    "sessionTTLTip": "How long a login session stays valid before the user must log in again.",
+    "requireUpper": "Uppercase letter",
+    "requireLower": "Lowercase letter",
+    "requireDigit": "Digit",
+    "requireSymbol": "Symbol"
+  },
+  "settingsCard": {
+    "title": "Brute-force protection",
+    "enabled": "Enabled",
+    "trackByUsername": "Track by username",
+    "trackByIP": "Track by IP",
+    "failThreshold": "Failure threshold",
+    "failThresholdTip": "How many consecutive wrong attempts (within the window below) trigger a ban.",
+    "countWindow": "Counting window (min)",
+    "countWindowTip": "How far back failed attempts are counted toward the ban threshold.",
+    "banBase": "Base ban duration (min)",
+    "escalationFactor": "Escalation factor",
+    "escalationFactorTip": "How much longer each ban gets if the same key re-offends shortly after the previous ban (default 2 — 5 → 10 → 20 minutes, etc).",
+    "escalationReset": "Escalation reset (min)",
+    "escalationResetTip": "If there's no new violation for this long after a ban expires, the next ban starts back at the base duration.",
+    "maxBan": "Maximum ban duration (min)"
+  },
+  "ipRulesCard": {
+    "title": "IP lists",
+    "description": "\"Deny\" rejects login attempts from that IP outright. \"Allow\" exempts an IP from brute-force checks entirely (no bans applied) -- e.g. for a trusted office network.",
+    "columns": { "ip": "IP / range", "kind": "Type", "note": "Note" },
+    "kind": { "allow": "Allow", "deny": "Deny" },
+    "confirmDelete": "Delete the rule for {{ip}}?",
+    "form": {
+      "ipRequired": "Enter an IP or range",
+      "ipPlaceholder": "203.0.113.5 or 10.0.0.0/24",
+      "notePlaceholder": "Note (optional)"
+    }
+  },
+  "bansCard": {
+    "title": "Active bans",
+    "empty": "Nobody is currently banned",
+    "columns": { "type": "Type", "value": "Value", "until": "Until", "level": "Escalation level" },
+    "type": { "username": "Username", "ip": "IP" },
+    "confirmUnban": "Lift the ban on {{value}}?",
+    "unban": "Unban",
+    "unbanned": "Ban lifted"
+  },
+  "statsCard": {
+    "title": "Statistics",
+    "total24h": "Attempts (24h)",
+    "failed24h": "Failed (24h)",
+    "topIPs": "Most failed attempts (IP)",
+    "count": "Count",
+    "recent": "Recent attempts",
+    "success": "success",
+    "failed": "failed",
+    "columns": { "ts": "Time", "username": "Username", "ip": "IP", "result": "Result" },
+    "reason": {
+      "bad_password": "wrong password",
+      "bad_totp": "wrong 2FA code",
+      "banned": "blocked (banned)",
+      "ip_denied": "blocked (deny list)",
+      "account_disabled": "account disabled",
+      "portal_access_denied": "portal access disabled"
+    }
+  }
+}

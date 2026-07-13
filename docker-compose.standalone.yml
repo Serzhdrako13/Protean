@@ -1,0 +1,100 @@
+# Self-contained "real" stack: the panel + its own Postgres, one network,
+# persistent volume. Use this to run/verify the whole project end-to-end on a
+# single machine (production-shaped, but DB bundled instead of external).
+#
+#   cp .env.standalone.example .env.standalone           # fill the 4 secrets
+#   docker compose -f docker-compose.standalone.yml --env-file .env.standalone up -d --build
+#   docker compose -f docker-compose.standalone.yml logs -f panel
+#   # open https://localhost:8080 -- self-signed by default (browser will
+#   # warn, that's expected on first boot); pick a different method
+#   # (Let's Encrypt / your own ACME server / manual / behind a reverse
+#   # proxy like Traefik) from the panel's "Сертификаты" page once logged in.
+#   docker compose -f docker-compose.standalone.yml down          # keep data
+#   docker compose -f docker-compose.standalone.yml down -v       # wipe DB volume
+#
+# VPN hosts are added in the UI (Servers page); their SSH keys are stored
+# encrypted in the DB, so the panel needs NO ssh key file at startup. The
+# container reaches VPN hosts over its normal outbound network; if a host is
+# this same machine, use host.docker.internal as its address.
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: wgpanel
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env.standalone}
+      POSTGRES_DB: wgpanel
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U wgpanel -d wgpanel"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    networks: [wgpanel]
+
+  panel:
+    build: .
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "8080:8080"
+      # Only needed if you configure ACME mode with the http-01 challenge in
+      # the panel's "Сертификаты" page (TLS-ALPN-01, the default, needs no
+      # extra port at all) -- harmless to leave mapped otherwise.
+      - "80:80"
+    environment:
+      LISTEN_ADDR: ":8080"
+      DATABASE_URL: postgres://wgpanel:${POSTGRES_PASSWORD}@postgres:5432/wgpanel?sslmode=disable
+      SESSION_SECRET: ${SESSION_SECRET:?set SESSION_SECRET (>=16 chars)}
+      SECRET_KEY: ${SECRET_KEY:?set SECRET_KEY (64 hex chars = openssl rand -hex 32)}
+      ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?set ADMIN_PASSWORD}
+      # Break-glass local admin: works via password even while "Internal"
+      # login is toggled off in the panel's Login Methods settings. Leave
+      # both unset normally; only set them temporarily to recover access,
+      # then unset and restart again to close the hole.
+      EMERGENCY_ADMIN_USERNAME: ${EMERGENCY_ADMIN_USERNAME:-}
+      EMERGENCY_ADMIN_PASSWORD: ${EMERGENCY_ADMIN_PASSWORD:-}
+      PUBLIC_HOST: ${PUBLIC_HOST:-}
+      METRICS_TOKEN: ${METRICS_TOKEN:-}
+      # TRUST_PROXY also gates X-Forwarded-Proto (is this request HTTPS?),
+      # not just X-Forwarded-For -- turn on when using "proxy" TLS mode
+      # (Traefik etc. in front) so the insecure-connection banner and
+      # audit-log IPs reflect the real client, not the proxy.
+      TRUST_PROXY: ${TRUST_PROXY:-0}
+      # Set COOKIE_INSECURE=1 only if the BROWSER itself reaches this panel
+      # over plain HTTP with no TLS anywhere in front (dev/LAN) -- normal
+      # HTTPS-to-the-browser via "proxy" mode does NOT need this, since the
+      # browser's own connection is still HTTPS even though the panel's
+      # internal listener speaks plain HTTP to the proxy.
+      COOKIE_INSECURE: ${COOKIE_INSECURE:-0}
+      LOG_FORMAT: ${LOG_FORMAT:-text}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      # No SSH_* here: servers (and their SSH keys) are managed in the UI.
+    volumes:
+      # Self-service portal's "how to connect" text (app names/links/steps
+      # per protocol+OS) -- auto-seeded with working ru/en defaults on first
+      # boot, then edit the files here directly as apps/instructions change;
+      # no rebuild/redeploy needed, the panel re-reads on every request.
+      - ./vpn-setup-content:/data/vpn-setup
+    healthcheck:
+      # distroless image: the binary self-probes /healthz over loopback.
+      test: ["CMD", "/panel", "-healthcheck"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    extra_hosts:
+      # so a VPN host that IS this machine can be reached as
+      # host.docker.internal from inside the container.
+      - "host.docker.internal:host-gateway"
+    networks: [wgpanel]
+
+volumes:
+  pgdata:
+
+networks:
+  wgpanel:

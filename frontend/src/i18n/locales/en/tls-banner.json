@@ -1,0 +1,4 @@
+{
+  "degraded": "TLS certificate problem ({{mode}}): {{error}}. The panel continues to run over HTTPS via the fallback self-signed certificate.",
+  "detailsFallback": "see the Certificates section for details"
+}

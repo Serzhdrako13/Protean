@@ -1,0 +1,292 @@
+zabbix_export:
+  version: '7.4'
+  template_groups:
+    - uuid: bd9845bb083c43ab9aea37bec48f44cb
+      name: Templates/Network
+  templates:
+    - uuid: 4f3939f4ca3e48fead601d0b9b00f78c
+      template: 'Protean by HTTP'
+      name: 'Protean by HTTP'
+      description: 'WireGuard/AmneziaWG panel (Protean) metrics via its /metrics endpoint. Set the macros, then link to the host running the panel (or a proxy in front of it).'
+      groups:
+        - name: Templates/Network
+      macros:
+        - macro: '{$PROTEAN_URL}'
+          value: 'http://127.0.0.1:8080'
+          description: 'Base URL of the panel (no trailing slash).'
+        - macro: '{$PROTEAN_TOKEN}'
+          value: ''
+          description: 'METRICS_TOKEN configured in the panel.'
+        - macro: '{$PROTEAN_INTERVAL}'
+          value: '1m'
+          description: 'Scrape interval.'
+        - macro: '{$PROTEAN_PEER_HS_MAX}'
+          value: '3600'
+          description: 'Seconds since last handshake before a peer is considered offline/stale.'
+      items:
+      - uuid: e9b23bae3fc54e749510861ef56c9c78
+        name: 'Protean: raw metrics'
+        type: HTTP_AGENT
+        key: protean.metrics
+        delay: '{$PROTEAN_INTERVAL}'
+        history: '0'
+        trends: '0'
+        value_type: TEXT
+        url: '{$PROTEAN_URL}/metrics'
+        headers:
+          - name: Authorization
+            value: 'Bearer {$PROTEAN_TOKEN}'
+        description: 'Master item: fetches the Prometheus-format exposition; all other items depend on it.'
+      - uuid: 93e32c21270b4799bf7686fb4f7e1cf1
+        name: 'Protean: up'
+        type: DEPENDENT
+        key: protean.up
+        delay: '0'
+        value_type: UNSIGNED
+        master_item:
+          key: protean.metrics
+        preprocessing:
+          - type: PROMETHEUS_PATTERN
+            parameters:
+              - 'protean_up'
+              - value
+              - ''
+      - uuid: 80338daa7963463aa667892e81388ab8
+        name: '[wireguard] interface up'
+        type: DEPENDENT
+        key: 'protean.interface_up[wireguard]'
+        delay: '0'
+        value_type: UNSIGNED
+        master_item:
+          key: protean.metrics
+        preprocessing:
+          - type: PROMETHEUS_PATTERN
+            parameters:
+              - 'protean_interface_up{provider="wireguard"}'
+              - value
+              - ''
+      - uuid: 34ef15d8935545fab1d919752b2cb680
+        name: '[wireguard] peers total'
+        type: DEPENDENT
+        key: 'protean.peers_total[wireguard]'
+        delay: '0'
+        value_type: UNSIGNED
+        master_item:
+          key: protean.metrics
+        preprocessing:
+          - type: PROMETHEUS_PATTERN
+            parameters:
+              - 'protean_peers_total{provider="wireguard"}'
+              - value
+              - ''
+      - uuid: df63f56d16784bafbfd32e0782f73a76
+        name: '[wireguard] peers online'
+        type: DEPENDENT
+        key: 'protean.peers_online[wireguard]'
+        delay: '0'
+        value_type: UNSIGNED
+        master_item:
+          key: protean.metrics
+        preprocessing:
+          - type: PROMETHEUS_PATTERN
+            parameters:
+              - 'protean_peers_online{provider="wireguard"}'
+              - value
+              - ''
+      - uuid: 3a7f92bd5d104b82b35b39e7e4d08303
+        name: '[wireguard] rx bytes'
+        type: DEPENDENT
+        key: 'protean.rx[wireguard]'
+        delay: '0'
+        value_type: UNSIGNED
+        units: 'B'
+        master_item:
+          key: protean.metrics
+        preprocessing:
+          - type: PROMETHEUS_PATTERN
+            parameters:
+              - 'protean_rx_bytes_total{provider="wireguard"}'
+              - value
+              - ''
+      - uuid: 6c23b339bfde41e9b3f5463b67d1096e
+        name: '[wireguard] tx bytes'
+        type: DEPENDENT
+        key: 'protean.tx[wireguard]'
+        delay: '0'
+        value_type: UNSIGNED
+        units: 'B'
+        master_item:
+          key: protean.metrics
+        preprocessing:
+          - type: PROMETHEUS_PATTERN
+            parameters:
+              - 'protean_tx_bytes_total{provider="wireguard"}'
+              - value
+              - ''
+      - uuid: 0e0db531ab32445581258f07f9c823f0
+        name: '[amneziawg] interface up'
+        type: DEPENDENT
+        key: 'protean.interface_up[amneziawg]'
+        delay: '0'
+        value_type: UNSIGNED
+        master_item:
+          key: protean.metrics
+        preprocessing:
+          - type: PROMETHEUS_PATTERN
+            parameters:
+              - 'protean_interface_up{provider="amneziawg"}'
+              - value
+              - ''
+      - uuid: 05f421fd0b5f42388e7c06351343c703
+        name: '[amneziawg] peers total'
+        type: DEPENDENT
+        key: 'protean.peers_total[amneziawg]'
+        delay: '0'
+        value_type: UNSIGNED
+        master_item:
+          key: protean.metrics
+        preprocessing:
+          - type: PROMETHEUS_PATTERN
+            parameters:
+              - 'protean_peers_total{provider="amneziawg"}'
+              - value
+              - ''
+      - uuid: 409c4b2f8f0c4be2afa185a0be046dd1
+        name: '[amneziawg] peers online'
+        type: DEPENDENT
+        key: 'protean.peers_online[amneziawg]'
+        delay: '0'
+        value_type: UNSIGNED
+        master_item:
+          key: protean.metrics
+        preprocessing:
+          - type: PROMETHEUS_PATTERN
+            parameters:
+              - 'protean_peers_online{provider="amneziawg"}'
+              - value
+              - ''
+      - uuid: a7ca5c77afaa47d7a40a5f60f62a9cf8
+        name: '[amneziawg] rx bytes'
+        type: DEPENDENT
+        key: 'protean.rx[amneziawg]'
+        delay: '0'
+        value_type: UNSIGNED
+        units: 'B'
+        master_item:
+          key: protean.metrics
+        preprocessing:
+          - type: PROMETHEUS_PATTERN
+            parameters:
+              - 'protean_rx_bytes_total{provider="amneziawg"}'
+              - value
+              - ''
+      - uuid: 255ea9fbdf614a34a7df06010e4b20b1
+        name: '[amneziawg] tx bytes'
+        type: DEPENDENT
+        key: 'protean.tx[amneziawg]'
+        delay: '0'
+        value_type: UNSIGNED
+        units: 'B'
+        master_item:
+          key: protean.metrics
+        preprocessing:
+          - type: PROMETHEUS_PATTERN
+            parameters:
+              - 'protean_tx_bytes_total{provider="amneziawg"}'
+              - value
+              - ''
+      discovery_rules:
+        - uuid: 0ac94f75e06a4fcebd1988985e007fc4
+          name: 'Peer discovery'
+          type: DEPENDENT
+          key: protean.peer.discovery
+          delay: '0'
+          master_item:
+            key: protean.metrics
+          preprocessing:
+            - type: PROMETHEUS_TO_JSON
+              parameters:
+                - 'protean_peer_online'
+          lld_macro_paths:
+            - lld_macro: '{#PEER}'
+              path: '$.labels.peer'
+            - lld_macro: '{#PROVIDER}'
+              path: '$.labels.provider'
+          item_prototypes:
+            - uuid: c4143d3dd6254d3db87d85c1c79c65e4
+              name: 'Peer [{#PROVIDER}/{#PEER}] online'
+              type: DEPENDENT
+              key: 'protean.peer.online[{#PROVIDER},{#PEER}]'
+              delay: '0'
+              value_type: UNSIGNED
+              master_item:
+                key: protean.metrics
+              preprocessing:
+                - type: PROMETHEUS_PATTERN
+                  parameters:
+                    - 'protean_peer_online{provider="{#PROVIDER}",peer="{#PEER}"}'
+                    - value
+                    - ''
+            - uuid: 92bc46824ec044a7b1211692157b56e4
+              name: 'Peer [{#PROVIDER}/{#PEER}] last handshake age'
+              type: DEPENDENT
+              key: 'protean.peer.handshake[{#PROVIDER},{#PEER}]'
+              delay: '0'
+              value_type: FLOAT
+              units: s
+              master_item:
+                key: protean.metrics
+              preprocessing:
+                - type: PROMETHEUS_PATTERN
+                  parameters:
+                    - 'protean_peer_last_handshake_seconds{provider="{#PROVIDER}",peer="{#PEER}"}'
+                    - value
+                    - ''
+            - uuid: 7a4c9001b3c94d6189426837958d81e0
+              name: 'Peer [{#PROVIDER}/{#PEER}] rx bytes'
+              type: DEPENDENT
+              key: 'protean.peer.rx[{#PROVIDER},{#PEER}]'
+              delay: '0'
+              value_type: UNSIGNED
+              units: B
+              master_item:
+                key: protean.metrics
+              preprocessing:
+                - type: PROMETHEUS_PATTERN
+                  parameters:
+                    - 'protean_peer_rx_bytes{provider="{#PROVIDER}",peer="{#PEER}"}'
+                    - value
+                    - ''
+            - uuid: 95f803a6856d4cff90eb5693af4519a5
+              name: 'Peer [{#PROVIDER}/{#PEER}] tx bytes'
+              type: DEPENDENT
+              key: 'protean.peer.tx[{#PROVIDER},{#PEER}]'
+              delay: '0'
+              value_type: UNSIGNED
+              units: B
+              master_item:
+                key: protean.metrics
+              preprocessing:
+                - type: PROMETHEUS_PATTERN
+                  parameters:
+                    - 'protean_peer_tx_bytes{provider="{#PROVIDER}",peer="{#PEER}"}'
+                    - value
+                    - ''
+          trigger_prototypes:
+            - uuid: 62474281cc144b45b62bd9a4887c7083
+              expression: 'last(/Protean by HTTP/protean.peer.online[{#PROVIDER},{#PEER}])=0'
+              name: 'Peer [{#PROVIDER}/{#PEER}] is offline'
+              priority: WARNING
+      triggers:
+        - uuid: 7d444f90ec1643de8d17c979061d27e0
+          expression: 'last(/Protean by HTTP/protean.interface_up[wireguard])=0'
+          name: 'WireGuard interface is down'
+          priority: HIGH
+        - uuid: 5ae7df8ff02040c580e7d8ad71e1e675
+          expression: 'last(/Protean by HTTP/protean.interface_up[amneziawg])=0'
+          name: 'AmneziaWG interface is down'
+          priority: AVERAGE
+        - uuid: 3bafb052544f41739e70e39bc537a328
+          expression: 'nodata(/Protean by HTTP/protean.metrics,10m)=1'
+          name: 'Protean metrics not received for 10m'
+          priority: WARNING

@@ -1,0 +1,82 @@
+{
+  "appName": "Protean",
+  "controlPanelTag": "Панель управления",
+  "passwordPolicy": {
+    "hint": "Требования к паролю",
+    "minLength": "минимум {{n}} символов",
+    "upper": "заглавная буква",
+    "lower": "строчная буква",
+    "digit": "цифра",
+    "symbol": "символ",
+    "confirmPassword": "Подтверждение пароля",
+    "confirmRequired": "Подтвердите пароль",
+    "confirmMismatch": "Пароли не совпадают",
+    "missing": "Пароль не соответствует требованиям: {{list}}"
+  },
+  "actions": {
+    "save": "Сохранить",
+    "saved": "Сохранено",
+    "cancel": "Отмена",
+    "delete": "Удалить",
+    "edit": "Изменить",
+    "create": "Создать",
+    "add": "Добавить",
+    "testConnection": "Проверить подключение",
+    "close": "Закрыть",
+    "back": "Назад",
+    "confirm": "Подтвердить",
+    "download": "Скачать",
+    "restart": "Перезапустить",
+    "retry": "Повторить",
+    "approve": "Одобрить",
+    "deny": "Отказать",
+    "logout": "Выйти",
+    "login": "Войти",
+    "search": "Поиск"
+  },
+  "status": {
+    "loading": "Загрузка…",
+    "online": "онлайн",
+    "offline": "офлайн",
+    "enabled": "включено",
+    "disabled": "отключено",
+    "yes": "Да",
+    "unknown": "неизвестно"
+  },
+  "errors": {
+    "generic": "Что-то пошло не так",
+    "loadFailed": "Не удалось загрузить данные"
+  },
+  "nav": {
+    "groups": {
+      "users": "Пользователи",
+      "logs": "Логи",
+      "settings": "Настройки"
+    },
+    "dashboard": "Панель",
+    "servers": "Узлы VPN",
+    "nodes": "Клиенты",
+    "subnets": "Подсети",
+    "notifications": "Уведомления",
+    "audit": "Аудит",
+    "connectionHistory": "Подключения",
+    "users": "Пользователи",
+    "accessRequests": "Запросы",
+    "adminPortal": "Портал",
+    "tls": "Сертификаты",
+    "loginSecurity": "Безопасность",
+    "authMethods": "Способы входа",
+    "dataRetention": "Автоочистка",
+    "account": "Аккаунт",
+    "help": "Справка",
+    "selfServicePortal": "Портал самообслуживания",
+    "theme": "Тема",
+    "lightTheme": "Светлая тема",
+    "darkTheme": "Тёмная тема",
+    "language": "Язык"
+  },
+  "notFound": {
+    "subtitle": "Страница не найдена",
+    "backHome": "На главную"
+  }
+}

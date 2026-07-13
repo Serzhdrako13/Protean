@@ -1,0 +1,87 @@
+{
+  "title": "Providers",
+  "searchPlaceholder": "Search by name or interface",
+  "hideDownProviders": "Hide offline",
+  "actions": {
+    "addInstance": "Add instance",
+    "installVpn": "Install VPN",
+    "checkInstall": "Check and continue",
+    "retryInstall": "Retry install",
+    "removeFromPanel": "Remove from panel"
+  },
+  "tooltips": {
+    "backToServers": "Back to server list",
+    "addInstance": "Register another VPN instance on this server (e.g. a second WireGuard interface for a different site)",
+    "installVpn": "Install a new VPN on this server",
+    "editLabel": "Set a friendly name for the self-service portal (e.g. \"Germany\")",
+    "editDescription": "Note for portal users — what this VPN is for (e.g. \"home network, egress blocked\")",
+    "removeConfirmTitle": "Remove \"{{label}}\" from the panel?",
+    "removeConfirmDescription": "The software on the host is not removed, it just stops being managed by the panel.",
+    "confirmStop": "Stop the \"{{label}}\" service? All current connections to this VPN will drop.",
+    "confirmStart": "Start the \"{{label}}\" service?"
+  },
+  "columns": {
+    "name": "Name",
+    "interface": "Interface",
+    "type": "Type",
+    "status": {
+      "label": "Status",
+      "tip": "UP means the VPN interface is installed and up on the host; the number is how many clients are currently online out of the total configured"
+    },
+    "traffic": "Traffic",
+    "description": "Description",
+    "portalVisible": {
+      "label": "Visible to users",
+      "tip": "While disabled, this instance isn't visible in the self-service portal at all — a user won't even be able to request access to it. Enable it to show it in the portal (greyed out until access is approved)."
+    }
+  },
+  "messages": {
+    "labelSaved": "Name saved",
+    "descriptionSaved": "Description saved",
+    "instanceAdded": "Instance added",
+    "instanceRemoved": "Instance removed from panel",
+    "serviceStopped": "Service stopped",
+    "serviceStarted": "Service started",
+    "setupDone": "Provider set up"
+  },
+  "modals": {
+    "add": {
+      "checkTitle": "Choose VPN type",
+      "checkDescription": "First we'll check (and install if needed) the required software on this server -- only after that can the rest of the settings be entered. This way a provider never sits in the list half-configured.",
+      "title": "Add VPN instance",
+      "description": "Software already checked/installed. Fill in the settings -- saving brings the provider up on the server right away."
+    },
+    "relabel": {
+      "title": "Friendly name",
+      "description": "Shown to self-service portal users instead of the instance's technical name. Leave empty to fall back to the technical name."
+    },
+    "redescribe": {
+      "title": "Portal description",
+      "description": "A short note about what this VPN is for — e.g. \"home network, internet egress blocked\", \"backup slow connection\", \"bypasses blocks, not part of the internal network\". Shown to portal users next to the name. Leave empty to show no note."
+    }
+  },
+  "form": {
+    "type": "Type",
+    "typePlaceholder": "Select type",
+    "localName": "Instance name",
+    "localNamePattern": "lowercase, must start with a letter",
+    "label": "Friendly name (for the self-service portal)",
+    "labelTooltip": "Shown to portal users instead of the instance's technical name — e.g. \"Germany\" instead of \"wg1\". Can be set later.",
+    "labelPlaceholder": "Germany",
+    "relabelLabel": "Friendly name",
+    "descriptionLabel": "Portal description",
+    "descriptionPlaceholder": "E.g.: home network, internet egress blocked",
+    "port": "Port",
+    "protocol": "Protocol",
+    "serverNet": "Server network",
+    "mask": "Mask",
+    "pool": "Address pool",
+    "dns": "DNS",
+    "address": "Interface address",
+    "addressTooltip": "This VPN interface's address and subnet, e.g. 10.10.0.1/24 -- required, the interface won't come up without it. Can be changed later on the Settings tab.",
+    "addressRequired": "Enter the interface address",
+    "wgPortTooltip": "The port this interface will listen on. Empty = WireGuard picks a random port itself. Must be free on this server.",
+    "mtu": "MTU",
+    "mssfix": "MSS fix"
+  }
+}

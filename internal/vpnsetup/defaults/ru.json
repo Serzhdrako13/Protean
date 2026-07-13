@@ -1,0 +1,134 @@
+{
+  "wireguard": {
+    "app": "WireGuard",
+    "appUrl": "https://www.wireguard.com/install/",
+    "appNote": "Официальное приложение WireGuard.",
+    "windows": [
+      "Скачайте WireGuard for Windows с https://www.wireguard.com/install/ и установите.",
+      "В приложении нажмите «Добавить туннель» → «Импорт из файла».",
+      "Выберите скачанный файл конфигурации (.conf)."
+    ],
+    "macos": [
+      "Установите WireGuard из Mac App Store (или https://www.wireguard.com/install/).",
+      "«Import tunnel(s) from file» → выберите скачанный .conf."
+    ],
+    "linux_nm": [
+      "NetworkManager версии 1.16 и новее поддерживает WireGuard нативно.",
+      "GNOME: Параметры → Сеть → «+» → «Импортировать из файла».",
+      "KDE Plasma: Настройки соединений (или nm-applet) → «Добавить VPN» → «Импортировать из файла».",
+      "Выберите скачанный .conf."
+    ],
+    "linux_cli": [
+      "Установите пакет wireguard-tools (apt/dnf/pacman: wireguard-tools).",
+      "Положите скачанный .conf в /etc/wireguard/wg0.conf.",
+      "Запуск разово: sudo wg-quick up wg0.",
+      "Запуск при загрузке: sudo systemctl enable --now wg-quick@wg0."
+    ],
+    "ios": [
+      "Установите WireGuard из App Store.",
+      "Нажмите «+» → «Create from QR code» и отсканируйте QR (с другого экрана).",
+      "Либо «+» → «Import from file/archive», если конфиг скачан как файл."
+    ],
+    "android": [
+      "Установите WireGuard из Google Play (или F-Droid).",
+      "Нажмите «+» → отсканируйте QR-код, либо импортируйте файл .conf."
+    ]
+  },
+  "amneziawg": {
+    "app": "Amnezia VPN",
+    "appUrl": "https://amnezia.org/",
+    "appNote": "Важно: обычное приложение WireGuard не понимает параметры обфускации (Jc/Jmin/Jmax/S1/S2/H1-4) — нужен клиент с поддержкой AmneziaWG: приложение Amnezia VPN (amnezia.org) либо пакет amneziawg-tools на Linux.",
+    "windows": [
+      "Установите Amnezia VPN с https://amnezia.org/.",
+      "Импортируйте скачанный .conf — поля обфускации подхватятся автоматически."
+    ],
+    "macos": [
+      "Установите Amnezia VPN с https://amnezia.org/.",
+      "Импортируйте скачанный .conf."
+    ],
+    "linux_nm": [
+      "NetworkManager не умеет поля обфускации AmneziaWG нативно.",
+      "Используйте приложение Amnezia VPN, если для вашего дистрибутива есть сборка.",
+      "Либо перейдите на вкладку «Командная строка»."
+    ],
+    "linux_cli": [
+      "Установите amneziawg-tools — форк wireguard-tools с поддержкой обфускации.",
+      "Положите скачанный .conf в /etc/amnezia/amneziawg/awg0.conf.",
+      "Запуск разово: sudo awg-quick up awg0.",
+      "Запуск при загрузке: sudo systemctl enable --now awg-quick@awg0."
+    ],
+    "ios": [
+      "Установите Amnezia VPN из App Store.",
+      "Импортируйте скачанный конфиг."
+    ],
+    "android": [
+      "Установите Amnezia VPN из Google Play.",
+      "Импортируйте скачанный конфиг."
+    ]
+  },
+  "openvpn": {
+    "app": "OpenVPN Connect",
+    "appUrl": "https://openvpn.net/client/",
+    "appNote": "Официальный клиент — работает одинаково на всех платформах.",
+    "windows": [
+      "Скачайте OpenVPN Connect с https://openvpn.net/client/ и установите.",
+      "Импортируйте скачанный .ovpn (Import Profile → From file), либо просто откройте файл — приложение подхватит его само."
+    ],
+    "macos": [
+      "Скачайте OpenVPN Connect с https://openvpn.net/client/ (или из Mac App Store).",
+      "Импортируйте скачанный .ovpn."
+    ],
+    "linux_nm": [
+      "Убедитесь, что установлен плагин network-manager-openvpn (обычно уже стоит на Ubuntu/Fedora).",
+      "Параметры сети → «Добавить VPN» → «Импортировать сохранённую конфигурацию VPN».",
+      "Выберите скачанный .ovpn."
+    ],
+    "linux_cli": [
+      "Установите пакет openvpn.",
+      "Разово: sudo openvpn --config client.ovpn.",
+      "Как служба: положите файл в /etc/openvpn/client/client.conf, затем sudo systemctl enable --now openvpn-client@client."
+    ],
+    "ios": [
+      "Скачайте OpenVPN Connect из App Store.",
+      "Откройте скачанный .ovpn файл (например через «Поделиться» из почты/файлов) — приложение предложит импорт."
+    ],
+    "android": [
+      "Скачайте OpenVPN Connect из Google Play.",
+      "Откройте скачанный .ovpn файл — приложение предложит импорт."
+    ]
+  },
+  "ikev2": {
+    "app": "Встроенный VPN-клиент ОС",
+    "appUrl": "",
+    "appNote": "На Windows/macOS/iOS используется системный VPN-клиент — сторонний не нужен, но сначала нужно установить выданный .p12-сертификат. На Android/Linux потребуется отдельное приложение.",
+    "windows": [
+      "Дважды кликните по скачанному .p12 файлу и установите сертификат (введите выданный пароль).",
+      "Параметры → Сеть → VPN → «Добавить VPN-подключение».",
+      "Тип подключения — IKEv2, укажите адрес сервера."
+    ],
+    "macos": [
+      "Проще всего: откройте присланный .mobileconfig — профиль VPN настроится автоматически, включая сертификат.",
+      "Вручную: Системные настройки → Сеть → «+» → тип IKEv2."
+    ],
+    "linux_nm": [
+      "Установите плагин network-manager-strongswan, если доступен для вашего дистрибутива.",
+      "Параметры сети → «Добавить VPN» → strongSwan → укажите сервер и импортируйте .p12.",
+      "Шаги отличаются в зависимости от дистрибутива."
+    ],
+    "linux_cli": [
+      "Установите strongSwan (пакет strongswan).",
+      "Настройте /etc/ipsec.conf и /etc/ipsec.secrets вручную, импортировав .p12.",
+      "Шаги зависят от версии strongSwan — см. документацию strongswan.org."
+    ],
+    "ios": [
+      "Откройте присланный .mobileconfig прямо на устройстве (через почту/AirDrop/файлы).",
+      "В Настройках появится «Профиль загружен» → нажмите «Установить».",
+      "Сертификат и VPN-профиль настроятся автоматически."
+    ],
+    "android": [
+      "Установите strongSwan VPN Client из Google Play.",
+      "В приложении импортируйте .p12-сертификат (с выданным паролем).",
+      "Добавьте профиль VPN с адресом сервера."
+    ]
+  }
+}

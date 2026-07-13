@@ -1,0 +1,87 @@
+{
+  "title": "VPN self-service portal",
+  "login": {
+    "usernamePlaceholder": "Username",
+    "usernameRequired": "Enter your username",
+    "passwordPlaceholder": "Password",
+    "passwordRequired": "Enter your password",
+    "codePlaceholder": "Code from your 2FA app",
+    "codeRequired": "Enter the 2FA code",
+    "loginError": "Login failed"
+  },
+  "loginForm": {
+    "usernamePlaceholder": "Username",
+    "usernameRequired": "Enter your username",
+    "passwordPlaceholder": "Password",
+    "passwordRequired": "Enter your password",
+    "totpPlaceholder": "Code from your 2FA app",
+    "totpRequired": "Enter the 2FA code",
+    "loginError": "Login failed",
+    "oidcButton": "Sign in with OIDC",
+    "oidcError": "OIDC sign-in failed. Try again or use a different method.",
+    "methodLocal": "Password",
+    "methodLdap": "LDAP",
+    "methodOidc": "OIDC"
+  },
+  "instance": {
+    "requestSent": "Request sent to the administrator",
+    "requestFailed": "Failed to send the request",
+    "downloadConfig": "Download config",
+    "qrCode": "QR code",
+    "available": "● available",
+    "online": "● online",
+    "offline": "● offline",
+    "pendingApproval": "Waiting for administrator approval",
+    "denied": "Access denied",
+    "retryRequest": "Request again",
+    "noAccess": "No access",
+    "requestAccess": "Request access",
+    "traffic": "↓ {{rx}} ↑ {{tx}}",
+    "lastSeen": "Last connected: {{time}}",
+    "neverConnected": "Never connected yet",
+    "configStale": "Settings changed",
+    "configStaleBanner": "The administrator changed the server settings. Re-download your configuration, or your connection may stop working.",
+    "manualSetup": "Manual setup",
+    "manualSetupHint": "If your device can't import a config file, copy the fields below and enter them manually in the app."
+  },
+  "home": {
+    "loggedInAs": "Logged in as {{username}}",
+    "myDevices": "My devices",
+    "noInstances": "No VPNs have been configured on the panel yet.",
+    "statsAvailable": "Available",
+    "statsPending": "Pending",
+    "statsDenied": "Denied"
+  },
+  "totp": {
+    "menuItem": "Two-factor authentication",
+    "cardTitle": "Two-factor authentication (TOTP)",
+    "status": "Status:",
+    "enabled": "enabled",
+    "disabled": "disabled",
+    "enableButton": "Enable 2FA",
+    "disableButton": "Disable 2FA",
+    "enableModalTitle": "Enable 2FA",
+    "disableModalTitle": "Disable 2FA",
+    "codeLabel": "Code from your authenticator app",
+    "passwordLabel": "Password",
+    "enableSuccess": "Two-factor authentication enabled",
+    "disableSuccess": "Two-factor authentication disabled",
+    "setupError": "Failed to start 2FA setup"
+  },
+  "history": {
+    "menuItem": "Connection history",
+    "title": "Connection history",
+    "empty": "No connection events yet.",
+    "connect": "connected",
+    "disconnect": "disconnected"
+  },
+  "password": {
+    "title": "Change password",
+    "changed": "Password changed",
+    "changeError": "Failed to change password",
+    "expired": "Your password has expired -- change it to keep using the portal.",
+    "currentPassword": "Current password",
+    "newPassword": "New password",
+    "minLength": "At least 8 characters"
+  }
+}

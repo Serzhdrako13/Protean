@@ -1,0 +1,91 @@
+{
+  "heading": "Notifications",
+  "pendingCount": "{{count}} queued",
+  "channel": {
+    "enabled": "Enabled",
+    "secretAlreadySet": "{{label}} (already set, leave empty to keep unchanged)",
+    "passwordPlaceholderSet": "••••••••",
+    "save": "Save",
+    "test": "Test",
+    "saveSuccess": "Saved",
+    "testSuccess": "Test message sent",
+    "statusEnabled": "enabled",
+    "statusDisabled": "disabled"
+  },
+  "channelsCard": {
+    "title": "Channels"
+  },
+  "zabbix": {
+    "cardTitle": "Zabbix / Prometheus",
+    "description": "Ready-to-import monitoring templates for the /metrics endpoint. Requires METRICS_TOKEN (panel environment variable).",
+    "download74": "Download Zabbix 7.4 template",
+    "download80": "Download Zabbix 8.0 template"
+  },
+  "settings": {
+    "cardTitle": "Events & reports",
+    "saveButton": "Save settings",
+    "saveSuccess": "Settings saved",
+    "events": {
+      "label": "Events",
+      "ifaceUpdown": {
+        "label": "Interface up/down",
+        "tooltip": "The VPN interface on the server (the provider itself) came up or went down — not related to individual clients"
+      },
+      "siteConnect": {
+        "label": "Site connected",
+        "tooltip": "A peer with the \"Site\" category (a remote site's gateway, added as \"Site (mesh)\" when the client was created) came online"
+      },
+      "siteDisconnect": {
+        "label": "Site disconnected",
+        "tooltip": "A peer with the \"Site\" category stopped responding (e.g. the handshake was lost)"
+      },
+      "clientConnect": {
+        "label": "Client connected",
+        "tooltip": "A regular client (not a \"Site\") came online"
+      },
+      "clientDisconnect": {
+        "label": "Client disconnected",
+        "tooltip": "A regular client stopped responding"
+      },
+      "unknownPeer": {
+        "label": "Unknown peer on interface",
+        "tooltip": "A peer not present in the panel's database appeared on the interface — for example, added manually on the host, bypassing the panel"
+      }
+    },
+    "report": {
+      "label": "Periodic report",
+      "enable": {
+        "label": "Enable report",
+        "tooltip": "Send a summary on a schedule, not only on events"
+      },
+      "intervalHours": "Interval (hours)",
+      "includeEvents": {
+        "label": "Include events",
+        "tooltip": "Attach the list of events that occurred during the period to the summary"
+      },
+      "includeStatus": {
+        "label": "Include server status",
+        "tooltip": "Attach the current status (up/down, clients online) of all providers to the summary"
+      }
+    },
+    "content": {
+      "label": "Show in event messages",
+      "provider": {
+        "label": "Provider",
+        "tooltip": "The name of the VPN provider/server the event relates to"
+      },
+      "endpoint": {
+        "label": "Endpoint",
+        "tooltip": "The network address (IP:port) the peer connected from"
+      },
+      "address": {
+        "label": "Address",
+        "tooltip": "The peer's VPN address inside the tunnel"
+      },
+      "time": {
+        "label": "Time",
+        "tooltip": "The exact time of the event"
+      }
+    }
+  }
+}

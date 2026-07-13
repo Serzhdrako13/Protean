@@ -1,0 +1,87 @@
+{
+  "title": "Портал получения VPN",
+  "login": {
+    "usernamePlaceholder": "Имя пользователя",
+    "usernameRequired": "Введите имя пользователя",
+    "passwordPlaceholder": "Пароль",
+    "passwordRequired": "Введите пароль",
+    "codePlaceholder": "Код из приложения 2FA",
+    "codeRequired": "Введите код 2FA",
+    "loginError": "Ошибка входа"
+  },
+  "loginForm": {
+    "usernamePlaceholder": "Имя пользователя",
+    "usernameRequired": "Введите имя пользователя",
+    "passwordPlaceholder": "Пароль",
+    "passwordRequired": "Введите пароль",
+    "totpPlaceholder": "Код из приложения 2FA",
+    "totpRequired": "Введите код 2FA",
+    "loginError": "Ошибка входа",
+    "oidcButton": "Войти через OIDC",
+    "oidcError": "Не удалось войти через OIDC. Попробуйте снова или другим способом.",
+    "methodLocal": "Пароль",
+    "methodLdap": "LDAP",
+    "methodOidc": "OIDC"
+  },
+  "instance": {
+    "requestSent": "Запрос отправлен администратору",
+    "requestFailed": "Не удалось отправить запрос",
+    "downloadConfig": "Скачать конфиг",
+    "qrCode": "QR-код",
+    "available": "● доступен",
+    "online": "● онлайн",
+    "offline": "● офлайн",
+    "pendingApproval": "Ожидание решения администратора",
+    "denied": "В доступе отказано",
+    "retryRequest": "Запросить снова",
+    "noAccess": "Нет доступа",
+    "requestAccess": "Запросить доступ",
+    "traffic": "↓ {{rx}} ↑ {{tx}}",
+    "lastSeen": "Последнее подключение: {{time}}",
+    "neverConnected": "Ещё не подключался",
+    "configStale": "Настройки изменились",
+    "configStaleBanner": "Администратор изменил настройки сервера. Скачайте конфигурацию заново, иначе подключение может перестать работать.",
+    "manualSetup": "Ручная настройка",
+    "manualSetupHint": "Если устройство не поддерживает импорт файла конфигурации — скопируйте нужные поля отсюда и введите их вручную в приложении."
+  },
+  "home": {
+    "loggedInAs": "Вы вошли как {{username}}",
+    "myDevices": "Мои устройства",
+    "noInstances": "На панели пока не настроено ни одного VPN.",
+    "statsAvailable": "Доступно",
+    "statsPending": "Ожидание",
+    "statsDenied": "Отказано"
+  },
+  "totp": {
+    "menuItem": "Двухфакторная аутентификация",
+    "cardTitle": "Двухфакторная аутентификация (TOTP)",
+    "status": "Статус:",
+    "enabled": "включена",
+    "disabled": "выключена",
+    "enableButton": "Включить 2FA",
+    "disableButton": "Выключить 2FA",
+    "enableModalTitle": "Включение 2FA",
+    "disableModalTitle": "Выключить 2FA",
+    "codeLabel": "Код из приложения-аутентификатора",
+    "passwordLabel": "Пароль",
+    "enableSuccess": "Двухфакторная аутентификация включена",
+    "disableSuccess": "Двухфакторная аутентификация выключена",
+    "setupError": "Не удалось начать настройку 2FA"
+  },
+  "history": {
+    "menuItem": "История подключений",
+    "title": "История подключений",
+    "empty": "Пока нет событий подключения.",
+    "connect": "подключение",
+    "disconnect": "отключение"
+  },
+  "password": {
+    "title": "Сменить пароль",
+    "changed": "Пароль изменён",
+    "changeError": "Ошибка смены пароля",
+    "expired": "Срок действия пароля истёк — смените его, чтобы продолжить пользоваться порталом.",
+    "currentPassword": "Текущий пароль",
+    "newPassword": "Новый пароль",
+    "minLength": "Минимум 8 символов"
+  }
+}

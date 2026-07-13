@@ -1,0 +1,26 @@
+/* "Zenter SP" (demo weight, Black) -- free for personal + commercial use,
+   licensed copy provided by the project owner (see
+   public/fonts/ZenterSP-License.pdf; author: Александр Павленко,
+   pavljenko.t.me). Resale of the font file itself is the only prohibited
+   use, which doesn't apply here. */
+@font-face {
+  font-family: 'Zenter SP';
+  src: url('/fonts/ZenterSPDemo-Black.otf') format('opentype');
+  font-weight: 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* Polished-steel "plays with light" effect: the highlight band in the
+   gradient sweeps back and forth across the text (alternate direction, so
+   it loops seamlessly with no jump-cut). */
+.protean-steel {
+  animation: protean-shine 3.5s ease-in-out infinite alternate;
+}
+@keyframes protean-shine {
+  0% { background-position: 0% 50%; }
+  100% { background-position: 100% 50%; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .protean-steel { animation: none; }
+}

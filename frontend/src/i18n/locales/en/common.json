@@ -1,0 +1,82 @@
+{
+  "appName": "Protean",
+  "controlPanelTag": "Control Panel",
+  "passwordPolicy": {
+    "hint": "Password requirements",
+    "minLength": "at least {{n}} characters",
+    "upper": "an uppercase letter",
+    "lower": "a lowercase letter",
+    "digit": "a digit",
+    "symbol": "a symbol",
+    "confirmPassword": "Confirm password",
+    "confirmRequired": "Confirm your password",
+    "confirmMismatch": "Passwords don't match",
+    "missing": "Password doesn't meet requirements: {{list}}"
+  },
+  "actions": {
+    "save": "Save",
+    "saved": "Saved",
+    "cancel": "Cancel",
+    "delete": "Delete",
+    "edit": "Edit",
+    "create": "Create",
+    "add": "Add",
+    "testConnection": "Test connection",
+    "close": "Close",
+    "back": "Back",
+    "confirm": "Confirm",
+    "download": "Download",
+    "restart": "Restart",
+    "retry": "Retry",
+    "approve": "Approve",
+    "deny": "Deny",
+    "logout": "Log out",
+    "login": "Login",
+    "search": "Search"
+  },
+  "status": {
+    "loading": "Loading…",
+    "online": "online",
+    "offline": "offline",
+    "enabled": "enabled",
+    "disabled": "disabled",
+    "yes": "Yes",
+    "unknown": "unknown"
+  },
+  "errors": {
+    "generic": "Something went wrong",
+    "loadFailed": "Failed to load data"
+  },
+  "nav": {
+    "groups": {
+      "users": "Users",
+      "logs": "Logs",
+      "settings": "Settings"
+    },
+    "dashboard": "Dashboard",
+    "servers": "VPN nodes",
+    "nodes": "Network clients",
+    "subnets": "Subnets",
+    "notifications": "Notifications",
+    "audit": "Audit",
+    "connectionHistory": "Connection History",
+    "users": "Users",
+    "accessRequests": "Access requests",
+    "adminPortal": "Portal",
+    "tls": "Certificates",
+    "loginSecurity": "Login Security",
+    "authMethods": "Login Methods",
+    "dataRetention": "Data Retention",
+    "account": "Account",
+    "help": "Help",
+    "selfServicePortal": "Self-service portal",
+    "theme": "Theme",
+    "lightTheme": "Light theme",
+    "darkTheme": "Dark theme",
+    "language": "Language"
+  },
+  "notFound": {
+    "subtitle": "Page not found",
+    "backHome": "Back to home"
+  }
+}

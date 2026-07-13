@@ -1,0 +1,70 @@
+{
+  "serverConfig": {
+    "title": "Interface network",
+    "listenPort": "Port",
+    "address": "Interface address (CIDR)",
+    "addressPlaceholder": "10.10.0.1/24",
+    "addressLockedTip": "The subnet and mask are set once at creation and can't be changed later — shrinking the range could strand existing peers outside it.",
+    "dns": "DNS for clients",
+    "dnsPlaceholder": "1.1.1.1",
+    "mtu": {
+      "label": "MTU",
+      "tip": "Maximum packet size on the interface. Empty = default (usually 1420). Lower it (e.g. to 1280-1380) if the connection works but large requests hang or drop — typical for mobile internet, PPPoE, or when this VPN itself runs through another tunnel. Applies to both the server and new client configs."
+    },
+    "obfuscation": {
+      "label": "AmneziaWG obfuscation",
+      "tip": "Traffic-masking parameters that disguise the tunnel as ordinary noise — the same values must be set in the client config as well"
+    }
+  },
+  "openvpnTuning": {
+    "title": "MTU / mssfix",
+    "description": "Adjust these if the connection works but large requests hang or drop — typical for mobile internet, PPPoE, or when this VPN itself runs through another tunnel. Applies to both the server and new client configs.",
+    "tunMtu": {
+      "label": "tun-mtu",
+      "tip": "MTU size of the tunnel interface. Empty = OpenVPN default."
+    },
+    "mssfix": {
+      "label": "mssfix",
+      "tip": "Clamps TCP MSS instead of changing the interface MTU — a gentler way to work around packet fragmentation. Empty = leave unset."
+    },
+    "savedMessage": "Saved — the server has been reconfigured and the service restarted"
+  },
+  "mesh": {
+    "title": "Network & service",
+    "meshEnabled": "Participates in mesh",
+    "meshEnabledTip": "This provider's clients get routes into the shared network without NAT (other VPN transports + site subnets)",
+    "egress": "Route internet traffic through this server",
+    "egressTip": "Clients route all other traffic (not just mesh) through this server",
+    "autoAssignRange": "Auto-assign range",
+    "autoAssignRangeTip": "Restricts which part of the subnet auto-provisioning (access-request grants, node grants) picks an address from -- like a DHCP pool on a router. Empty = whole subnet, no restriction.",
+    "rangeStartPlaceholder": "From (10.10.0.10)",
+    "rangeEndPlaceholder": "To (10.10.0.50)",
+    "service": "Service",
+    "serviceRestarted": "Service restarted",
+    "viewLogs": "View logs",
+    "logsTitle": "Logs for {{unit}}",
+    "logsEmpty": "No logs"
+  },
+  "ca": {
+    "title": "Certificate authority (CA)",
+    "description": "Import an external CA instead of the self-signed one the panel generates by default. After importing you need to run \"Configure server\" again — existing client certificates will need to be reissued.",
+    "caCert": "CA certificate (PEM)",
+    "caKey": "CA private key (PEM)",
+    "import": "Import",
+    "importedMessage": "CA imported — click \"Configure server\" on the Overview tab to apply"
+  },
+  "backups": {
+    "title": "Config backups",
+    "emptyText": "No backups yet",
+    "date": "Date",
+    "size": "Size",
+    "sizeBytes": "{{count}} bytes",
+    "preview": {
+      "label": "Preview",
+      "tip": "First 200 characters of the saved config file"
+    },
+    "restore": "Restore",
+    "restoreConfirm": "Restore config from the backup dated {{date}}? The current config will be replaced.",
+    "restoredMessage": "Config restored"
+  }
+}

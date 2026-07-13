@@ -1,0 +1,44 @@
+{
+  "empty": "Xray is unavailable",
+  "status": {
+    "label": "Status:",
+    "strategyTag": "strategy: {{name}}",
+    "relayTag": "via relay: {{chain}}",
+    "relayTooltip": "All outbound traffic from this server goes through this chain of relay servers in order"
+  },
+  "strategy": {
+    "cardTitle": "Strategy",
+    "selectLabel": "Strategy (ready-made transport+security+protocol combo)",
+    "applyButton": "Apply"
+  },
+  "relay": {
+    "fieldLabel": "External relay — hop chain (optional)",
+    "fieldTooltip": "Paste the config link of one or more external Xray servers, in order — all traffic from this server will transit through hop 1, then hop 2, and so on (multi-hop). Leave empty for a direct connection to the internet.",
+    "hopLabel": "hop {{n}}",
+    "moveUpTitle": "Move hop up (earlier in the chain)",
+    "moveDownTitle": "Move hop down (later in the chain)",
+    "removeTitle": "Remove hop",
+    "addButton": "Add hop"
+  },
+  "clients": {
+    "cardTitle": "Clients",
+    "emptyText": "No clients yet",
+    "name": "Name",
+    "linkColumn": "Link",
+    "copyLinkTitle": "Copy link",
+    "showQrTitle": "Show QR code",
+    "deleteConfirmTitle": "Delete client {{name}}?",
+    "addModalTitle": "Add client",
+    "qrModalTitle": "QR code"
+  },
+  "subscription": {
+    "cardTitle": "Subscription",
+    "openButton": "Open subscription",
+    "description": "A single Base64 subscription with links to all clients at once — import it into Happ / v2rayN / nekoray with one string instead of adding each client manually."
+  },
+  "messages": {
+    "applied": "Applied",
+    "clientAdded": "Client added",
+    "linkCopied": "Link copied"
+  }
+}

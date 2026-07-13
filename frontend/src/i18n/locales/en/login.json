@@ -1,0 +1,23 @@
+{
+  "usernamePlaceholder": "Username",
+  "usernameRequired": "Enter your username",
+  "passwordPlaceholder": "Password",
+  "passwordRequired": "Enter your password",
+  "totpPlaceholder": "Code from your 2FA app",
+  "totpRequired": "Enter the 2FA code",
+  "loginError": "Login failed",
+  "loginForm": {
+    "usernamePlaceholder": "Username",
+    "usernameRequired": "Enter your username",
+    "passwordPlaceholder": "Password",
+    "passwordRequired": "Enter your password",
+    "totpPlaceholder": "Code from your 2FA app",
+    "totpRequired": "Enter the 2FA code",
+    "loginError": "Login failed",
+    "oidcButton": "Sign in with OIDC",
+    "oidcError": "OIDC sign-in failed. Try again or use a different method.",
+    "methodLocal": "Password",
+    "methodLdap": "LDAP",
+    "methodOidc": "OIDC"
+  }
+}

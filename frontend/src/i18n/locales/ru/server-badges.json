@@ -1,0 +1,8 @@
+{
+  "installedTooltip": "{{label}}: работает",
+  "notInstalledTooltip": "{{label}}: не поднят",
+  "providerCount_one": "{{upCount}}/{{count}}",
+  "providerCount_few": "{{upCount}}/{{count}}",
+  "providerCount_many": "{{upCount}}/{{count}}",
+  "providerCount_other": "{{upCount}}/{{count}}"
+}

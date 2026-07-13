@@ -1,0 +1,57 @@
+services:
+  panel:
+    build: .
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+      # Only needed for ACME mode with the http-01 challenge (see the panel's
+      # "Сертификаты" page) -- TLS-ALPN-01, the default, needs no extra port.
+      - "80:80"
+    healthcheck:
+      # Distroless image has no shell/curl; the binary self-checks via a tiny
+      # flag that hits /healthz over the loopback and exits 0/1.
+      test: ["CMD", "/panel", "-healthcheck"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    environment:
+      LISTEN_ADDR: ":8080"
+      DATABASE_URL: ${DATABASE_URL}
+      SSH_HOST: ${SSH_HOST}
+      SSH_PORT: ${SSH_PORT:-22}
+      SSH_USER: ${SSH_USER}
+      SSH_KEY_PATH: /run/secrets/ssh_key
+      SESSION_SECRET: ${SESSION_SECRET}
+      SECRET_KEY: ${SECRET_KEY}
+      ADMIN_USERNAME: ${ADMIN_USERNAME}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD}
+      PUBLIC_HOST: ${PUBLIC_HOST}
+      WG_INTERFACE: ${WG_INTERFACE:-wg0}
+      AWG_INTERFACE: ${AWG_INTERFACE:-awg0}
+    secrets:
+      - ssh_key
+    volumes:
+      # Self-service portal's "how to connect" text (app names/links/steps
+      # per protocol+OS) -- auto-seeded with working ru/en defaults on first
+      # boot, then edit the files here directly as apps/instructions change;
+      # no rebuild/redeploy needed, the panel re-reads on every request.
+      - ./vpn-setup-content:/data/vpn-setup
+    networks:
+      - postgres-net
+    extra_hosts:
+      # Lets the container reach sshd on the same VPS without joining the
+      # host network. Set SSH_HOST=host.docker.internal in .env when the
+      # panel and the VPN host are the same machine (the normal case here).
+      - "host.docker.internal:host-gateway"
+
+secrets:
+  ssh_key:
+    file: ./secrets/id_ed25519
+
+# The panel expects Postgres to already be running in a container on this
+# host. Point `postgres-net` at that container's docker network so the
+# panel can reach it -- rename to match whatever it's actually called.
+networks:
+  postgres-net:
+    external: true

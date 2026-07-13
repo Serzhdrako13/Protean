@@ -1,0 +1,24 @@
+{
+  "title": "Install VPN",
+  "backToServers": "Back to server list",
+  "detectError": "Failed to detect host",
+  "host": "Host:",
+  "pkgManager": "· package manager:",
+  "noSystemd": "no systemd — installation not supported",
+  "table": {
+    "provider": "Provider",
+    "installed": "Installed",
+    "installedYes": "✅ installed",
+    "installedNo": "not installed",
+    "afterInstall": "After installation",
+    "afterInstallTooltip": "What the panel can do with this VPN once it is installed on the host — not the current state (see the \"Installed\" column)",
+    "managedFull": "full management (status, clients)",
+    "managedInstallOnly": "install only — configure manually on the host",
+    "alreadyInstalled": "installed",
+    "install": "Install",
+    "unsupported": "not supported on this distribution"
+  },
+  "installSuccess": "{{name}}: installation complete",
+  "outputTitle": "Installation output",
+  "disclaimer": "Installation runs a fixed, root-owned script on the host over SSH. The panel cannot execute arbitrary commands — only predefined installation actions."
+}

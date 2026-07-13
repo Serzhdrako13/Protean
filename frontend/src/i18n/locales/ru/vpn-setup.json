@@ -1,0 +1,16 @@
+{
+  "modalTitle": "Как подключиться",
+  "selectOs": "Операционная система",
+  "linuxVariant": "Способ (Linux)",
+  "linuxNm": "NetworkManager (графический интерфейс)",
+  "linuxCli": "Командная строка",
+  "openSite": "Открыть сайт",
+  "loadError": "Не удалось загрузить инструкцию",
+  "os": {
+    "windows": "Windows",
+    "macos": "macOS",
+    "linux": "Linux",
+    "ios": "iOS",
+    "android": "Android"
+  }
+}

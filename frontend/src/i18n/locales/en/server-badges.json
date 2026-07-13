@@ -1,0 +1,6 @@
+{
+  "installedTooltip": "{{label}}: up",
+  "notInstalledTooltip": "{{label}}: down",
+  "providerCount_one": "{{upCount}}/{{count}}",
+  "providerCount_other": "{{upCount}}/{{count}}"
+}

@@ -1,0 +1,31 @@
+{
+  "title": "Access requests",
+  "searchPlaceholder": "Search by user or provider",
+  "columns": {
+    "username": "User",
+    "provider": "Provider",
+    "server": "Server",
+    "status": "Status",
+    "statusTip": "\"Pending\" — a new request. \"Approved, awaiting setup\" — the admin allowed it, but the client hasn't been created/verified yet (for WireGuard/AmneziaWG the panel usually creates it automatically; for OpenVPN/IKEv2 — manually on the provider page). \"Granted\" — the user can already download the config.",
+    "created": "Requested"
+  },
+  "status": {
+    "pending": "pending decision",
+    "approved": "approved, awaiting setup",
+    "granted": "granted",
+    "denied": "denied"
+  },
+  "confirm": {
+    "deny": "Deny {{username}} access to \"{{label}}\"?",
+    "revoke": "Revoke approval for {{username}}?",
+    "delete": "Remove the denied request {{username}} → \"{{label}}\" from the list?",
+    "clearDenied": "Remove all denied requests ({{count}})? Pending, approved, and granted requests are not affected."
+  },
+  "clearDeniedButton": "Clear denied ({{count}})",
+  "messages": {
+    "approveSuccess": "Processed — see status in the table (some provider types require manual client setup on the provider page)",
+    "denySuccess": "Denied",
+    "deleteSuccess": "Request removed from the list",
+    "clearDeniedSuccess": "Denied requests removed: {{count}}"
+  }
+}

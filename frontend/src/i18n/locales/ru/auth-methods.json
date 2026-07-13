@@ -1,0 +1,76 @@
+{
+  "title": "Способы входа",
+  "description": "Настройте, каким способом пользователи и администраторы входят в панель и портал — можно включить любую комбинацию.",
+  "internal": {
+    "title": "Локальный пароль",
+    "enabledLabel": "Локальный вход включён",
+    "disabledWarning": "Локальный вход выключен — все пароли панели больше не работают. Если что-то пойдёт не так с LDAP/OIDC, используйте аварийную учётную запись (EMERGENCY_ADMIN_USERNAME/EMERGENCY_ADMIN_PASSWORD в переменных окружения панели) — она работает даже при выключенном локальном входе.",
+    "emergencyHint": "Аварийный доступ: если вход по паролю выключить, а LDAP/OIDC перестанут работать — задайте EMERGENCY_ADMIN_USERNAME и EMERGENCY_ADMIN_PASSWORD в окружении панели (docker-compose/.env) и перезапустите контейнер. Эта учётная запись работает независимо от переключателя выше. Уберите переменные и перезапустите ещё раз, чтобы закрыть лазейку."
+  },
+  "ldap": {
+    "title": "LDAP / Active Directory",
+    "enabledLabel": "Включить вход через LDAP",
+    "url": { "label": "Адрес сервера" },
+    "skipTlsVerify": {
+      "label": "Не проверять TLS-сертификат",
+      "tip": "Включайте только для тестов или самоподписанных сертификатов на доверенной сети — иначе подключение уязвимо к подмене сервера."
+    },
+    "bindDn": { "label": "Bind DN (сервисная учётная запись)" },
+    "bindPassword": {
+      "label": "Пароль bind-аккаунта",
+      "setPlaceholder": "задан — оставьте пустым, чтобы не менять"
+    },
+    "userBaseDn": { "label": "Base DN для поиска пользователей" },
+    "userFilter": {
+      "label": "Фильтр поиска пользователя",
+      "tip": "%s заменяется на введённое имя пользователя (экранируется автоматически). Для AD обычно (sAMAccountName=%s), для generic LDAP — (uid=%s)."
+    },
+    "groupBaseDn": {
+      "label": "Base DN для групп (опционально)",
+      "tip": "Используется только если у пользователя нет атрибута memberOf — тогда панель ищет группы отдельно (member=DN или memberUid=имя)."
+    },
+    "testOk": "Подключение успешно"
+  },
+  "oidc": {
+    "title": "OIDC (Keycloak, Authentik, Azure AD, Google Workspace и т.п.)",
+    "enabledLabel": "Включить вход через OIDC",
+    "issuerUrl": {
+      "label": "Issuer URL",
+      "tip": "Базовый адрес провайдера — панель сама найдёт остальные endpoint'ы через discovery (/.well-known/openid-configuration)."
+    },
+    "clientId": { "label": "Client ID" },
+    "clientSecret": {
+      "label": "Client Secret",
+      "setPlaceholder": "задан — оставьте пустым, чтобы не менять"
+    },
+    "redirectBaseUrl": {
+      "label": "Базовый адрес панели",
+      "tip": "Публичный адрес, по которому панель доступна извне, например https://vpn.example.com — используется для формирования redirect URI, который нужно зарегистрировать у вашего IdP."
+    },
+    "callbackHint": "Зарегистрируйте этот redirect URI у вашего IdP:",
+    "scopes": { "label": "Scopes" },
+    "usernameClaim": {
+      "label": "Claim с именем пользователя",
+      "tip": "Имя claim'а в ID-токене, из которого берётся логин. По умолчанию preferred_username."
+    },
+    "groupsClaim": {
+      "label": "Claim с группами",
+      "tip": "Имя claim'а с группами — у разных провайдеров называется по-разному (groups, roles и т.п.). Если в ID-токене его нет, панель дополнительно запросит userinfo-эндпоинт."
+    },
+    "testOk": "Discovery выполнен успешно"
+  },
+  "groupRules": {
+    "title": "Группы → роли",
+    "description": "Учётная запись получает роль по членству в группе. Если группа не входит ни в один из списков — вход запрещён.",
+    "columns": { "role": "Роль", "value": "Группа" },
+    "role": { "admin": "Администратор", "user": "Пользователь" },
+    "confirmDelete": "Удалить правило для «{{value}}»?",
+    "form": {
+      "valueRequired": "Укажите группу",
+      "valuePlaceholder": {
+        "ldap": "cn=vpn-admins,ou=groups,dc=example,dc=com",
+        "oidc": "vpn-admins"
+      }
+    }
+  }
+}

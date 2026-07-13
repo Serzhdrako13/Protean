@@ -1,0 +1,92 @@
+{
+  "title": "VPN nodes",
+  "addServer": "Add node",
+  "searchPlaceholder": "Search by ID, name, address",
+  "table": {
+    "label": "Name",
+    "host": "Host",
+    "sshUser": "SSH login",
+    "publicHost": {
+      "label": "Public addr.",
+      "tip": "Address the panel writes into client configs instead of the SSH host (needed if the server is reachable from outside on a different address/port, e.g. behind NAT)"
+    },
+    "hostKey": {
+      "label": "Host key",
+      "tip": "Public key of the SSH host. \"Pinned\" — the panel verifies it on every connection and will detect a spoof. TOFU (trust-on-first-use) — the key isn't pinned in the DB: trust is held only in memory and resets on almost any action (editing the server, adding/removing a provider, restarting the panel) -- so it's not \"trust once\", it's \"trust again every time\". A host spoof (MITM) can't be detected. To pin it: run ssh-keyscan against the host over a trusted channel and paste the public key into the field below."
+    },
+    "hostKeyPinned": "pinned",
+    "hostKeyTofu": "TOFU",
+    "providers": {
+      "label": "Providers",
+      "tip": "How many providers are registered on this node and how many of them are actually up on the host right now"
+    },
+    "enabled": {
+      "label": "Enabled",
+      "tip": "Disabling drops the panel's connection to this node but keeps every provider setting -- re-enable any time with no loss of config. Deleting erases everything permanently."
+    }
+  },
+  "actions": {
+    "providers": "Providers",
+    "providersTitle": "List of VPN providers installed on this node",
+    "editTitle": "Edit node settings",
+    "deleteTitle": "Delete node and all provider settings",
+    "deleteConfirm": "Delete node {{id}}?",
+    "deleteConfirmDetail": "Every provider, its settings, client secrets, and history for this node will be permanently deleted. To just disconnect the node without losing settings, use the \"Enabled\" toggle instead.",
+    "disableConfirm": "Disable node {{id}}? Providers stay configured, but the connection will be dropped."
+  },
+  "modal": {
+    "editTitle": "Edit node {{id}}",
+    "form": {
+      "id": {
+        "label": "ID (slug)",
+        "message": "lowercase, digits, - or _"
+      },
+      "label": {
+        "label": "Name",
+        "placeholder": "Moscow, prod"
+      },
+      "host": {
+        "label": "SSH host",
+        "tip": "The panel connects here over SSH to manage VPN — this is the address of the physical/virtual host, not an address inside a container. If VPN is deployed on the SAME machine where the panel itself runs (Docker): don't specify 127.0.0.1/localhost — that would mean \"inside the panel's container\", not the host. Specify the real LAN IP of the host machine (sshd must listen on it), or on Linux add extra_hosts: [\"host.docker.internal:host-gateway\"] to docker-compose and specify host.docker.internal."
+      },
+      "port": "Port",
+      "sshUser": "Panel's account",
+      "publicHost": {
+        "label": "Public address (in client config)",
+        "placeholder": "vpn.example.com or external IP"
+      },
+      "hostKey": {
+        "label": "Pinned host key",
+        "placeholder": "ssh-ed25519 AAAA... (empty = TOFU)",
+        "probeButton": "Fetch current key",
+        "probeResultTitle": "Key fetched",
+        "probeWarning": "The panel just connected and looked at whatever key the host is presenting right now -- this is NOT an authenticity check (exactly as exposed to spoofing as a plain ssh-keyscan). Before pinning it, verify the fingerprint through an independent channel -- e.g. your hosting provider's console or direct console access to the server.",
+        "probeAccept": "Verified, pin this key",
+        "pinned": "Key filled in -- don't forget to save the server"
+      },
+      "serviceUser": {
+        "placeholder": "protean",
+        "tip": "The account the panel will use going forward. If it doesn't exist on the host yet, the script creates it (key-only, no password). If it already exists, it's just granted rights -- never re-created."
+      },
+      "bootstrap": {
+        "tab": "Set up automatically",
+        "identityLabel": "Connect as",
+        "identityRoot": "root",
+        "identitySudoUser": "an existing sudo user",
+        "bootstrapUser": {
+          "label": "Sudo username",
+          "placeholder": "e.g. admin"
+        },
+        "passwordTab": "Password",
+        "passwordLabel": "Password — used once, not stored",
+        "passwordPlaceholder": "that account's password",
+        "keyTab": "Private key",
+        "keyLabel": "That account's private key — used once, not stored",
+        "keyAuthSudoWarning": "Key auth for a sudo user requires passwordless sudo (NOPASSWD) already configured for it -- there's nowhere to type a password. If that's not the case, use a password instead of a key, or connect as root."
+      },
+      "keyTab": "Existing key",
+      "sshKey": "Private SSH key for the panel's account -- it must already be fully set up on the host (no automatic setup)",
+      "sshKeyEdit": "New private key (empty = don't change)"
+    }
+  }
+}

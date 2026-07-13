@@ -1,0 +1,13 @@
+{
+  "heading": "Audit",
+  "description": "Log of administrative actions in the panel (last 200 entries) — who changed what.",
+  "searchPlaceholder": "Search by user, action, target",
+  "columns": {
+    "timestamp": "Time",
+    "username": "User",
+    "action": "Action",
+    "actionTip": "Action code in the format \"section.verb\" (e.g. server.create — server created, peer.disable — client disabled)",
+    "target": "Target",
+    "targetTip": "What the action refers to — server id, client provider/id, etc., depending on the action"
+  }
+}

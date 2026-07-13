@@ -1,0 +1,32 @@
+# Throwaway Postgres for store integration tests (build tag `dbtest`).
+# Uses port 5433 to avoid clashing with any existing local Postgres / the
+# app's own DB container.
+#
+#   docker compose -f docker-compose.test.yml up -d
+#   PROTEAN_TEST_DB='postgres://wgpanel:wgpanel@localhost:5433/wgpanel?sslmode=disable' \
+#     go test -tags dbtest ./internal/store/
+#   docker compose -f docker-compose.test.yml down -v
+services:
+  postgres-test:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: wgpanel
+      POSTGRES_PASSWORD: wgpanel
+      POSTGRES_DB: wgpanel
+    ports:
+      - "5433:5432"
+    tmpfs:
+      - /var/lib/postgresql/data   # ephemeral: fresh DB every run
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U wgpanel"]
+      interval: 2s
+      timeout: 3s
+      retries: 20
+    networks:
+      - postgres-net
+
+# This file CREATES the shared network (fixed name "postgres-net"); the main
+# docker-compose.yml joins it as `external: true`. Bring this file up first.
+networks:
+  postgres-net:
+    name: postgres-net

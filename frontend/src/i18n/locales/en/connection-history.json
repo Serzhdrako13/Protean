@@ -1,0 +1,20 @@
+{
+  "title": "Connection History",
+  "description": "A permanent log of client connect/disconnect events -- unlike live notifications, these entries never disappear and don't depend on notification settings.",
+  "filters": {
+    "providerPlaceholder": "Provider (server:instance)",
+    "devicePlaceholder": "Search by device",
+    "hours_one": "{{count}} hour",
+    "hours_other": "{{count}} hours"
+  },
+  "columns": {
+    "ts": "Time",
+    "provider": "Provider",
+    "peer": "Client",
+    "event": "Event"
+  },
+  "event": {
+    "connect": "connected",
+    "disconnect": "disconnected"
+  }
+}

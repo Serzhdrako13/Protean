@@ -1,0 +1,78 @@
+{
+  "title": "Network clients",
+  "tabs": {
+    "nodes": "Equipment",
+    "clients": "All clients",
+    "overview": "Network overview"
+  },
+  "createButton": "Add device",
+  "fields": {
+    "name": "Name",
+    "kind": "Kind",
+    "role": "Role",
+    "description": "Description",
+    "peersOnline": "Online"
+  },
+  "kindLabels": {
+    "router": "Router",
+    "device": "Host",
+    "other": "Other"
+  },
+  "kindTip": "Equipment kind. \"Host\" is an external server (incl. virtual) or other machine that just connects as a VPN client -- the panel doesn't manage it over SSH (unlike the nodes on the VPN nodes page).",
+  "roleLabels": {
+    "member": "Network member",
+    "network_node": "Network node"
+  },
+  "roleTip": "\"Network member\" is a plain client, it doesn't route anything for others. \"Network node\" is a full participant in the internal network (it may have a subnet behind it, e.g. a home network behind a router) -- other VPN nodes can depend on it. A \"network node\" gets internet-access/NAT configured on a dedicated provider instance just for it -- this protects against an accidental traffic leak from sharing NAT across nodes.",
+  "form": {
+    "namePlaceholder": "Keenetic-Office",
+    "descriptionPlaceholder": "e.g.: home network behind the router, 192.168.50.0/24"
+  },
+  "modal": {
+    "createTitle": "New device",
+    "editTitle": "Edit \"{{name}}\""
+  },
+  "confirmDelete": "Delete device \"{{name}}\"? All its connections will be revoked.",
+  "messages": {
+    "deleted": "Device deleted"
+  },
+  "access": {
+    "name": "Name",
+    "server": "VPN node",
+    "type": "Type",
+    "interface": "Interface",
+    "address": "Address",
+    "status": "Status",
+    "traffic": "Rx / Tx",
+    "access": "Access",
+    "nat": {
+      "label": "NAT",
+      "tip": "This instance's current internet-access/NAT state (configured on the provider page's Settings tab). For a \"network node\" this is that node's own setting, not shared -- see the Role field's tooltip.",
+      "on": "NAT on",
+      "off": "NAT off"
+    }
+  },
+  "clients": {
+    "description": "Every real connection across every provider and server in one place -- both device-owned and portal-user-owned. Duplicates data already on the Equipment and Users pages, but it's easier to keep track of things once the relationships get complex.",
+    "searchPlaceholder": "Search by name, provider, owner",
+    "columns": {
+      "owner": "Owner",
+      "name": "Name",
+      "provider": "Provider",
+      "server": "VPN node",
+      "type": "Type",
+      "category": "Category",
+      "status": "Status",
+      "traffic": "Rx / Tx"
+    },
+    "ownerKind": {
+      "user": "User",
+      "node": "Device",
+      "none": "Unassigned"
+    },
+    "categoryLabels": {
+      "site": "Site",
+      "client": "Client"
+    }
+  }
+}

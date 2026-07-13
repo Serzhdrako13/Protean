@@ -1,0 +1,76 @@
+{
+  "title": "Login Methods",
+  "description": "Configure how admins and regular users sign in to the panel and portal — any combination can be enabled at once.",
+  "internal": {
+    "title": "Local password",
+    "enabledLabel": "Local sign-in enabled",
+    "disabledWarning": "Local sign-in is off — every panel password stops working. If LDAP/OIDC ever breaks, use the emergency account (EMERGENCY_ADMIN_USERNAME/EMERGENCY_ADMIN_PASSWORD panel env vars) — it works even while local sign-in is disabled.",
+    "emergencyHint": "Break-glass access: if you turn password sign-in off and LDAP/OIDC then stops working, set EMERGENCY_ADMIN_USERNAME and EMERGENCY_ADMIN_PASSWORD in the panel's environment (docker-compose/.env) and restart the container. This account works regardless of the toggle above. Unset the vars and restart again to close the hole."
+  },
+  "ldap": {
+    "title": "LDAP / Active Directory",
+    "enabledLabel": "Enable LDAP sign-in",
+    "url": { "label": "Server URL" },
+    "skipTlsVerify": {
+      "label": "Skip TLS certificate verification",
+      "tip": "Only enable for testing or self-signed certs on a trusted network -- otherwise the connection is exposed to server spoofing."
+    },
+    "bindDn": { "label": "Bind DN (service account)" },
+    "bindPassword": {
+      "label": "Bind account password",
+      "setPlaceholder": "set -- leave blank to keep it"
+    },
+    "userBaseDn": { "label": "User search base DN" },
+    "userFilter": {
+      "label": "User search filter",
+      "tip": "%s is replaced with the entered username (escaped automatically). AD typically uses (sAMAccountName=%s), generic LDAP (uid=%s)."
+    },
+    "groupBaseDn": {
+      "label": "Group base DN (optional)",
+      "tip": "Only used when the user entry has no memberOf attribute -- the panel then searches for groups separately (member=DN or memberUid=username)."
+    },
+    "testOk": "Connection successful"
+  },
+  "oidc": {
+    "title": "OIDC (Keycloak, Authentik, Azure AD, Google Workspace, etc.)",
+    "enabledLabel": "Enable OIDC sign-in",
+    "issuerUrl": {
+      "label": "Issuer URL",
+      "tip": "The provider's base address -- the panel discovers the rest of its endpoints via /.well-known/openid-configuration."
+    },
+    "clientId": { "label": "Client ID" },
+    "clientSecret": {
+      "label": "Client Secret",
+      "setPlaceholder": "set -- leave blank to keep it"
+    },
+    "redirectBaseUrl": {
+      "label": "Panel's public base URL",
+      "tip": "The public address the panel is reachable at, e.g. https://vpn.example.com -- used to build the redirect URI you need to register with your IdP."
+    },
+    "callbackHint": "Register this redirect URI with your IdP:",
+    "scopes": { "label": "Scopes" },
+    "usernameClaim": {
+      "label": "Username claim",
+      "tip": "The ID token claim the login is taken from. Defaults to preferred_username."
+    },
+    "groupsClaim": {
+      "label": "Groups claim",
+      "tip": "The claim carrying group membership -- name varies by provider (groups, roles, etc). If missing from the ID token, the panel also checks the userinfo endpoint."
+    },
+    "testOk": "Discovery successful"
+  },
+  "groupRules": {
+    "title": "Groups → roles",
+    "description": "An account's role comes from its group membership. If a group matches neither list, sign-in is denied.",
+    "columns": { "role": "Role", "value": "Group" },
+    "role": { "admin": "Admin", "user": "User" },
+    "confirmDelete": "Delete the rule for \"{{value}}\"?",
+    "form": {
+      "valueRequired": "Group is required",
+      "valuePlaceholder": {
+        "ldap": "cn=vpn-admins,ou=groups,dc=example,dc=com",
+        "oidc": "vpn-admins"
+      }
+    }
+  }
+}
