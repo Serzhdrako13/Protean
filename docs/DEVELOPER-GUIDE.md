@@ -1078,19 +1078,21 @@ add/del FORWARD-accept и сознательно не трогает NAT.
 
 ---
 
-## 22. UI: шаблоны, статика, embed
+## 22. UI: SPA, статика, embed
 
-- `internal/web/web.go`: `//go:embed templates/*.html` и `//go:embed static/*`.
-  `Templates` — распарсенный набор всех страниц/фрагментов
-  (`html/template.ParseFS`), `StaticHandler()` отдаёт вендоренные htmx/Pico.css под
-  `/static/`. FuncMap: `bytesHuman`, `timeAgo`.
-- Рендер из API — `render(w, name, data)` (`api/render.go:10`).
-- View-модели — `internal/api/types.go` (`PageHeader`, `NavProviderView`,
-  `peerFormView`, `xrayView`, `serversView`, `networkView`, `meshView` и т. п.).
-  Общий заголовок собирает `pageHeader` (`providers.go:108`), который всегда кладёт
-  CSRF-токен, чтобы формы его не забыли.
-- Смоук-тесты шаблонов/маршрутов: `api/templates_smoke_test.go`,
-  `api/routes_smoke_test.go`.
+- `internal/web/web.go`: `//go:embed dist` — весь собранный React+AntD SPA
+  (`frontend/`, см. `frontend/vite.config.ts`, выход прямо в
+  `internal/web/dist`). `SPAAssetsHandler()`/`SPAFontsHandler()` отдают
+  `dist/assets/*`/`dist/fonts/*` под `/assets/`/`/fonts/`;
+  `ServeIndexHTML`/`ServeLoginHTML`/`ServePortalHTML` отдают
+  `index.html`/`login.html`/`portal.html` (три отдельных Vite-входа — админка,
+  standalone логин, standalone портал).
+- Раньше здесь были server-side `html/template` шаблоны — их больше нет,
+  вся отрисовка на клиенте, панель отдаёт только собранный SPA.
+- Смоук-тесты SPA-шелла/маршрутов: `internal/api/routes_smoke_test.go`
+  (`TestSPAFallbackServesShellWithoutSession`, `TestLoginPageIsPublic`) —
+  требуют реальный `dist/index.html`/`dist/login.html` (или хотя бы
+  заглушку, см. §24) иначе не скомпилируются вообще, не просто упадут.
 
 ---
 
@@ -1125,14 +1127,22 @@ go vet ./...
 `internal/web/dist` не хранится в git (`.gitignore`) — это выходные файлы
 `vite build`, встраиваемые через `go:embed` в `internal/web/web.go`; без
 предварительной сборки фронтенда `go build ./cmd/panel` упадёт с "pattern
-dist: no matching files found". Сборка через Docker (`docker compose ... up
---build`) делает это автоматически (см. `Dockerfile`'s multi-stage build).
+dist: no matching files found" — причём это ошибка КОМПИЛЯЦИИ, не теста, и
+затрагивает весь `internal/api` (импортирует `internal/web`), не только
+`cmd/panel`. Сборка через Docker (`docker compose ... up --build`) делает
+это автоматически (см. `Dockerfile`'s multi-stage build).
 
 Тесты:
 
 ```sh
+./scripts/ensure-frontend-dist.sh    # no-op если реальная сборка уже есть
 go test -race ./...                  # юнит + in-process интеграция (без внешних служб)
 ```
+
+`ensure-frontend-dist.sh` кладёт минимальную заглушку (`index.html`/
+`login.html`/`portal.html` + пустые `assets/`/`fonts/`) — этого достаточно
+чтобы пакет скомпилировался и два SPA-shell смоук-теста прошли, реальную
+сборку никогда не перезаписывает.
 
 Покрывает чистую логику, парсеры/билдеры, PKI, notify (httptest), API-слой и
 **SSH-клиент end-to-end** против in-process SSH-сервера.
