@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import { Outlet } from 'react-router-dom';
+import { Spin } from 'antd';
 import { HttpUtil } from '@/api/http-init';
 
 // Renders nothing until a lightweight session probe resolves, then renders
@@ -30,5 +31,9 @@ export function AuthGate() {
   }, []);
 
   if (!ready) return null;
-  return <Outlet />;
+  return (
+    <Suspense fallback={<div style={{ display: 'flex', justifyContent: 'center', padding: 48 }}><Spin size="large" /></div>}>
+      <Outlet />
+    </Suspense>
+  );
 }
