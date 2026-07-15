@@ -1,0 +1,109 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend deps
+        working-directory: frontend
+        run: npm ci
+
+      - name: Typecheck frontend
+        working-directory: frontend
+        run: npx tsc --noEmit
+
+      - name: Build frontend
+        # Outputs straight into internal/web/dist (frontend/vite.config.ts) --
+        # internal/web/web.go's //go:embed dist needs this to exist before any
+        # Go package that imports internal/web (incl. cmd/panel) will even
+        # compile, so this has to run before any `go build`/`go test` below.
+        working-directory: frontend
+        run: npm run build
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.25"
+          cache: true
+
+      - name: Go vet
+        run: go vet ./...
+
+      - name: Go test
+        # dbtest (-tags dbtest) and wgfamily's real-interface integration
+        # test (-tags integration, needs root + wg/ip) are intentionally
+        # NOT run here -- both skip (not fail) with their env var unset,
+        # matching TESTING.md. Covered by the dbtest job below instead.
+        run: go test -race ./...
+
+      - name: Build panel binary
+        run: CGO_ENABLED=0 go build -trimpath -o /tmp/panel ./cmd/panel
+
+  dbtest:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: wgpanel
+          POSTGRES_PASSWORD: wgpanel
+          POSTGRES_DB: wgpanel
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U wgpanel"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.25"
+          cache: true
+      - name: Store integration tests (real Postgres)
+        env:
+          PROTEAN_TEST_DB: postgres://wgpanel:wgpanel@localhost:5432/wgpanel?sslmode=disable
+        run: go test -tags dbtest ./internal/store/
+
+  docker-smoke:
+    runs-on: ubuntu-latest
+    needs: test
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build and boot the standalone stack
+        run: |
+          cat > .env.standalone <<EOF
+          POSTGRES_PASSWORD=ci-postgres-pass
+          SESSION_SECRET=ci-session-secret-not-for-real-use
+          SECRET_KEY=$(openssl rand -hex 32)
+          ADMIN_PASSWORD=ci-admin-pass
+          EOF
+          docker compose -f docker-compose.standalone.yml --env-file .env.standalone up -d --build
+
+      - name: Wait for /healthz
+        run: |
+          for i in $(seq 1 30); do
+            if curl -fsSk https://localhost:8080/healthz; then exit 0; fi
+            sleep 2
+          done
+          echo "panel never became healthy" >&2
+          docker compose -f docker-compose.standalone.yml logs
+          exit 1
+
+      - name: Tear down
+        if: always()
+        run: docker compose -f docker-compose.standalone.yml down -v
