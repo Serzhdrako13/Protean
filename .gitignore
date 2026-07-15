@@ -5,6 +5,7 @@
 secrets/*
 !secrets/.gitkeep
 /panel
+/bin/
 
 # Self-service portal's "how to connect" content -- auto-seeded into this
 # bind-mounted directory on first container boot (see internal/vpnsetup),

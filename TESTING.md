@@ -1,5 +1,11 @@
 # Testing
 
+**Shortest path from a fresh clone**: `make test` (unit tests, stubs the
+frontend if needed), `make build` (real frontend + static binary), `make
+dev` (self-contained standalone stack). See the Makefile for what each
+target actually runs -- everything below also works directly if you want
+more control.
+
 ## Unit + in-process integration (no external services)
 
 ```sh
