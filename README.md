@@ -33,7 +33,7 @@ dashboard, forms, and a single "add client" button.
 </p>
 </details>
 
-## What this is *not*
+## Doesn't require installing a VPN first
 
 The panel does **not require a pre-installed VPN** — it can install
 WireGuard/AmneziaWG/OpenVPN/IKEv2/Xray on the target VPS itself, one button
@@ -105,9 +105,9 @@ that SSH channel.
   stealth), `vless-vision-tls`, `vmess-ws-tls` (CDN-friendly),
   `trojan-tcp-tls`, `shadowsocks-2022`, `vless-grpc-tls`. Secrets (UUID/
   Reality keys/passwords) are generated once and stay stable across
-  re-applies; the panel hands out the client link. Doesn't work in a given
-  network — switch modules, re-apply. Xray itself installs from the panel
-  (official Xray-install script).
+  re-applies; the panel hands out the client link. If a module doesn't get
+  through in a particular network, switch to another one and re-apply.
+  Xray itself installs from the panel (official Xray-install script).
 - **Egress relay (tunnel chaining)**: any Xray server can egress traffic
   **through another server** (e.g. one abroad) — multi-hop `client → hub →
   relay → internet`, and the chain isn't limited to one hop. A relay is set
@@ -118,27 +118,31 @@ that SSH channel.
 
 ## One network, no NAT (cross-provider mesh)
 
-All transports (wg0, awg0, ...) form **one site-to-site network**. A
-WireGuard client and an AmneziaWG client see each other and every site
-subnet as if on one L3 network — no NAT, addresses stay intact. How it
-works:
+Any mesh-capable provider — **WireGuard, AmneziaWG, OpenVPN, IKEv2** (all
+except Xray, which is a proxy protocol, not IP peering) — can join **one
+site-to-site network** on the same host. A WireGuard client and, say, an
+IKEv2 client see each other and every site subnet as if on one L3 network —
+no NAT, addresses stay intact. How it works:
 
-- Each interface has its own tunnel CIDR (e.g. wg0=10.10.0.0/24,
-  awg0=10.20.0.0/24). Site subnets live in a **shared mesh catalog** (not
-  tied to a single provider).
-- The downloadable client config's AllowedIPs = **every tunnel network +
-  every site subnet, minus its own**. So a wg client routes traffic bound
-  for an awg subnet into its tunnel → the hub → out through awg0.
-- The hub forwards between interfaces: the panel writes `PostUp/PostDown`
-  into each config's `[Interface]` block with `iptables ... FORWARD ACCEPT`
-  (**no MASQUERADE** — this is site-to-site, no NAT needed), plus enables
-  `ip_forward`.
+- Each provider has its own tunnel CIDR (e.g. wg0=10.10.0.0/24,
+  awg0=10.20.0.0/24, IKEv2=10.9.0.0/24). Site subnets live in a **shared
+  mesh catalog** (not tied to a single provider).
+- The downloadable client config's AllowedIPs = **the tunnel networks of
+  every provider that's joined the mesh, + every site subnet, minus its
+  own**. So a client on one provider routes traffic bound for another
+  provider's subnet through the hub.
+- Forwarding between providers works differently depending on the type:
+  wg-family (WireGuard/AmneziaWG) gets it baked into the interface config
+  itself — `PostUp/PostDown` with `iptables ... FORWARD ACCEPT` (**no
+  MASQUERADE** — this is site-to-site, no NAT needed), applied by
+  restarting the interface; cert-based providers (OpenVPN/IKEv2) get a
+  separate host-level `iptables` rule instead, applied live, no restart
+  needed. Either way, `ip_forward` gets enabled.
 - The panel rejects any **overlap** between tunnel networks and subnets —
   without that, NAT-less routing becomes ambiguous.
 - The **Network overview** tab (on the **Network clients** page) shows
-  every transport, tunnel CIDR, subnet, and peer across both providers,
-  warns on overlaps, and has the button to enable
-  forwarding (which restarts the interface).
+  every transport, tunnel CIDR, subnet, and peer across every mesh-capable
+  provider, and warns on overlaps.
 
 > Note: on the site's own side, its LAN router/hosts need to know the
 > return route into the mesh through the client machine (or the client does
@@ -150,8 +154,9 @@ works:
 - **Dashboard** per provider: interface up/down, endpoint, port, public
   key, address, peer count/how many online, total traffic; a peer table
   (name, status, the client's current endpoint — usually a NATed public
-  IP, allowed-ips/subnets, last handshake, rx/tx). Auto-refreshes every 7
-  seconds, no page reload.
+  IP, allowed-ips/subnets, last handshake, rx/tx). Auto-refreshes with no
+  page reload, at a configurable interval (10s/20s/30s/60s/5m, 60s by
+  default).
 - **Add client**: name, auto-suggested free address in the tunnel subnet,
   which "sites" (subnets) the client should see, persistent keepalive. Keys
   are generated in the panel itself (Go, no round-trip to the host); once
@@ -162,23 +167,32 @@ works:
 - **Rotate**: regenerate a peer's keys (adopt a peer created outside the
   panel, or rotate after a leak).
 - **Delete peer**.
-- **Multi-instance**: several interfaces of the same type (wg0, wg1, ... via
-  `WG_INTERFACES`) — each its own dashboard/instance with independent
-  mesh/egress settings (for multi-site setups).
-- **Peer expiry**: auto-disable (wg) / delete (cert-based) after N days —
-  temporary/guest access, handled by a background worker.
-- **Client-side keygen** (wg): paste your own public key — the private key
-  never touches the server (self-managed, no config download needed).
-- **Server settings**: listen port, address, DNS, and for AmneziaWG also
-  the obfuscation parameters. Changing them restarts the interface (the
-  panel warns first).
+- **Multi-instance**: several interfaces of the same type on one server
+  (wg0, wg1, ...) — added from the **VPN nodes** page's "Add instance"
+  button, no container restart needed; each is its own dashboard/instance
+  with independent mesh/egress settings (for multi-site setups). There's
+  also an older env-var path (`WG_INTERFACES`/`AWG_INTERFACES`) for
+  single-server installs with no UI involved — see docs/OPERATIONS.md.
+- **Peer expiry**: auto-disable (wg-family) / delete (cert-based) after N
+  days — temporary/guest access, handled by a background worker.
+- **Client-side keygen** (wg-family): paste your own public key — the
+  private key never touches the server (self-managed, no config download
+  needed).
+- **Server settings**: listen port, DNS, MTU, and for AmneziaWG also the
+  obfuscation parameters; the interface's address/subnet is set once at
+  creation and can't be edited afterward (see Known limitations below on
+  changing the mask). Changing settings restarts the interface (the panel
+  warns first).
+- **Config history** (wg-family): before every write to the conf file, the
+  panel snapshots the previous version (date, size, preview) — restorable
+  straight from the UI, no manual grepping through backups.
 - **Subnets**: CRUD over the shared mesh catalog of site subnets with
   overlap checking; picked when creating/editing a peer and folded into
   client configs' AllowedIPs mesh-wide.
 - **Network overview**: a tab on the **Network clients** page summarizing
-  the whole network (transports, tunnel CIDRs, subnets, peers across both
-  providers, overlap warnings, forwarding toggle).
-- **Network (per provider)**: independently for each VPN — join the mesh
+  the whole network (transports, tunnel CIDRs, subnets, peers across every
+  mesh-capable provider, overlap warnings, forwarding toggle).
+- **Network & service** (per provider): independently for each VPN — join the mesh
   (off by default, i.e. a parallel independent tunnel), egress to the
   internet through this VPN (NAT + default route, off by default), and
   manage the systemd service (start/stop/enable/disable — turn off an
@@ -327,6 +341,10 @@ by hand is in **[DEPLOYMENT.md](DEPLOYMENT.md)**.
 - The panel's SSH user reads the same conf file that holds the WireGuard/
   AmneziaWG server's private key — a deliberate trade-off for a simpler
   permission model, details and reasoning in DEPLOYMENT.md.
+- **A wg-family interface's address/mask is set only at creation** and
+  can't be edited afterward — resizing the mask on a provider that already
+  has issued peers could strand some of them outside the new range, so the
+  field is locked on purpose (enforced on the API too, not just the form).
 
 ## Is there anything like this already?
 
