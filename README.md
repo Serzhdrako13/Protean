@@ -92,7 +92,7 @@ that SSH channel.
   profiles — `.mobileconfig` (Apple) and `.sswan` (strongSwan Android) —
   alongside `.p12`, as separate download links on the dashboard.
 - **Multi-server**: the panel manages several VPSes at once. Servers are
-  added on the **Servers** page (SSH credentials encrypted in the DB, AES);
+  added on the **VPN nodes** page (SSH credentials encrypted in the DB, AES);
   each server keeps its own set of providers, instance key `server:
   instance`. SSH clients and providers are rebuilt and re-registered live
   when a server is added/removed, no restart needed. An existing
@@ -135,8 +135,9 @@ works:
   `ip_forward`.
 - The panel rejects any **overlap** between tunnel networks and subnets —
   without that, NAT-less routing becomes ambiguous.
-- The **Mesh** page shows every transport, tunnel CIDR, subnet, and peer
-  across both providers, warns on overlaps, and has the button to enable
+- The **Network overview** tab (on the **Network clients** page) shows
+  every transport, tunnel CIDR, subnet, and peer across both providers,
+  warns on overlaps, and has the button to enable
   forwarding (which restarts the interface).
 
 > Note: on the site's own side, its LAN router/hosts need to know the
@@ -174,9 +175,9 @@ works:
 - **Subnets**: CRUD over the shared mesh catalog of site subnets with
   overlap checking; picked when creating/editing a peer and folded into
   client configs' AllowedIPs mesh-wide.
-- **Mesh**: one page summarizing the whole network (transports, tunnel
-  CIDRs, subnets, peers across both providers, overlap warnings, forwarding
-  toggle).
+- **Network overview**: a tab on the **Network clients** page summarizing
+  the whole network (transports, tunnel CIDRs, subnets, peers across both
+  providers, overlap warnings, forwarding toggle).
 - **Network (per provider)**: independently for each VPN — join the mesh
   (off by default, i.e. a parallel independent tunnel), egress to the
   internet through this VPN (NAT + default route, off by default), and
@@ -271,7 +272,7 @@ docker compose -f docker-compose.standalone.yml --env-file .env.standalone up -d
 
 Then open `https://localhost:8080` (self-signed cert, the browser will
 warn on first boot — expected) and add your first VPN host from the
-**Servers** page; the panel connects to it over SSH and can install the
+**VPN nodes** page; the panel connects to it over SSH and can install the
 VPN itself. See the comments at the top of
 [docker-compose.standalone.yml](docker-compose.standalone.yml) for the full
 rundown.
