@@ -135,6 +135,13 @@ func (s *Server) apiLDAPSettingsUpdate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.audit(r.Context(), "auth_methods.ldap.update", "")
+	// A generic "settings changed" entry doesn't say WHICH field changed --
+	// call this out on its own every time it's saved enabled, not just on
+	// the false->true transition, so it can't quietly go unnoticed by
+	// someone reading the log after the one save that turned it on.
+	if t.SkipTLSVerify {
+		s.audit(r.Context(), "auth_methods.ldap.insecure_tls_verify_enabled", "")
+	}
 	writeOK(w, nil)
 }
 
