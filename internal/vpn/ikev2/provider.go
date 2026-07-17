@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"math/big"
+	"net"
 	"strings"
 	"sync"
 	"time"
@@ -137,6 +138,17 @@ func (p *Provider) ImportCA(ctx context.Context, certPEM, keyPEM string) error {
 	return nil
 }
 
+// RebuildCRL regenerates the CRL from all recorded revocations (including any
+// just imported via ImportCA's crl_pem) and pushes it to the host, without
+// waiting for a full re-provision.
+func (p *Provider) RebuildCRL(ctx context.Context) error {
+	ca, err := p.getCA(ctx)
+	if err != nil {
+		return err
+	}
+	return p.rebuildCRL(ctx, ca)
+}
+
 func (p *Provider) Status(ctx context.Context) (vpn.ServerStatus, error) {
 	st := vpn.ServerStatus{Provider: p.opts.Instance}
 	out, _ := p.opts.SSH.Run(ctx, "systemctl is-active "+shellQuote(p.opts.ServiceName))
@@ -256,6 +268,50 @@ func (p *Provider) AddPeerFromCSR(ctx context.Context, csrPEM string, spec vpn.P
 		return vpn.NewPeerResult{}, err
 	}
 	return vpn.NewPeerResult{Peer: vpn.Peer{ID: cn, Provider: p.opts.Instance, Name: cn, PublicKey: cn, AllowedIPs: spec.AllowedIPs}}, nil
+}
+
+// ImportPeer adopts an already-issued client certificate (e.g. from a
+// strongSwan/swanctl server being taken over by the panel) instead of
+// issuing a new one. The cert must verify against the current CA -- only
+// works after ImportCA has adopted the matching CA. keyPEM is optional: with
+// it, a .p12 can be built later (a fresh random password is generated for
+// it, same as AddPeer); without it the client keeps its existing config.
+func (p *Provider) ImportPeer(ctx context.Context, certPEM, keyPEM string) (vpn.Peer, error) {
+	certPEM = strings.TrimSpace(certPEM)
+	keyPEM = strings.TrimSpace(keyPEM)
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	ca, err := p.getCA(ctx)
+	if err != nil {
+		return vpn.Peer{}, err
+	}
+	cn, err := ca.VerifyClientCert(certPEM)
+	if err != nil {
+		return vpn.Peer{}, err
+	}
+	var enc []byte
+	var pass string
+	if keyPEM != "" {
+		if err := pki.MatchesPrivateKey(certPEM, keyPEM); err != nil {
+			return vpn.Peer{}, err
+		}
+		enc, err = p.opts.Enc.Seal(keyPEM)
+		if err != nil {
+			return vpn.Peer{}, err
+		}
+		pass, err = randPassword()
+		if err != nil {
+			return vpn.Peer{}, err
+		}
+	}
+	if err := p.opts.Store.SaveClient(ctx, p.opts.Instance, cn, certPEM, enc, pass, "", ""); err != nil {
+		return vpn.Peer{}, err
+	}
+	if err := p.applyClients(ctx); err != nil {
+		return vpn.Peer{}, err
+	}
+	return vpn.Peer{ID: cn, Provider: p.opts.Instance, Name: cn, PublicKey: cn}, nil
 }
 
 func (p *Provider) UpdatePeer(ctx context.Context, id string, spec vpn.PeerSpec) error {
@@ -431,11 +487,21 @@ func (p *Provider) EnsureServer(ctx context.Context, pushRoutes []string, redire
 	if err != nil {
 		return err
 	}
-	var sans []string
+	// ServerID is commonly a bare IP (no-domain VPS deployments). It has to
+	// land in the right SAN bucket -- IP clients like strongSwan auto-type
+	// a dotted-quad remote id as ID_IPV4_ADDR and refuse to trust a cert
+	// whose SAN only has it as a DNS-type entry ("no trusted RSA public
+	// key found for <ip>"), confirmed live against the load-test client.
+	var dnsNames []string
+	var ips []net.IP
 	if p.opts.ServerID != "" {
-		sans = append(sans, p.opts.ServerID)
+		if ip := net.ParseIP(p.opts.ServerID); ip != nil {
+			ips = append(ips, ip)
+		} else {
+			dnsNames = append(dnsNames, p.opts.ServerID)
+		}
 	}
-	certPEM, keyPEM, err := ca.IssueServer(p.opts.ServerID, sans, nil, leafValidity)
+	certPEM, keyPEM, err := ca.IssueServer(p.opts.ServerID, dnsNames, ips, leafValidity)
 	if err != nil {
 		return fmt.Errorf("issue server cert: %w", err)
 	}

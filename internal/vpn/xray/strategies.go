@@ -45,11 +45,19 @@ func tlsSettings(p Params) map[string]any {
 	}
 }
 
-// vlessClients builds settings.clients for VLESS from the client list.
-func vlessClients(clients []Client, flow string) []any {
+// VlessClients builds settings.clients for VLESS from the client list.
+// Exported for reuse by file-based modules (filemodule.go) whose
+// "client_format" is "vless" -- flow is left empty by that path (the most
+// broadly compatible option; "xtls-rprx-vision" is specific to raw
+// TCP+Reality/TLS-vision and stays a compiled-strategy-only choice).
+func VlessClients(clients []Client, flow string) []any {
 	out := make([]any, 0, len(clients))
 	for _, c := range clients {
-		m := map[string]any{"id": c.UUID, "encryption": "none"}
+		// Xray-core rejects an "encryption" key inside inbound VLESS
+		// clients ("VLESS clients: \"encryption\" should not be in
+		// inbound settings") -- confirmed live against xray 26.3.27.
+		// It only belongs in the outbound/client-link side.
+		m := map[string]any{"id": c.UUID}
 		if flow != "" {
 			m["flow"] = flow
 		}
@@ -58,7 +66,9 @@ func vlessClients(clients []Client, flow string) []any {
 	return out
 }
 
-func vmessClients(clients []Client) []any {
+// VmessClients builds settings.clients for VMess. Exported for reuse by
+// file-based modules ("client_format": "vmess").
+func VmessClients(clients []Client) []any {
 	out := make([]any, 0, len(clients))
 	for _, c := range clients {
 		out = append(out, map[string]any{"id": c.UUID})
@@ -66,7 +76,9 @@ func vmessClients(clients []Client) []any {
 	return out
 }
 
-func trojanClients(clients []Client) []any {
+// TrojanClients builds settings.clients for Trojan. Exported for reuse by
+// file-based modules ("client_format": "trojan").
+func TrojanClients(clients []Client) []any {
 	out := make([]any, 0, len(clients))
 	for _, c := range clients {
 		out = append(out, map[string]any{"password": c.Password})
@@ -101,6 +113,12 @@ func (realityVlessTCP) Name() string      { return "reality-vless-tcp" }
 func (realityVlessTCP) Label() string     { return "VLESS + Reality (TCP) — max stealth" }
 func (realityVlessTCP) Cred() CredKind    { return CredUUID }
 func (realityVlessTCP) MultiClient() bool { return true }
+func (realityVlessTCP) InstanceSecrets() []SecretSpec {
+	return []SecretSpec{
+		{Key: pRealityPriv, Kind: "reality_keypair", PairKey: pRealityPub},
+		{Key: pShortID, Kind: "short_id"},
+	}
+}
 func (realityVlessTCP) Params() []ParamSpec {
 	return []ParamSpec{
 		{Key: pPort, Label: "Listen port", Default: "443", Required: true},
@@ -122,7 +140,7 @@ func (realityVlessTCP) BuildInbound(p Params, clients []Client) (map[string]any,
 		"listen":   "0.0.0.0",
 		"port":     portOf(p, "443"),
 		"protocol": "vless",
-		"settings": map[string]any{"clients": vlessClients(clients, "xtls-rprx-vision"), "decryption": "none"},
+		"settings": map[string]any{"clients": VlessClients(clients, "xtls-rprx-vision"), "decryption": "none"},
 		"streamSettings": map[string]any{
 			"network":  "tcp",
 			"security": "reality",
@@ -179,7 +197,7 @@ func (vlessVisionTLS) BuildInbound(p Params, clients []Client) (map[string]any, 
 		"listen":   "0.0.0.0",
 		"port":     portOf(p, "443"),
 		"protocol": "vless",
-		"settings": map[string]any{"clients": vlessClients(clients, "xtls-rprx-vision"), "decryption": "none"},
+		"settings": map[string]any{"clients": VlessClients(clients, "xtls-rprx-vision"), "decryption": "none"},
 		"streamSettings": map[string]any{
 			"network":     "tcp",
 			"security":    "tls",
@@ -225,7 +243,7 @@ func (vmessWSTLS) BuildInbound(p Params, clients []Client) (map[string]any, erro
 		"listen":   "0.0.0.0",
 		"port":     portOf(p, "443"),
 		"protocol": "vmess",
-		"settings": map[string]any{"clients": vmessClients(clients)},
+		"settings": map[string]any{"clients": VmessClients(clients)},
 		"streamSettings": map[string]any{
 			"network":     "ws",
 			"security":    "tls",
@@ -275,7 +293,7 @@ func (trojanTCPTLS) BuildInbound(p Params, clients []Client) (map[string]any, er
 		"listen":   "0.0.0.0",
 		"port":     portOf(p, "443"),
 		"protocol": "trojan",
-		"settings": map[string]any{"clients": trojanClients(clients)},
+		"settings": map[string]any{"clients": TrojanClients(clients)},
 		"streamSettings": map[string]any{
 			"network":     "tcp",
 			"security":    "tls",
@@ -357,7 +375,7 @@ func (vlessGRPCTLS) BuildInbound(p Params, clients []Client) (map[string]any, er
 		"listen":   "0.0.0.0",
 		"port":     portOf(p, "443"),
 		"protocol": "vless",
-		"settings": map[string]any{"clients": vlessClients(clients, ""), "decryption": "none"},
+		"settings": map[string]any{"clients": VlessClients(clients, ""), "decryption": "none"},
 		"streamSettings": map[string]any{
 			"network":      "grpc",
 			"security":     "tls",

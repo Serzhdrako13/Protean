@@ -65,7 +65,7 @@ that SSH channel.
   `# Name: ...` comment right above the `[Peer]` block — the same trick
   wg-easy/wireguard-ui use.
 - Postgres (in an existing container on the host, its own DB/schema
-  `wgpanel`) only holds what the conf file can't: panel users, sessions, the
+  `protean`) only holds what the conf file can't: panel users, sessions, the
   shared "site subnets" catalog, and client private keys the panel
   generated itself (AES-256-GCM encrypted, key from `SECRET_KEY`) — needed
   to hand out the config/QR again after a client is created.
@@ -316,12 +316,64 @@ and an existing Postgres container:
 The full checklist of what the script doesn't do and what to check/adjust
 by hand is in **[DEPLOYMENT.md](DEPLOYMENT.md)**.
 
+## Tested distributions & system requirements
+
+Only systemd-based Linux is supported. Tested via a real Docker container
+per distro (real systemd as PID 1, real SSH provisioning, the actual
+`protean-installer.sh` install logic — not a hand-copied package list),
+one representative version per package-manager family verified locally,
+every version below run in CI (nightly + on demand):
+
+| Family | Versions |
+|---|---|
+| apt | Ubuntu 22.04, 24.04, 26.04 (18.04/20.04 best-effort, EOL/deprecated), Debian 11, 12, 13 |
+| dnf | CentOS Stream 9, 10; Rocky Linux 8, 9, 10; AlmaLinux 8, 9, 10; Fedora 43, 44 |
+| zypper | openSUSE Leap 15.6, 16 |
+| pacman | Arch Linux |
+
+ALT Linux (apt-over-rpm hybrid) and Astra Linux are Timeweb-only options
+we don't yet support — see `test/e2elab/README.md` for exactly what was
+tried and why. Full methodology, per-distro findings, and the load-test
+harness are in `test/e2elab/README.md`.
+
+**Sizing**: the OS doesn't affect how much CPU/RAM you need — only
+whether Protean runs on it at all (the compatibility question above).
+Resource needs depend on the **VPN protocol**, **concurrent client
+count**, and **traffic per client**. Measured with a real load test
+(genuine tunnels and traffic, not synthetic):
+
+| Protocol | Cost per Mbps of traffic |
+|---|---|
+| WireGuard / AmneziaWG | cheapest (kernel-side crypto) |
+| IKEv2 | about the same as WireGuard |
+| Xray (VLESS+TLS) | ~6x WireGuard |
+| OpenVPN | ~21x WireGuard (userspace, single-process crypto) |
+
+Concretely: 20 concurrent clients at ~5 Mbps each barely register on
+WireGuard/IKEv2/Xray (well under 1 vCPU), but need roughly 2 vCPU on
+OpenVPN. At 100 clients and 10 Mbps each, WireGuard/IKEv2 still fit in
+1-2 vCPU while OpenVPN alone needs on the order of 8 vCPU for the same
+traffic. If client compatibility allows a choice, WireGuard/AmneziaWG or
+IKEv2 are the meaningfully cheaper picks for a large client base.
+
+| Tier | vCPU | RAM | Disk | Fits |
+|---|---|---|---|---|
+| Minimum | 1 | 1 GB | 10 GB | Panel + DB, one protocol, a handful of light-traffic clients. Not OpenVPN as the primary protocol. |
+| Recommended | 2 | 2 GB | 20 GB | 1-2 protocols, dozens of clients at ordinary traffic, headroom for OpenVPN too. |
+| Heavier (OpenVPN-primary, or 100+ clients) | 4-8+ | 4 GB+ | 20-40 GB | Size CPU from the formula in the doc below using your own expected client count and per-client Mbps. |
+
+RAM and disk are rarely the constraint for any of these protocols — CPU
+is. Full measured numbers, the worked formula, and honesty caveats about
+what "measured on this rig" does and doesn't guarantee on real cloud
+hardware: **[docs/SYSTEM-REQUIREMENTS.md](docs/SYSTEM-REQUIREMENTS.md)**.
+
 ## Documentation
 
 - [docs/GETTING-STARTED.md](docs/GETTING-STARTED.md) — overview + quick start
 - [docs/USER-GUIDE.md](docs/USER-GUIDE.md) — operator's guide
 - [docs/DEVELOPER-GUIDE.md](docs/DEVELOPER-GUIDE.md) — architecture and development
 - [docs/OPERATIONS.md](docs/OPERATIONS.md) — running it in production (SRE runbook)
+- [docs/SYSTEM-REQUIREMENTS.md](docs/SYSTEM-REQUIREMENTS.md) — sizing, tested distributions, load-test methodology
 
 ## Known limitations
 

@@ -4,6 +4,17 @@ on:
   push:
     branches: [main]
   pull_request:
+  # e2e-lab (below) only ever runs from these two triggers -- it needs a
+  # privileged systemd container and takes several minutes, so it's kept
+  # off the normal push/PR path entirely.
+  schedule:
+    - cron: "0 3 * * *"
+  workflow_dispatch:
+    inputs:
+      run_load_test:
+        description: "Also run e2e-load (real tunnels + traffic at 1/10/50 concurrency, ~5min, see test/e2elab/loadtest)"
+        type: boolean
+        default: false
 
 jobs:
   test:
@@ -57,13 +68,13 @@ jobs:
       postgres:
         image: postgres:16-alpine
         env:
-          POSTGRES_USER: wgpanel
-          POSTGRES_PASSWORD: wgpanel
-          POSTGRES_DB: wgpanel
+          POSTGRES_USER: protean
+          POSTGRES_PASSWORD: protean
+          POSTGRES_DB: protean
         ports:
           - 5432:5432
         options: >-
-          --health-cmd "pg_isready -U wgpanel"
+          --health-cmd "pg_isready -U protean"
           --health-interval 5s
           --health-timeout 3s
           --health-retries 20
@@ -75,7 +86,7 @@ jobs:
           cache: true
       - name: Store integration tests (real Postgres)
         env:
-          PROTEAN_TEST_DB: postgres://wgpanel:wgpanel@localhost:5432/wgpanel?sslmode=disable
+          PROTEAN_TEST_DB: postgres://protean:protean@localhost:5432/protean?sslmode=disable
         run: go test -tags dbtest ./internal/store/
 
   docker-smoke:
@@ -107,3 +118,123 @@ jobs:
       - name: Tear down
         if: always()
         run: docker compose -f docker-compose.standalone.yml down -v
+
+  e2e-lab:
+    # Real systemd container, real OpenVPN/IKEv2/Xray daemons, real SSH
+    # provisioning (see test/e2elab/README.md) -- nightly + manual only,
+    # never on a normal push/PR: needs --privileged and takes a few minutes.
+    # One matrix entry per Linux image Hetzner/Timeweb currently offer
+    # (researched against their live catalogs, not guessed); fail-fast:
+    # false so one distro's failure doesn't hide the others' results.
+    # `continue-on-error` is set only for entries this repo doesn't treat
+    # as a real target yet (see test/e2elab/README.md's distro-matrix
+    # section) -- their failures are visible in the job summary but don't
+    # fail the overall run.
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    needs: test
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # apt family
+          - { family: apt, image: "ubuntu:18.04", tag: ubuntu-1804, best_effort: true }  # EOL upstream; kept for existing-fleet coverage only
+          - { family: apt, image: "ubuntu:20.04", tag: ubuntu-2004, best_effort: true }  # deprecated by Hetzner; same reason
+          - { family: apt, image: "ubuntu:22.04", tag: ubuntu-2204 }
+          - { family: apt, image: "ubuntu:24.04", tag: ubuntu-2404 }
+          - { family: apt, image: "ubuntu:26.04", tag: ubuntu-2604 }
+          - { family: apt, image: "debian:11",    tag: debian-11 }
+          - { family: apt, image: "debian:12",    tag: debian-12 }
+          - { family: apt, image: "debian:13",    tag: debian-13 }
+          # dnf family
+          - { family: dnf, image: "quay.io/centos/centos:stream9",  tag: centos-stream9 }
+          - { family: dnf, image: "quay.io/centos/centos:stream10", tag: centos-stream10 }
+          - { family: dnf, image: "rockylinux:8",  tag: rocky-8 }
+          - { family: dnf, image: "rockylinux:9",  tag: rocky-9 }
+          - { family: dnf, image: "rockylinux:10", tag: rocky-10 }
+          - { family: dnf, image: "almalinux:8",   tag: alma-8 }
+          - { family: dnf, image: "almalinux:9",   tag: alma-9 }
+          - { family: dnf, image: "almalinux:10",  tag: alma-10 }
+          - { family: dnf, image: "fedora:43", tag: fedora-43 }
+          - { family: dnf, image: "fedora:44", tag: fedora-44 }
+          # zypper family
+          - { family: zypper, image: "opensuse/leap:15.6", tag: opensuse-leap156 }
+          - { family: zypper, image: "opensuse/leap:16",   tag: opensuse-leap16 }
+          # pacman family
+          - { family: pacman, image: "archlinux:latest", tag: arch }
+          # apt-rpm hybrid, Timeweb only -- no OS_FAMILY case in
+          # detect_os today; attempted honestly, not expected to pass
+          # (see test/e2elab/README.md).
+          - { family: altlinux, image: "alt:p10", tag: altlinux-p10, best_effort: true }
+          # Astra Linux 2.12 (Timeweb only) has no publicly available
+          # Docker base image -- not covered by this automated harness;
+          # documented in test/e2elab/README.md rather than silently
+          # dropped.
+    continue-on-error: ${{ matrix.best_effort == true }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.25"
+          cache: true
+
+      - name: Run the e2e lab (${{ matrix.image }})
+        env:
+          PROTEAN_E2ELAB: "1"
+          E2ELAB_DOCKERFILE: test/e2elab/dockerfiles/${{ matrix.family }}.Dockerfile
+          E2ELAB_BASE_IMAGE: ${{ matrix.image }}
+        run: go test -tags e2elab ./test/e2elab/... -v -timeout 15m
+
+      - name: Dump container logs on failure
+        if: failure()
+        run: docker logs protean-e2elab || true
+
+      - name: Tear down
+        if: always()
+        run: docker rm -f protean-e2elab || true
+
+  e2e-load:
+    # Real client tunnels (WireGuard/AmneziaWG, OpenVPN, IKEv2, Xray)
+    # against a real server, at 1/10/50 concurrent peers, with real
+    # iperf3/curl traffic and CPU%/RSS sampling (see
+    # test/e2elab/loadtest/README.md and docs/SYSTEM-REQUIREMENTS.md for
+    # the numbers this produces). Explicit opt-in only -- a second
+    # container plus real package installs on both sides takes noticeably
+    # longer than e2e-lab, so a plain "Run workflow" click doesn't trigger
+    # it by accident.
+    if: github.event_name == 'workflow_dispatch' && inputs.run_load_test == true
+    runs-on: ubuntu-latest
+    needs: test
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.25"
+          cache: true
+
+      - name: Run the load test
+        env:
+          PROTEAN_E2ELOAD: "1"
+        run: go test -tags e2eload ./test/e2elab/loadtest/... -v -timeout 20m
+
+      - name: Upload results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: loadtest-results
+          path: test/e2elab/loadtest/results.json
+          if-no-files-found: ignore
+
+      - name: Dump container logs on failure
+        if: failure()
+        run: |
+          docker logs protean-loadtest-server || true
+          docker logs protean-loadtest-client || true
+
+      - name: Tear down
+        if: always()
+        run: |
+          docker rm -f protean-loadtest-server protean-loadtest-client || true
+          docker network rm protean-loadtest-net || true

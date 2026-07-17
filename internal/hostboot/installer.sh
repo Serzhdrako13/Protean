@@ -12,6 +12,7 @@
 #   detect                 -> print a JSON summary of the host to stdout
 #   install <provider>     -> install a VPN backend (wireguard|amneziawg|openvpn|ikev2)
 #   status  <unit>         -> print "active"/"inactive"/"unknown" for a systemd unit
+#   ensure-ip-forward      -> turn on net.ipv4.ip_forward if it isn't already (idempotent)
 #
 # Keep this script dependency-free (POSIX-ish bash) and side-effect-free
 # except for the explicit install actions.
@@ -98,11 +99,38 @@ provider_installable() {
 
 json_bool() { if [ "$1" -eq 1 ] 2>/dev/null || [ "$1" = "true" ]; then printf 'true'; else printf 'false'; fi; }
 
+# provider_service_active/provider_config_exists: best-effort check for
+# whether this host ALREADY looks provisioned by the panel's own conventional
+# defaults (openvpn-server@server unit + /etc/openvpn/server/server.conf,
+# ipsec unit + any /etc/swanctl/conf.d/*.conf) -- used to warn before "Set up"
+# would overwrite an existing CA/config. Only meaningful for cert-based
+# providers (wg-family's "Set up" doesn't destroy anything, it's just a
+# config write); other providers always report false here.
+provider_service_active() {
+	command -v systemctl >/dev/null 2>&1 || return 1
+	case "$1" in
+		openvpn) systemctl is-active --quiet "openvpn-server@server" ;;
+		ikev2)   systemctl is-active --quiet ipsec ;;
+		*)       return 1 ;;
+	esac
+}
+
+provider_config_exists() {
+	case "$1" in
+		openvpn) [ -s /etc/openvpn/server/server.conf ] ;;
+		ikev2)   ls /etc/swanctl/conf.d/*.conf >/dev/null 2>&1 ;;
+		*)       return 1 ;;
+	esac
+}
+
 provider_json() {
-	local p="$1" inst=false able=false
+	local p="$1" inst=false able=false active=false cfg=false
 	provider_installed "$p" && inst=true
 	provider_installable "$p" && able=true
-	printf '"%s":{"installed":%s,"installable":%s}' "$p" "$inst" "$able"
+	provider_service_active "$p" && active=true
+	provider_config_exists "$p" && cfg=true
+	printf '"%s":{"installed":%s,"installable":%s,"service_active":%s,"config_exists":%s}' \
+		"$p" "$inst" "$able" "$active" "$cfg"
 }
 
 cmd_detect() {
@@ -137,7 +165,16 @@ pkg_install() {
 		dnf)    dnf install -y "$@" ;;
 		yum)    yum install -y "$@" ;;
 		pacman) pacman -Sy --noconfirm --needed "$@" ;;
-		zypper) zypper --non-interactive install -y "$@" ;;
+		zypper)
+			# Exit 107 (ZYPPER_EXIT_INF_RPM_SCRIPT_FAILED) means the
+			# package installed fine but an rpm %post scriptlet
+			# errored -- confirmed live: strongswan's scriptlet
+			# calls systemctl, which fails with no live systemd
+			# during a container build. Not a real install failure.
+			zypper --non-interactive install -y "$@"
+			local rc=$?
+			[ "$rc" -eq 0 ] || [ "$rc" -eq 107 ]
+			;;
 		*)      echo "no supported package manager" >&2; return 1 ;;
 	esac
 }
@@ -214,12 +251,63 @@ install_amneziawg() {
 }
 
 install_openvpn() {
+	# RHEL-clones (not Fedora, which ships these directly in its own repos)
+	# don't carry openvpn/easy-rsa in the base repos at all -- EPEL has to
+	# be enabled first. Confirmed live: `dnf install openvpn easy-rsa`
+	# fails outright on a stock Rocky Linux 9 without this.
+	if [ "$PKG_MANAGER" = "dnf" ] || [ "$PKG_MANAGER" = "yum" ]; then
+		if [ "${ID:-}" != "fedora" ]; then
+			pkg_install epel-release || true
+		fi
+	fi
 	case "$PKG_MANAGER" in
 		apt|dnf|yum|pacman) pkg_install openvpn easy-rsa ;;
 		zypper)             pkg_install openvpn easy-rsa ;;
 	esac
+	ensure_openvpn_alias
 	echo "[i] OpenVPN installed but not configured -- the panel does not manage it yet."
 	provider_installed openvpn
+}
+
+# The panel's Go code (internal/vpn/openvpn, internal/servers/manager.go)
+# hardcodes both the Debian/RHEL unit template name "openvpn-server@<name>"
+# AND its path convention (config at /etc/openvpn/server/<name>.conf,
+# i.e. WorkingDirectory=/etc/openvpn/server + a relative "%i.conf").
+# openSUSE's openvpn package ships neither: its own "openvpn@<name>"
+# template resolves to the flat path /etc/openvpn/<name>.conf instead --
+# confirmed live on opensuse/leap:15.6 ("Error opening configuration
+# file: server.conf", cwd /etc/openvpn/, not /etc/openvpn/server/). A
+# plain alias symlink to that template would just move the same path
+# mismatch one level down, so instead write a real unit using the
+# Debian-style WorkingDirectory/ExecStart, reusing the same openvpn
+# binary the distro already installed.
+ensure_openvpn_alias() {
+	[ -e /etc/systemd/system/openvpn-server@.service ] && return 0
+	if [ -e /usr/lib/systemd/system/openvpn-server@.service ] || [ -e /lib/systemd/system/openvpn-server@.service ]; then
+		return 0 # native template already uses the expected convention
+	fi
+	local bin
+	bin="$(command -v openvpn || echo /usr/sbin/openvpn)"
+	cat > /etc/systemd/system/openvpn-server@.service <<EOF
+[Unit]
+Description=OpenVPN service for %I
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=notify
+PrivateTmp=true
+RuntimeDirectory=openvpn-server
+WorkingDirectory=/etc/openvpn/server
+ExecStart=$bin --status /run/openvpn-server/status-%i.log --status-version 2 --suppress-timestamps --config %i.conf
+RestartSec=5s
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target
+EOF
+	systemctl daemon-reload 2>/dev/null || true
+	return 0
 }
 
 install_ikev2() {
@@ -232,13 +320,69 @@ install_ikev2() {
 		debian) pkg_install strongswan strongswan-swanctl strongswan-pki libcharon-extra-plugins || pkg_install strongswan strongswan-swanctl ;;
 		*)      pkg_install strongswan ;;
 	esac
+	ensure_ipsec_alias
 	provider_installed ikev2
+}
+
+# ensure_ipsec_alias: the rest of this panel assumes "ipsec" as the one
+# portable strongSwan service name across every distro (see
+# internal/vpn/ikev2/provider.go's ServiceName comment) -- true on Debian/
+# Ubuntu, whose strongswan package declares an Alias=ipsec.service in its
+# unit file (materialized into a real symlink only once something actually
+# runs `systemctl enable`), but NOT on RHEL-family: confirmed live that
+# Rocky Linux 9's strongswan package ships only strongswan.service /
+# strongswan-starter.service with no "ipsec" alias at all, so
+# `service enable ipsec` fails outright with "Unit file ipsec.service does
+# not exist." File-based checks only (no `systemctl cat`/`show`/
+# `daemon-reload`) -- this needs to work when called from a Docker image
+# build too, where systemd isn't actually running as PID 1 yet to answer
+# live queries (confirmed live: those all fail with "Failed to connect to
+# bus" at build time, even though the plain enable/symlink operations
+# below don't need a live daemon at all).
+ensure_ipsec_alias() {
+	[ -e /etc/systemd/system/ipsec.service ] && return 0
+	local dir name f
+	for dir in /usr/lib/systemd/system /lib/systemd/system; do
+		for name in strongswan.service strongswan-starter.service; do
+			f="$dir/$name"
+			[ -f "$f" ] || continue
+			if grep -q '^Alias=ipsec\.service' "$f" 2>/dev/null; then
+				return 0 # native alias declared; `systemctl enable` materializes it at runtime
+			fi
+			ln -sf "$f" /etc/systemd/system/ipsec.service
+			return 0
+		done
+	done
+	echo "[!] no strongswan systemd unit found to alias as ipsec.service" >&2
+	return 1
 }
 
 install_xray() {
 	# Official installer (systemd service + /usr/local/bin/xray). Needs curl.
 	have curl || pkg_install curl
+	# openSUSE/SLE don't ship a "nobody" user in the base image (every
+	# other family here does) -- the installer's own check_install_user
+	# step hard-requires one and exits before doing anything else.
+	# Confirmed live: fresh opensuse/leap:15.6 has no "nobody" account.
+	if [ "$OS_FAMILY" = "suse" ] && ! id nobody >/dev/null 2>&1; then
+		pkg_install system-user-nobody || true
+	fi
 	bash -c "$(curl -fsSL https://github.com/XTLS/Xray-install/raw/main/install-release.sh)" @ install
+	# Upstream unit runs as User=nobody, but /usr/local/etc/xray is locked
+	# to 750 protean:protean (config holds plaintext client UUIDs/Reality
+	# keys, so it's not world-readable like the other conf dirs) -- nobody
+	# then can't even traverse the directory to read its own config file.
+	# Confirmed live: xray.service fails every start with EACCES on
+	# config.json, on every distro. Run as protean instead, which already
+	# owns that directory -- no new privilege surface, no loosening to
+	# world-readable.
+	mkdir -p /etc/systemd/system/xray.service.d
+	cat > /etc/systemd/system/xray.service.d/10-protean-user.conf <<'EOF'
+[Service]
+User=protean
+Group=protean
+EOF
+	systemctl daemon-reload 2>/dev/null || true
 	provider_installed xray
 }
 
@@ -304,6 +448,22 @@ cmd_forward() {
 	esac
 }
 
+# cmd_ensure_ip_forward: turn on net.ipv4.ip_forward if it isn't already, the
+# same sysctl drop-in setup-host.sh's interactive bootstrap uses -- but
+# idempotent and non-interactive, so the panel can re-check/re-apply it any
+# time mesh/egress gets turned on (a host reboot without the sysctl.d file
+# surviving, or ip_forward toggled off out-of-band, would otherwise silently
+# break routing between sites until someone noticed).
+cmd_ensure_ip_forward() {
+	if [ "$(sysctl -n net.ipv4.ip_forward 2>/dev/null)" = "1" ]; then
+		echo "already enabled"
+		return 0
+	fi
+	echo "net.ipv4.ip_forward = 1" > /etc/sysctl.d/99-protean.conf
+	sysctl -q -p /etc/sysctl.d/99-protean.conf
+	echo "enabled"
+}
+
 # cmd_service <action> <unit>: control a VPN systemd unit to save resources on
 # hosts where a given VPN is not used. Whitelisted actions + unit pattern.
 cmd_service() {
@@ -311,7 +471,41 @@ cmd_service() {
 	command -v systemctl >/dev/null 2>&1 || { echo "no systemctl" >&2; return 1; }
 	case "$action" in
 		start|stop|restart) systemctl "$action" "$unit" ;;
-		enable)  systemctl enable --now "$unit" ;;
+		enable)
+			# If $unit's underlying template/unit file is itself a
+			# manually-created alias symlink (see ensure_ipsec_alias,
+			# ensure_openvpn_alias -- needed where a distro's package
+			# doesn't declare a native alias, e.g. RHEL's strongswan
+			# has no ipsec.service alias, openSUSE's openvpn package
+			# ships openvpn@.service not openvpn-server@.service),
+			# systemd refuses to `enable` it directly ("Refusing to
+			# operate on alias name or linked unit file") -- resolve
+			# to the real target and enable THAT instead. start/stop/
+			# restart/is-active against the alias name work fine as-is,
+			# only enable needs this.
+			local base="${unit%%@*}" instance="" tmpl real
+			case "$unit" in
+				*@*) instance="${unit#*@}" ;;
+			esac
+			if [ -n "$instance" ]; then
+				tmpl="/etc/systemd/system/${base}@.service"
+			else
+				tmpl="/etc/systemd/system/${base}.service"
+			fi
+			if [ -L "$tmpl" ]; then
+				real="$(readlink -f "$tmpl")"
+				if [ -n "$instance" ]; then
+					local realbase
+					realbase="$(basename "$real")"
+					realbase="${realbase%@.service}"
+					systemctl enable --now "${realbase}@${instance}"
+				else
+					systemctl enable --now "$real"
+				fi
+			else
+				systemctl enable --now "$unit"
+			fi
+			;;
 		disable) systemctl disable --now "$unit" ;;
 		*) echo "invalid action" >&2; return 2 ;;
 	esac
@@ -360,8 +554,11 @@ main() {
 			[[ "$n" =~ $VALID_LINES ]] || { echo "invalid lines" >&2; exit 2; }
 			cmd_logs "$u" "$n"
 			;;
+		ensure-ip-forward)
+			cmd_ensure_ip_forward
+			;;
 		*)
-			echo "usage: $0 {detect|install <provider>|status <unit>|service <action> <unit>|forward <add|del> <cidr>|logs <unit> <lines>}" >&2
+			echo "usage: $0 {detect|install <provider>|status <unit>|service <action> <unit>|forward <add|del> <cidr>|logs <unit> <lines>|ensure-ip-forward}" >&2
 			exit 2
 			;;
 	esac
