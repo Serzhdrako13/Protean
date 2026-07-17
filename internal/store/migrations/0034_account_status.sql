@@ -5,5 +5,5 @@
 -- portal_access_enabled=false only blocks the self-service portal login
 -- path (role='user' accounts) while leaving any existing VPN peers
 -- running untouched -- a lighter control than disabling the account.
-ALTER TABLE wgpanel.users ADD COLUMN enabled BOOLEAN NOT NULL DEFAULT true;
-ALTER TABLE wgpanel.users ADD COLUMN portal_access_enabled BOOLEAN NOT NULL DEFAULT true;
+ALTER TABLE protean.users ADD COLUMN enabled BOOLEAN NOT NULL DEFAULT true;
+ALTER TABLE protean.users ADD COLUMN portal_access_enabled BOOLEAN NOT NULL DEFAULT true;

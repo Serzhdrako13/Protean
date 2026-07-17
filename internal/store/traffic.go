@@ -15,7 +15,7 @@ type TrafficSample struct {
 // InsertTrafficSample records a counter snapshot for the traffic history chart.
 func (s *Store) InsertTrafficSample(ctx context.Context, provider string, ts time.Time, rx, tx uint64) error {
 	_, err := s.pool.Exec(ctx, `
-		INSERT INTO wgpanel.traffic_samples (provider, ts, rx_bytes, tx_bytes)
+		INSERT INTO protean.traffic_samples (provider, ts, rx_bytes, tx_bytes)
 		VALUES ($1, $2, $3, $4)
 	`, provider, ts, int64(rx), int64(tx))
 	return err
@@ -25,7 +25,7 @@ func (s *Store) InsertTrafficSample(ctx context.Context, provider string, ts tim
 // instant, oldest first.
 func (s *Store) TrafficSamples(ctx context.Context, provider string, since time.Time) ([]TrafficSample, error) {
 	rows, err := s.pool.Query(ctx, `
-		SELECT ts, rx_bytes, tx_bytes FROM wgpanel.traffic_samples
+		SELECT ts, rx_bytes, tx_bytes FROM protean.traffic_samples
 		WHERE provider = $1 AND ts >= $2
 		ORDER BY ts ASC
 	`, provider, since)
@@ -52,7 +52,7 @@ func (s *Store) TrafficSamples(ctx context.Context, provider string, since time.
 // up rounds instead of needing time-bucket approximation), oldest first.
 func (s *Store) AggregateTrafficSamples(ctx context.Context, since time.Time) ([]TrafficSample, error) {
 	rows, err := s.pool.Query(ctx, `
-		SELECT ts, SUM(rx_bytes), SUM(tx_bytes) FROM wgpanel.traffic_samples
+		SELECT ts, SUM(rx_bytes), SUM(tx_bytes) FROM protean.traffic_samples
 		WHERE ts >= $1
 		GROUP BY ts
 		ORDER BY ts ASC
@@ -80,7 +80,7 @@ func (s *Store) AggregateTrafficSamples(ctx context.Context, since time.Time) ([
 // AggregateTrafficSamples. Backs the Index page's per-server traffic chart.
 func (s *Store) AggregateTrafficSamplesByServer(ctx context.Context, serverID string, since time.Time) ([]TrafficSample, error) {
 	rows, err := s.pool.Query(ctx, `
-		SELECT ts, SUM(rx_bytes), SUM(tx_bytes) FROM wgpanel.traffic_samples
+		SELECT ts, SUM(rx_bytes), SUM(tx_bytes) FROM protean.traffic_samples
 		WHERE split_part(provider, ':', 1) = $1 AND ts >= $2
 		GROUP BY ts
 		ORDER BY ts ASC
@@ -104,6 +104,6 @@ func (s *Store) AggregateTrafficSamplesByServer(ctx context.Context, serverID st
 
 // PruneTrafficSamples deletes samples older than the cutoff (retention window).
 func (s *Store) PruneTrafficSamples(ctx context.Context, before time.Time) error {
-	_, err := s.pool.Exec(ctx, `DELETE FROM wgpanel.traffic_samples WHERE ts < $1`, before)
+	_, err := s.pool.Exec(ctx, `DELETE FROM protean.traffic_samples WHERE ts < $1`, before)
 	return err
 }

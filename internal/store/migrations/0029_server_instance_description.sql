@@ -3,4 +3,4 @@
 -- внутреннюю сеть") -- shown to self-service portal users alongside the
 -- friendly label, so they understand WHAT each connection is for, not just
 -- its name.
-ALTER TABLE wgpanel.server_instances ADD COLUMN description TEXT NOT NULL DEFAULT '';
+ALTER TABLE protean.server_instances ADD COLUMN description TEXT NOT NULL DEFAULT '';

@@ -102,7 +102,7 @@ type apiProviderSummary struct {
 	Status        vpn.ServerStatus `json:"status"`
 	CertBased     bool             `json:"cert_based"`
 	// PortalVisible: whether this instance is opted into the self-service
-	// portal (see wgpanel.server_instances.portal_visible).
+	// portal (see protean.server_instances.portal_visible).
 	PortalVisible bool `json:"portal_visible"`
 	// Description is the admin-set note shown to portal users (empty if unset).
 	Description string `json:"description,omitempty"`

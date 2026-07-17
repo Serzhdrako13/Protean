@@ -45,7 +45,7 @@ type User struct {
 func (s *Store) CreateUser(ctx context.Context, username, passwordHash, role string) (User, error) {
 	var u User
 	err := s.pool.QueryRow(ctx, `
-		INSERT INTO wgpanel.users (username, password_hash, role, auth_source)
+		INSERT INTO protean.users (username, password_hash, role, auth_source)
 		VALUES ($1, $2, $3, 'local')
 		RETURNING id, username, password_hash, role, auth_source, created_at, password_changed_at
 	`, username, passwordHash, role).Scan(&u.ID, &u.Username, &u.PasswordHash, &u.Role, &u.AuthSource, &u.CreatedAt, &u.PasswordChangedAt)
@@ -60,7 +60,7 @@ func (s *Store) CreateUser(ctx context.Context, username, passwordHash, role str
 func (s *Store) UpsertExternalUser(ctx context.Context, username, authSource, role string) (User, error) {
 	var u User
 	err := s.pool.QueryRow(ctx, `
-		INSERT INTO wgpanel.users (username, role, auth_source)
+		INSERT INTO protean.users (username, role, auth_source)
 		VALUES ($1, $2, $3)
 		ON CONFLICT (auth_source, username) DO UPDATE SET role = EXCLUDED.role
 		RETURNING id, username, role, auth_source, totp_secret, totp_enabled, created_at, password_changed_at, language, enabled, portal_access_enabled
@@ -77,7 +77,7 @@ func (s *Store) GetUserByUsernameAndSource(ctx context.Context, username, authSo
 	var u User
 	err := s.pool.QueryRow(ctx, `
 		SELECT id, username, COALESCE(password_hash, ''), role, auth_source, totp_secret, totp_enabled, created_at, password_changed_at, language, enabled, portal_access_enabled
-		FROM wgpanel.users
+		FROM protean.users
 		WHERE username = $1 AND auth_source = $2
 	`, username, authSource).Scan(&u.ID, &u.Username, &u.PasswordHash, &u.Role, &u.AuthSource, &u.TOTPSecret, &u.TOTPEnabled, &u.CreatedAt, &u.PasswordChangedAt, &u.Language, &u.Enabled, &u.PortalAccessEnabled)
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -90,7 +90,7 @@ func (s *Store) GetUserByID(ctx context.Context, id int64) (User, error) {
 	var u User
 	err := s.pool.QueryRow(ctx, `
 		SELECT id, username, COALESCE(password_hash, ''), role, auth_source, totp_secret, totp_enabled, created_at, password_changed_at, language, enabled, portal_access_enabled
-		FROM wgpanel.users
+		FROM protean.users
 		WHERE id = $1
 	`, id).Scan(&u.ID, &u.Username, &u.PasswordHash, &u.Role, &u.AuthSource, &u.TOTPSecret, &u.TOTPEnabled, &u.CreatedAt, &u.PasswordChangedAt, &u.Language, &u.Enabled, &u.PortalAccessEnabled)
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -102,7 +102,7 @@ func (s *Store) GetUserByID(ctx context.Context, id int64) (User, error) {
 // UpdateUserLanguage saves the account's UI language preference.
 func (s *Store) UpdateUserLanguage(ctx context.Context, id int64, language string) error {
 	tag, err := s.pool.Exec(ctx, `
-		UPDATE wgpanel.users SET language = $2 WHERE id = $1
+		UPDATE protean.users SET language = $2 WHERE id = $1
 	`, id, language)
 	if err != nil {
 		return err
@@ -117,7 +117,7 @@ func (s *Store) UpdateUserLanguage(ctx context.Context, id int64, language strin
 // username -- for the admin "Users" management page.
 func (s *Store) ListUsers(ctx context.Context) ([]User, error) {
 	rows, err := s.pool.Query(ctx, `
-		SELECT id, username, role, created_at, enabled, portal_access_enabled FROM wgpanel.users
+		SELECT id, username, role, created_at, enabled, portal_access_enabled FROM protean.users
 		ORDER BY role DESC, username
 	`)
 	if err != nil {
@@ -138,7 +138,7 @@ func (s *Store) ListUsers(ctx context.Context) ([]User, error) {
 // UpdateUserEnabled sets the account-wide enabled flag (see the migration
 // that adds this column for what disabling implies).
 func (s *Store) UpdateUserEnabled(ctx context.Context, id int64, enabled bool) error {
-	tag, err := s.pool.Exec(ctx, `UPDATE wgpanel.users SET enabled = $2 WHERE id = $1`, id, enabled)
+	tag, err := s.pool.Exec(ctx, `UPDATE protean.users SET enabled = $2 WHERE id = $1`, id, enabled)
 	if err != nil {
 		return err
 	}
@@ -153,7 +153,7 @@ func (s *Store) UpdateUserEnabled(ctx context.Context, id int64, enabled bool) e
 // SeedEmergencyAdmin) to guarantee the account is an admin even if a
 // pre-existing local account of the same username had drifted to "user".
 func (s *Store) UpdateUserRole(ctx context.Context, id int64, role string) error {
-	tag, err := s.pool.Exec(ctx, `UPDATE wgpanel.users SET role = $2 WHERE id = $1`, id, role)
+	tag, err := s.pool.Exec(ctx, `UPDATE protean.users SET role = $2 WHERE id = $1`, id, role)
 	if err != nil {
 		return err
 	}
@@ -165,7 +165,7 @@ func (s *Store) UpdateUserRole(ctx context.Context, id int64, role string) error
 
 // UpdateUserPortalAccess sets the portal-only access flag.
 func (s *Store) UpdateUserPortalAccess(ctx context.Context, id int64, enabled bool) error {
-	tag, err := s.pool.Exec(ctx, `UPDATE wgpanel.users SET portal_access_enabled = $2 WHERE id = $1`, id, enabled)
+	tag, err := s.pool.Exec(ctx, `UPDATE protean.users SET portal_access_enabled = $2 WHERE id = $1`, id, enabled)
 	if err != nil {
 		return err
 	}
@@ -178,12 +178,12 @@ func (s *Store) UpdateUserPortalAccess(ctx context.Context, id int64, enabled bo
 // CountUsersByRole is used to guard against deleting the last remaining admin.
 func (s *Store) CountUsersByRole(ctx context.Context, role string) (int, error) {
 	var n int
-	err := s.pool.QueryRow(ctx, `SELECT count(*) FROM wgpanel.users WHERE role = $1`, role).Scan(&n)
+	err := s.pool.QueryRow(ctx, `SELECT count(*) FROM protean.users WHERE role = $1`, role).Scan(&n)
 	return n, err
 }
 
 func (s *Store) DeleteUser(ctx context.Context, id int64) error {
-	tag, err := s.pool.Exec(ctx, `DELETE FROM wgpanel.users WHERE id = $1`, id)
+	tag, err := s.pool.Exec(ctx, `DELETE FROM protean.users WHERE id = $1`, id)
 	if err != nil {
 		return err
 	}
@@ -196,7 +196,7 @@ func (s *Store) DeleteUser(ctx context.Context, id int64) error {
 // SetUserTOTP stores the secret and enabled flag for a user's 2FA.
 func (s *Store) SetUserTOTP(ctx context.Context, id int64, secret string, enabled bool) error {
 	tag, err := s.pool.Exec(ctx, `
-		UPDATE wgpanel.users SET totp_secret = $2, totp_enabled = $3 WHERE id = $1
+		UPDATE protean.users SET totp_secret = $2, totp_enabled = $3 WHERE id = $1
 	`, id, secret, enabled)
 	if err != nil {
 		return err
@@ -209,13 +209,13 @@ func (s *Store) SetUserTOTP(ctx context.Context, id int64, secret string, enable
 
 func (s *Store) CountUsers(ctx context.Context) (int, error) {
 	var n int
-	err := s.pool.QueryRow(ctx, `SELECT count(*) FROM wgpanel.users`).Scan(&n)
+	err := s.pool.QueryRow(ctx, `SELECT count(*) FROM protean.users`).Scan(&n)
 	return n, err
 }
 
 func (s *Store) UpdateUserPassword(ctx context.Context, id int64, passwordHash string) error {
 	tag, err := s.pool.Exec(ctx, `
-		UPDATE wgpanel.users SET password_hash = $2, password_changed_at = now() WHERE id = $1
+		UPDATE protean.users SET password_hash = $2, password_changed_at = now() WHERE id = $1
 	`, id, passwordHash)
 	if err != nil {
 		return err

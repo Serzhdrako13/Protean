@@ -2,7 +2,7 @@
 -- the config is always active -- so to disable a peer without losing it we
 -- remove it from the live interface and config and stash its definition here.
 -- Enabling re-adds it verbatim (same public key, routes, keepalive).
-CREATE TABLE wgpanel.disabled_peers (
+CREATE TABLE protean.disabled_peers (
     provider    TEXT NOT NULL,
     public_key  TEXT NOT NULL,
     name        TEXT NOT NULL DEFAULT '',

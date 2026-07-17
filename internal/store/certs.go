@@ -21,7 +21,7 @@ func (s *Store) GetCAMaterial(ctx context.Context, provider string) (CAMaterial,
 	var m CAMaterial
 	err := s.pool.QueryRow(ctx, `
 		SELECT provider, cert_pem, enc_key_pem, source, created_at
-		FROM wgpanel.ca_material WHERE provider = $1
+		FROM protean.ca_material WHERE provider = $1
 	`, provider).Scan(&m.Provider, &m.CertPEM, &m.EncKeyPEM, &m.Source, &m.CreatedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return CAMaterial{}, ErrNotFound
@@ -34,7 +34,7 @@ func (s *Store) SaveCAMaterial(ctx context.Context, m CAMaterial) error {
 		m.Source = "internal"
 	}
 	_, err := s.pool.Exec(ctx, `
-		INSERT INTO wgpanel.ca_material (provider, cert_pem, enc_key_pem, source)
+		INSERT INTO protean.ca_material (provider, cert_pem, enc_key_pem, source)
 		VALUES ($1, $2, $3, $4)
 		ON CONFLICT (provider) DO UPDATE SET
 			cert_pem = EXCLUDED.cert_pem, enc_key_pem = EXCLUDED.enc_key_pem, source = EXCLUDED.source
@@ -56,7 +56,7 @@ type OpenVPNClient struct {
 
 func (s *Store) SaveOpenVPNClient(ctx context.Context, c OpenVPNClient) error {
 	_, err := s.pool.Exec(ctx, `
-		INSERT INTO wgpanel.openvpn_clients (provider, cn, cert_pem, enc_key_pem, address, subnets)
+		INSERT INTO protean.openvpn_clients (provider, cn, cert_pem, enc_key_pem, address, subnets)
 		VALUES ($1, $2, $3, $4, $5, $6)
 		ON CONFLICT (provider, cn) DO UPDATE SET
 			cert_pem = EXCLUDED.cert_pem, enc_key_pem = EXCLUDED.enc_key_pem,
@@ -69,7 +69,7 @@ func (s *Store) GetOpenVPNClient(ctx context.Context, provider, cn string) (Open
 	var c OpenVPNClient
 	err := s.pool.QueryRow(ctx, `
 		SELECT provider, cn, cert_pem, enc_key_pem, address, subnets, created_at
-		FROM wgpanel.openvpn_clients WHERE provider = $1 AND cn = $2
+		FROM protean.openvpn_clients WHERE provider = $1 AND cn = $2
 	`, provider, cn).Scan(&c.Provider, &c.CN, &c.CertPEM, &c.EncKeyPEM, &c.Address, &c.Subnets, &c.CreatedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return OpenVPNClient{}, ErrNotFound
@@ -80,7 +80,7 @@ func (s *Store) GetOpenVPNClient(ctx context.Context, provider, cn string) (Open
 func (s *Store) ListOpenVPNClients(ctx context.Context, provider string) ([]OpenVPNClient, error) {
 	rows, err := s.pool.Query(ctx, `
 		SELECT provider, cn, cert_pem, enc_key_pem, address, subnets, created_at
-		FROM wgpanel.openvpn_clients WHERE provider = $1 ORDER BY cn
+		FROM protean.openvpn_clients WHERE provider = $1 ORDER BY cn
 	`, provider)
 	if err != nil {
 		return nil, err
@@ -98,6 +98,6 @@ func (s *Store) ListOpenVPNClients(ctx context.Context, provider string) ([]Open
 }
 
 func (s *Store) DeleteOpenVPNClient(ctx context.Context, provider, cn string) error {
-	_, err := s.pool.Exec(ctx, `DELETE FROM wgpanel.openvpn_clients WHERE provider = $1 AND cn = $2`, provider, cn)
+	_, err := s.pool.Exec(ctx, `DELETE FROM protean.openvpn_clients WHERE provider = $1 AND cn = $2`, provider, cn)
 	return err
 }

@@ -3,9 +3,9 @@
 -- enforcement (internal/api/api_common.go's requireAuthAPI gate) --
 -- existing users get `now()` as a starting point via the column default,
 -- not treated as already-overdue on the day this migration runs.
-ALTER TABLE wgpanel.users ADD COLUMN password_changed_at timestamptz NOT NULL DEFAULT now();
+ALTER TABLE protean.users ADD COLUMN password_changed_at timestamptz NOT NULL DEFAULT now();
 
-CREATE TABLE wgpanel.password_policy_settings (
+CREATE TABLE protean.password_policy_settings (
     id             boolean PRIMARY KEY DEFAULT true CHECK (id),
     min_length     int NOT NULL DEFAULT 8,
     require_upper  boolean NOT NULL DEFAULT false,

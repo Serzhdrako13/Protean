@@ -27,7 +27,7 @@ func (s *Store) GetProviderSettings(ctx context.Context, provider string) (Provi
 	ps := ProviderSettings{Provider: provider}
 	err := s.pool.QueryRow(ctx, `
 		SELECT mesh_enabled, internet_egress, auto_assign_start, auto_assign_end
-		FROM wgpanel.provider_settings WHERE provider = $1
+		FROM protean.provider_settings WHERE provider = $1
 	`, provider).Scan(&ps.MeshEnabled, &ps.InternetEgress, &ps.AutoAssignStart, &ps.AutoAssignEnd)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return ps, nil // no row -> defaults (standalone parallel tunnel)
@@ -41,7 +41,7 @@ func (s *Store) GetProviderSettings(ctx context.Context, provider string) (Provi
 // SetProviderSettings upserts the toggles for a provider.
 func (s *Store) SetProviderSettings(ctx context.Context, ps ProviderSettings) error {
 	_, err := s.pool.Exec(ctx, `
-		INSERT INTO wgpanel.provider_settings (provider, mesh_enabled, internet_egress, auto_assign_start, auto_assign_end, updated_at)
+		INSERT INTO protean.provider_settings (provider, mesh_enabled, internet_egress, auto_assign_start, auto_assign_end, updated_at)
 		VALUES ($1, $2, $3, $4, $5, now())
 		ON CONFLICT (provider) DO UPDATE SET
 			mesh_enabled = EXCLUDED.mesh_enabled,

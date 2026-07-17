@@ -31,7 +31,7 @@ func (s *Store) GetPasswordPolicySettings(ctx context.Context) (PasswordPolicySe
 	t := defaultPasswordPolicySettings()
 	err := s.pool.QueryRow(ctx, `
 		SELECT min_length, require_upper, require_lower, require_digit, require_symbol, max_age_days, session_ttl_hours
-		FROM wgpanel.password_policy_settings WHERE id = true
+		FROM protean.password_policy_settings WHERE id = true
 	`).Scan(&t.MinLength, &t.RequireUpper, &t.RequireLower, &t.RequireDigit, &t.RequireSymbol, &t.MaxAgeDays, &t.SessionTTLHours)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return t, nil
@@ -44,7 +44,7 @@ func (s *Store) GetPasswordPolicySettings(ctx context.Context) (PasswordPolicySe
 
 func (s *Store) SetPasswordPolicySettings(ctx context.Context, t PasswordPolicySettings) error {
 	_, err := s.pool.Exec(ctx, `
-		INSERT INTO wgpanel.password_policy_settings (
+		INSERT INTO protean.password_policy_settings (
 			id, min_length, require_upper, require_lower, require_digit, require_symbol, max_age_days, session_ttl_hours, updated_at
 		) VALUES (true, $1, $2, $3, $4, $5, $6, $7, now())
 		ON CONFLICT (id) DO UPDATE SET

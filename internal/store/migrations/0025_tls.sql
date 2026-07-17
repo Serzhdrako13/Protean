@@ -15,7 +15,7 @@
 --   proxy       -- a reverse proxy (Traefik etc.) terminates TLS in front;
 --                  the panel serves plain HTTP on its own internal listener
 --                  (normal for that pattern) and trusts X-Forwarded-Proto.
-CREATE TABLE wgpanel.tls_state (
+CREATE TABLE protean.tls_state (
     id                   boolean PRIMARY KEY DEFAULT true CHECK (id),
     mode                 text NOT NULL DEFAULT 'self_signed'
                          CHECK (mode IN ('self_signed', 'acme', 'manual', 'proxy')),
@@ -57,7 +57,7 @@ CREATE TABLE wgpanel.tls_state (
 -- ACME account/cert cache (golang.org/x/crypto/acme/autocert.Cache shape:
 -- opaque string key -> blob). Values are sealed via the panel's Encryptor --
 -- this cache holds the ACME account private key and issued cert+key bundles.
-CREATE TABLE wgpanel.acme_cache (
+CREATE TABLE protean.acme_cache (
     key   text PRIMARY KEY,
     value bytea NOT NULL
 );
@@ -66,7 +66,7 @@ CREATE TABLE wgpanel.acme_cache (
 -- so switching modes back and forth doesn't lose the self-signed identity
 -- (it's also the permanent fallback -- see internal/webtls) and doesn't
 -- force a new CA (new self-signed root) each time.
-CREATE TABLE wgpanel.tls_self_signed (
+CREATE TABLE protean.tls_self_signed (
     id            boolean PRIMARY KEY DEFAULT true CHECK (id),
     ca_cert_pem   text NOT NULL,
     ca_key_enc    bytea NOT NULL,

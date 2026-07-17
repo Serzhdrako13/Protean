@@ -1,6 +1,6 @@
 -- Notification channels: per-kind enabled flag + AES-encrypted config JSON
 -- (tokens/URLs/SMTP/XMPP creds). Encryption happens in the app layer.
-CREATE TABLE wgpanel.notify_channels (
+CREATE TABLE protean.notify_channels (
     kind       TEXT PRIMARY KEY,
     enabled    BOOLEAN NOT NULL DEFAULT false,
     config     BYTEA NOT NULL,
@@ -9,7 +9,7 @@ CREATE TABLE wgpanel.notify_channels (
 
 -- Singleton notification settings: which events fire instant channels, and
 -- the accumulating email report (frequency + content).
-CREATE TABLE wgpanel.notify_settings (
+CREATE TABLE protean.notify_settings (
     id                    BOOLEAN PRIMARY KEY DEFAULT true CHECK (id),
     ev_iface_updown       BOOLEAN NOT NULL DEFAULT true,
     ev_peer_onoff         BOOLEAN NOT NULL DEFAULT false,
@@ -19,10 +19,10 @@ CREATE TABLE wgpanel.notify_settings (
     report_include_status BOOLEAN NOT NULL DEFAULT true,
     last_report_at        TIMESTAMPTZ NOT NULL DEFAULT now()
 );
-INSERT INTO wgpanel.notify_settings (id) VALUES (true) ON CONFLICT DO NOTHING;
+INSERT INTO protean.notify_settings (id) VALUES (true) ON CONFLICT DO NOTHING;
 
 -- Events accumulated since the last email report.
-CREATE TABLE wgpanel.notify_pending (
+CREATE TABLE protean.notify_pending (
     id   BIGSERIAL PRIMARY KEY,
     ts   TIMESTAMPTZ NOT NULL DEFAULT now(),
     text TEXT NOT NULL

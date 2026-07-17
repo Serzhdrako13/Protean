@@ -37,7 +37,7 @@ func (s *Store) GetDataRetentionSettings(ctx context.Context) (DataRetentionSett
 	err := s.pool.QueryRow(ctx, `
 		SELECT access_requests_enabled, access_requests_days, audit_log_enabled, audit_log_days,
 		       login_attempts_enabled, login_attempts_days, login_bans_enabled, login_bans_days
-		FROM wgpanel.data_retention_settings WHERE id = true
+		FROM protean.data_retention_settings WHERE id = true
 	`).Scan(
 		&t.AccessRequestsEnabled, &t.AccessRequestsDays, &t.AuditLogEnabled, &t.AuditLogDays,
 		&t.LoginAttemptsEnabled, &t.LoginAttemptsDays, &t.LoginBansEnabled, &t.LoginBansDays,
@@ -53,7 +53,7 @@ func (s *Store) GetDataRetentionSettings(ctx context.Context) (DataRetentionSett
 
 func (s *Store) SetDataRetentionSettings(ctx context.Context, t DataRetentionSettings) error {
 	_, err := s.pool.Exec(ctx, `
-		INSERT INTO wgpanel.data_retention_settings (
+		INSERT INTO protean.data_retention_settings (
 			id, access_requests_enabled, access_requests_days, audit_log_enabled, audit_log_days,
 			login_attempts_enabled, login_attempts_days, login_bans_enabled, login_bans_days, updated_at
 		) VALUES (true, $1, $2, $3, $4, $5, $6, $7, $8, now())
@@ -77,7 +77,7 @@ func (s *Store) SetDataRetentionSettings(ctx context.Context, t DataRetentionSet
 // age -- those are either in-progress or an active grant.
 func (s *Store) DeleteOldDeniedAccessRequests(ctx context.Context, cutoff time.Time) (int64, error) {
 	tag, err := s.pool.Exec(ctx, `
-		DELETE FROM wgpanel.access_request WHERE status = 'denied' AND updated_at < $1
+		DELETE FROM protean.access_request WHERE status = 'denied' AND updated_at < $1
 	`, cutoff)
 	if err != nil {
 		return 0, err
@@ -87,7 +87,7 @@ func (s *Store) DeleteOldDeniedAccessRequests(ctx context.Context, cutoff time.T
 
 // DeleteOldAuditEntries removes audit log rows older than cutoff.
 func (s *Store) DeleteOldAuditEntries(ctx context.Context, cutoff time.Time) (int64, error) {
-	tag, err := s.pool.Exec(ctx, `DELETE FROM wgpanel.audit_log WHERE ts < $1`, cutoff)
+	tag, err := s.pool.Exec(ctx, `DELETE FROM protean.audit_log WHERE ts < $1`, cutoff)
 	if err != nil {
 		return 0, err
 	}
@@ -96,7 +96,7 @@ func (s *Store) DeleteOldAuditEntries(ctx context.Context, cutoff time.Time) (in
 
 // DeleteOldLoginAttempts removes login attempt log rows older than cutoff.
 func (s *Store) DeleteOldLoginAttempts(ctx context.Context, cutoff time.Time) (int64, error) {
-	tag, err := s.pool.Exec(ctx, `DELETE FROM wgpanel.login_attempts WHERE ts < $1`, cutoff)
+	tag, err := s.pool.Exec(ctx, `DELETE FROM protean.login_attempts WHERE ts < $1`, cutoff)
 	if err != nil {
 		return 0, err
 	}
@@ -108,7 +108,7 @@ func (s *Store) DeleteOldLoginAttempts(ctx context.Context, cutoff time.Time) (i
 // window), so a currently-active or future ban (banned_until still ahead of
 // "now") can never match, regardless of how this is called.
 func (s *Store) DeleteStaleLoginBanState(ctx context.Context, cutoff time.Time) (int64, error) {
-	tag, err := s.pool.Exec(ctx, `DELETE FROM wgpanel.login_ban_state WHERE banned_until < $1`, cutoff)
+	tag, err := s.pool.Exec(ctx, `DELETE FROM protean.login_ban_state WHERE banned_until < $1`, cutoff)
 	if err != nil {
 		return 0, err
 	}

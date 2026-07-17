@@ -14,7 +14,7 @@ type PeerExpiry struct {
 
 func (s *Store) SetPeerExpiry(ctx context.Context, provider, peerID string, expiresAt time.Time) error {
 	_, err := s.pool.Exec(ctx, `
-		INSERT INTO wgpanel.peer_expiry (provider, peer_id, expires_at)
+		INSERT INTO protean.peer_expiry (provider, peer_id, expires_at)
 		VALUES ($1, $2, $3)
 		ON CONFLICT (provider, peer_id) DO UPDATE SET expires_at = EXCLUDED.expires_at
 	`, provider, peerID, expiresAt)
@@ -23,7 +23,7 @@ func (s *Store) SetPeerExpiry(ctx context.Context, provider, peerID string, expi
 
 func (s *Store) DeletePeerExpiry(ctx context.Context, provider, peerID string) error {
 	_, err := s.pool.Exec(ctx, `
-		DELETE FROM wgpanel.peer_expiry WHERE provider = $1 AND peer_id = $2
+		DELETE FROM protean.peer_expiry WHERE provider = $1 AND peer_id = $2
 	`, provider, peerID)
 	return err
 }
@@ -31,7 +31,7 @@ func (s *Store) DeletePeerExpiry(ctx context.Context, provider, peerID string) e
 // ExpiryForProvider returns peer_id -> expires_at for one provider instance.
 func (s *Store) ExpiryForProvider(ctx context.Context, provider string) (map[string]time.Time, error) {
 	rows, err := s.pool.Query(ctx, `
-		SELECT peer_id, expires_at FROM wgpanel.peer_expiry WHERE provider = $1
+		SELECT peer_id, expires_at FROM protean.peer_expiry WHERE provider = $1
 	`, provider)
 	if err != nil {
 		return nil, err
@@ -52,7 +52,7 @@ func (s *Store) ExpiryForProvider(ctx context.Context, provider string) (map[str
 // ListDuePeers returns peers whose expiry has passed.
 func (s *Store) ListDuePeers(ctx context.Context) ([]PeerExpiry, error) {
 	rows, err := s.pool.Query(ctx, `
-		SELECT provider, peer_id, expires_at FROM wgpanel.peer_expiry
+		SELECT provider, peer_id, expires_at FROM protean.peer_expiry
 		WHERE expires_at <= now()
 	`)
 	if err != nil {

@@ -19,7 +19,7 @@ type ConnectionEvent struct {
 // the transition for live notifications.
 func (s *Store) InsertConnectionEvent(ctx context.Context, ts time.Time, provider, peerID, peerName, event string) error {
 	_, err := s.pool.Exec(ctx, `
-		INSERT INTO wgpanel.connection_history (ts, provider, peer_id, peer_name, event)
+		INSERT INTO protean.connection_history (ts, provider, peer_id, peer_name, event)
 		VALUES ($1, $2, $3, $4, $5)
 	`, ts, provider, peerID, peerName, event)
 	return err
@@ -41,7 +41,7 @@ func (s *Store) ListConnectionHistory(ctx context.Context, f ConnectionHistoryFi
 		limit = 200
 	}
 	rows, err := s.pool.Query(ctx, `
-		SELECT ts, provider, peer_id, peer_name, event FROM wgpanel.connection_history
+		SELECT ts, provider, peer_id, peer_name, event FROM protean.connection_history
 		WHERE ts >= $1
 		  AND ($2 = '' OR provider = $2)
 		  AND ($3 = '' OR peer_id = $3)
@@ -65,6 +65,6 @@ func (s *Store) ListConnectionHistory(ctx context.Context, f ConnectionHistoryFi
 
 // PruneConnectionHistory deletes events older than the cutoff.
 func (s *Store) PruneConnectionHistory(ctx context.Context, before time.Time) error {
-	_, err := s.pool.Exec(ctx, `DELETE FROM wgpanel.connection_history WHERE ts < $1`, before)
+	_, err := s.pool.Exec(ctx, `DELETE FROM protean.connection_history WHERE ts < $1`, before)
 	return err
 }

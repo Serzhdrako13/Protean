@@ -5,7 +5,7 @@
 -- IP-only, reset on every restart) entirely.
 
 -- Singleton settings row (id enforced true, same pattern as tls_state).
-CREATE TABLE wgpanel.login_security_settings (
+CREATE TABLE protean.login_security_settings (
     id                       boolean PRIMARY KEY DEFAULT true CHECK (id),
     enabled                  boolean NOT NULL DEFAULT true,
     track_by_username        boolean NOT NULL DEFAULT true,
@@ -32,7 +32,7 @@ CREATE TABLE wgpanel.login_security_settings (
 -- are still logged. ip_or_cidr may be a bare IP or a CIDR range -- membership
 -- is checked in Go (net.ParseCIDR/Contains), not in SQL, since this list is
 -- small and admin-curated.
-CREATE TABLE wgpanel.login_ip_rules (
+CREATE TABLE protean.login_ip_rules (
     ip_or_cidr text PRIMARY KEY,
     kind       text NOT NULL CHECK (kind IN ('allow', 'deny')),
     note       text NOT NULL DEFAULT '',
@@ -44,7 +44,7 @@ CREATE TABLE wgpanel.login_ip_rules (
 -- admin-facing stats/recent-activity view. reason is one of:
 -- 'bad_password', 'bad_totp', '' (success), 'banned' (rejected -- already
 -- under an active ban), 'ip_denied' (rejected by the deny list).
-CREATE TABLE wgpanel.login_attempts (
+CREATE TABLE protean.login_attempts (
     id       bigserial PRIMARY KEY,
     ts       timestamptz NOT NULL DEFAULT now(),
     username text NOT NULL DEFAULT '',
@@ -52,15 +52,15 @@ CREATE TABLE wgpanel.login_attempts (
     success  boolean NOT NULL,
     reason   text NOT NULL DEFAULT ''
 );
-CREATE INDEX login_attempts_ts_idx ON wgpanel.login_attempts (ts);
-CREATE INDEX login_attempts_username_idx ON wgpanel.login_attempts (username, ts);
-CREATE INDEX login_attempts_ip_idx ON wgpanel.login_attempts (ip, ts);
+CREATE INDEX login_attempts_ts_idx ON protean.login_attempts (ts);
+CREATE INDEX login_attempts_username_idx ON protean.login_attempts (username, ts);
+CREATE INDEX login_attempts_ip_idx ON protean.login_attempts (ip, ts);
 
 -- Current ban state per key (one row per username or IP that has ever been
 -- banned) -- banned_until in the past simply means "not currently banned",
 -- rows are kept (not deleted) so escalation_level/last known ban is
 -- available the next time this key re-offends.
-CREATE TABLE wgpanel.login_ban_state (
+CREATE TABLE protean.login_ban_state (
     key_type         text NOT NULL CHECK (key_type IN ('username', 'ip')),
     key_value        text NOT NULL,
     banned_until     timestamptz NOT NULL,

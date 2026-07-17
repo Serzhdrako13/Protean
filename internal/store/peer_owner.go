@@ -22,7 +22,7 @@ type OwnedPeerKey struct {
 // SetPeerOwner assigns (or reassigns) a peer to a user.
 func (s *Store) SetPeerOwner(ctx context.Context, provider, peerKey string, userID int64) error {
 	_, err := s.pool.Exec(ctx, `
-		INSERT INTO wgpanel.peer_owner (provider, peer_key, user_id)
+		INSERT INTO protean.peer_owner (provider, peer_key, user_id)
 		VALUES ($1, $2, $3)
 		ON CONFLICT (provider, peer_key) DO UPDATE SET user_id = EXCLUDED.user_id, created_at = now()
 	`, provider, peerKey, userID)
@@ -31,14 +31,14 @@ func (s *Store) SetPeerOwner(ctx context.Context, provider, peerKey string, user
 
 // ClearPeerOwner unassigns a peer (no-op if it had no owner).
 func (s *Store) ClearPeerOwner(ctx context.Context, provider, peerKey string) error {
-	_, err := s.pool.Exec(ctx, `DELETE FROM wgpanel.peer_owner WHERE provider = $1 AND peer_key = $2`, provider, peerKey)
+	_, err := s.pool.Exec(ctx, `DELETE FROM protean.peer_owner WHERE provider = $1 AND peer_key = $2`, provider, peerKey)
 	return err
 }
 
 // ListOwnedPeerKeys returns every peer assigned to a user, across all providers.
 func (s *Store) ListOwnedPeerKeys(ctx context.Context, userID int64) ([]OwnedPeerKey, error) {
 	rows, err := s.pool.Query(ctx, `
-		SELECT provider, peer_key, created_at, config_downloaded_at FROM wgpanel.peer_owner WHERE user_id = $1 ORDER BY provider, peer_key
+		SELECT provider, peer_key, created_at, config_downloaded_at FROM protean.peer_owner WHERE user_id = $1 ORDER BY provider, peer_key
 	`, userID)
 	if err != nil {
 		return nil, err
@@ -65,7 +65,7 @@ func (s *Store) ListOwnedPeerKeys(ctx context.Context, userID int64) ([]OwnedPee
 // change (see TouchServerInstanceConfig).
 func (s *Store) TouchPeerOwnerDownload(ctx context.Context, provider, peerKey string) error {
 	_, err := s.pool.Exec(ctx, `
-		UPDATE wgpanel.peer_owner SET config_downloaded_at = now() WHERE provider = $1 AND peer_key = $2
+		UPDATE protean.peer_owner SET config_downloaded_at = now() WHERE provider = $1 AND peer_key = $2
 	`, provider, peerKey)
 	return err
 }
@@ -84,8 +84,8 @@ type PeerOwnerRow struct {
 func (s *Store) ListOwnersForProvider(ctx context.Context, provider string) ([]PeerOwnerRow, error) {
 	rows, err := s.pool.Query(ctx, `
 		SELECT po.peer_key, po.user_id, u.username
-		FROM wgpanel.peer_owner po
-		JOIN wgpanel.users u ON u.id = po.user_id
+		FROM protean.peer_owner po
+		JOIN protean.users u ON u.id = po.user_id
 		WHERE po.provider = $1
 	`, provider)
 	if err != nil {
@@ -120,8 +120,8 @@ type GlobalPeerOwnerRow struct {
 func (s *Store) ListAllOwnedPeers(ctx context.Context) ([]GlobalPeerOwnerRow, error) {
 	rows, err := s.pool.Query(ctx, `
 		SELECT po.provider, po.peer_key, po.user_id, u.username
-		FROM wgpanel.peer_owner po
-		JOIN wgpanel.users u ON u.id = po.user_id
+		FROM protean.peer_owner po
+		JOIN protean.users u ON u.id = po.user_id
 		ORDER BY po.provider, u.username
 	`)
 	if err != nil {
@@ -143,7 +143,7 @@ func (s *Store) ListAllOwnedPeers(ctx context.Context) ([]GlobalPeerOwnerRow, er
 func (s *Store) GetPeerOwnerUserID(ctx context.Context, provider, peerKey string) (int64, bool, error) {
 	var userID int64
 	err := s.pool.QueryRow(ctx, `
-		SELECT user_id FROM wgpanel.peer_owner WHERE provider = $1 AND peer_key = $2
+		SELECT user_id FROM protean.peer_owner WHERE provider = $1 AND peer_key = $2
 	`, provider, peerKey).Scan(&userID)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return 0, false, nil

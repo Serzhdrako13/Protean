@@ -33,7 +33,7 @@ type ServerInstance struct {
 
 func (s *Store) ListServerInstances(ctx context.Context, serverID string) ([]ServerInstance, error) {
 	rows, err := s.pool.Query(ctx, `
-		SELECT local_name, type, config, label, portal_visible, description FROM wgpanel.server_instances
+		SELECT local_name, type, config, label, portal_visible, description FROM protean.server_instances
 		WHERE server_id = $1
 		ORDER BY type, local_name
 	`, serverID)
@@ -62,7 +62,7 @@ func (s *Store) ListServerInstances(ctx context.Context, serverID string) ([]Ser
 // mirrors ListAllServerInstanceLabels' "only non-default rows" shape.
 func (s *Store) ListAllServerInstancePortalVisibility(ctx context.Context) (map[string]bool, error) {
 	rows, err := s.pool.Query(ctx, `
-		SELECT server_id, local_name FROM wgpanel.server_instances WHERE portal_visible = true
+		SELECT server_id, local_name FROM protean.server_instances WHERE portal_visible = true
 	`)
 	if err != nil {
 		return nil, err
@@ -83,7 +83,7 @@ func (s *Store) ListAllServerInstancePortalVisibility(ctx context.Context) (map[
 // the self-service portal.
 func (s *Store) UpdateServerInstanceVisibility(ctx context.Context, serverID, localName string, visible bool) error {
 	tag, err := s.pool.Exec(ctx, `
-		UPDATE wgpanel.server_instances SET portal_visible = $3 WHERE server_id = $1 AND local_name = $2
+		UPDATE protean.server_instances SET portal_visible = $3 WHERE server_id = $1 AND local_name = $2
 	`, serverID, localName, visible)
 	if err != nil {
 		return err
@@ -100,7 +100,7 @@ func (s *Store) UpdateServerInstanceVisibility(ctx context.Context, serverID, lo
 // provider when building labels for a list.
 func (s *Store) ListAllServerInstanceLabels(ctx context.Context) (map[string]string, error) {
 	rows, err := s.pool.Query(ctx, `
-		SELECT server_id, local_name, label FROM wgpanel.server_instances WHERE label != ''
+		SELECT server_id, local_name, label FROM protean.server_instances WHERE label != ''
 	`)
 	if err != nil {
 		return nil, err
@@ -122,7 +122,7 @@ func (s *Store) ListAllServerInstanceLabels(ctx context.Context) (map[string]str
 // existed (they can't get a label at creation time since they predate it).
 func (s *Store) UpdateServerInstanceLabel(ctx context.Context, serverID, localName, label string) error {
 	tag, err := s.pool.Exec(ctx, `
-		UPDATE wgpanel.server_instances SET label = $3 WHERE server_id = $1 AND local_name = $2
+		UPDATE protean.server_instances SET label = $3 WHERE server_id = $1 AND local_name = $2
 	`, serverID, localName, label)
 	if err != nil {
 		return err
@@ -137,7 +137,7 @@ func (s *Store) UpdateServerInstanceLabel(ctx context.Context, serverID, localNa
 // every instance's admin note, keyed "serverID:localName", omitting empty ones.
 func (s *Store) ListAllServerInstanceDescriptions(ctx context.Context) (map[string]string, error) {
 	rows, err := s.pool.Query(ctx, `
-		SELECT server_id, local_name, description FROM wgpanel.server_instances WHERE description != ''
+		SELECT server_id, local_name, description FROM protean.server_instances WHERE description != ''
 	`)
 	if err != nil {
 		return nil, err
@@ -160,7 +160,7 @@ func (s *Store) ListAllServerInstanceDescriptions(ctx context.Context) (map[stri
 // (see TouchServerInstanceConfig for what bumps this).
 func (s *Store) ListAllServerInstanceConfigChangedAt(ctx context.Context) (map[string]time.Time, error) {
 	rows, err := s.pool.Query(ctx, `
-		SELECT server_id, local_name, config_changed_at FROM wgpanel.server_instances
+		SELECT server_id, local_name, config_changed_at FROM protean.server_instances
 	`)
 	if err != nil {
 		return nil, err
@@ -184,7 +184,7 @@ func (s *Store) ListAllServerInstanceConfigChangedAt(ctx context.Context) (map[s
 // downloads as stale until the user re-downloads.
 func (s *Store) TouchServerInstanceConfig(ctx context.Context, serverID, localName string) error {
 	_, err := s.pool.Exec(ctx, `
-		UPDATE wgpanel.server_instances SET config_changed_at = now() WHERE server_id = $1 AND local_name = $2
+		UPDATE protean.server_instances SET config_changed_at = now() WHERE server_id = $1 AND local_name = $2
 	`, serverID, localName)
 	return err
 }
@@ -192,7 +192,7 @@ func (s *Store) TouchServerInstanceConfig(ctx context.Context, serverID, localNa
 // UpdateServerInstanceDescription sets an existing instance's admin note.
 func (s *Store) UpdateServerInstanceDescription(ctx context.Context, serverID, localName, description string) error {
 	tag, err := s.pool.Exec(ctx, `
-		UPDATE wgpanel.server_instances SET description = $3 WHERE server_id = $1 AND local_name = $2
+		UPDATE protean.server_instances SET description = $3 WHERE server_id = $1 AND local_name = $2
 	`, serverID, localName, description)
 	if err != nil {
 		return err
@@ -208,7 +208,7 @@ func (s *Store) UpdateServerInstanceDescription(ctx context.Context, serverID, l
 func (s *Store) CountServerInstancesByType(ctx context.Context, serverID, typ string) (int, error) {
 	var n int
 	err := s.pool.QueryRow(ctx, `
-		SELECT count(*) FROM wgpanel.server_instances WHERE server_id = $1 AND type = $2
+		SELECT count(*) FROM protean.server_instances WHERE server_id = $1 AND type = $2
 	`, serverID, typ).Scan(&n)
 	return n, err
 }
@@ -222,7 +222,7 @@ func (s *Store) CreateServerInstance(ctx context.Context, inst ServerInstance) e
 		return err
 	}
 	_, err = s.pool.Exec(ctx, `
-		INSERT INTO wgpanel.server_instances (server_id, local_name, type, config, label, portal_visible, description)
+		INSERT INTO protean.server_instances (server_id, local_name, type, config, label, portal_visible, description)
 		VALUES ($1, $2, $3, $4, $5, $6, $7)
 	`, inst.ServerID, inst.LocalName, inst.Type, string(cfgJSON), inst.Label, inst.PortalVisible, inst.Description)
 	return err
@@ -237,7 +237,7 @@ func (s *Store) CreateServerInstance(ctx context.Context, inst ServerInstance) e
 func (s *Store) UpdateServerInstanceConfig(ctx context.Context, serverID, localName string, patch map[string]string) error {
 	var cfgJSON string
 	err := s.pool.QueryRow(ctx, `
-		SELECT config FROM wgpanel.server_instances WHERE server_id = $1 AND local_name = $2
+		SELECT config FROM protean.server_instances WHERE server_id = $1 AND local_name = $2
 	`, serverID, localName).Scan(&cfgJSON)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return ErrNotFound
@@ -255,14 +255,14 @@ func (s *Store) UpdateServerInstanceConfig(ctx context.Context, serverID, localN
 		return err
 	}
 	_, err = s.pool.Exec(ctx, `
-		UPDATE wgpanel.server_instances SET config = $3 WHERE server_id = $1 AND local_name = $2
+		UPDATE protean.server_instances SET config = $3 WHERE server_id = $1 AND local_name = $2
 	`, serverID, localName, string(merged))
 	return err
 }
 
 func (s *Store) DeleteServerInstance(ctx context.Context, serverID, localName string) error {
 	_, err := s.pool.Exec(ctx, `
-		DELETE FROM wgpanel.server_instances WHERE server_id = $1 AND local_name = $2
+		DELETE FROM protean.server_instances WHERE server_id = $1 AND local_name = $2
 	`, serverID, localName)
 	return err
 }

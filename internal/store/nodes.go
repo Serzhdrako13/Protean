@@ -29,7 +29,7 @@ type Node struct {
 
 func (s *Store) CreateNode(ctx context.Context, n Node) (Node, error) {
 	err := s.pool.QueryRow(ctx, `
-		INSERT INTO wgpanel.nodes (name, kind, role, description)
+		INSERT INTO protean.nodes (name, kind, role, description)
 		VALUES ($1, $2, $3, $4)
 		RETURNING id, created_at
 	`, n.Name, n.Kind, n.Role, n.Description).Scan(&n.ID, &n.CreatedAt)
@@ -38,7 +38,7 @@ func (s *Store) CreateNode(ctx context.Context, n Node) (Node, error) {
 
 func (s *Store) ListNodes(ctx context.Context) ([]Node, error) {
 	rows, err := s.pool.Query(ctx, `
-		SELECT id, name, kind, role, description, created_at FROM wgpanel.nodes ORDER BY name
+		SELECT id, name, kind, role, description, created_at FROM protean.nodes ORDER BY name
 	`)
 	if err != nil {
 		return nil, err
@@ -58,7 +58,7 @@ func (s *Store) ListNodes(ctx context.Context) ([]Node, error) {
 func (s *Store) GetNode(ctx context.Context, id int64) (Node, error) {
 	var n Node
 	err := s.pool.QueryRow(ctx, `
-		SELECT id, name, kind, role, description, created_at FROM wgpanel.nodes WHERE id = $1
+		SELECT id, name, kind, role, description, created_at FROM protean.nodes WHERE id = $1
 	`, id).Scan(&n.ID, &n.Name, &n.Kind, &n.Role, &n.Description, &n.CreatedAt)
 	if err != nil {
 		return Node{}, ErrNotFound
@@ -68,7 +68,7 @@ func (s *Store) GetNode(ctx context.Context, id int64) (Node, error) {
 
 func (s *Store) UpdateNode(ctx context.Context, id int64, name, kind, role, description string) error {
 	tag, err := s.pool.Exec(ctx, `
-		UPDATE wgpanel.nodes SET name = $2, kind = $3, role = $4, description = $5 WHERE id = $1
+		UPDATE protean.nodes SET name = $2, kind = $3, role = $4, description = $5 WHERE id = $1
 	`, id, name, kind, role, description)
 	if err != nil {
 		return err
@@ -80,6 +80,6 @@ func (s *Store) UpdateNode(ctx context.Context, id int64, name, kind, role, desc
 }
 
 func (s *Store) DeleteNode(ctx context.Context, id int64) error {
-	_, err := s.pool.Exec(ctx, `DELETE FROM wgpanel.nodes WHERE id = $1`, id)
+	_, err := s.pool.Exec(ctx, `DELETE FROM protean.nodes WHERE id = $1`, id)
 	return err
 }

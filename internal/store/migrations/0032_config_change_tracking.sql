@@ -5,5 +5,5 @@
 -- flags an instance as stale when config_changed_at is newer than the
 -- owning peer's config_downloaded_at (falling back to the grant time,
 -- peer_owner.created_at, if the user never downloaded yet).
-ALTER TABLE wgpanel.server_instances ADD COLUMN config_changed_at TIMESTAMPTZ NOT NULL DEFAULT now();
-ALTER TABLE wgpanel.peer_owner ADD COLUMN config_downloaded_at TIMESTAMPTZ;
+ALTER TABLE protean.server_instances ADD COLUMN config_changed_at TIMESTAMPTZ NOT NULL DEFAULT now();
+ALTER TABLE protean.peer_owner ADD COLUMN config_downloaded_at TIMESTAMPTZ;

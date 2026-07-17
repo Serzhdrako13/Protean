@@ -17,7 +17,7 @@ type NotifyChannel struct {
 
 func (s *Store) SaveNotifyChannel(ctx context.Context, kind string, enabled bool, config []byte) error {
 	_, err := s.pool.Exec(ctx, `
-		INSERT INTO wgpanel.notify_channels (kind, enabled, config, updated_at)
+		INSERT INTO protean.notify_channels (kind, enabled, config, updated_at)
 		VALUES ($1, $2, $3, now())
 		ON CONFLICT (kind) DO UPDATE SET enabled = EXCLUDED.enabled, config = EXCLUDED.config, updated_at = now()
 	`, kind, enabled, config)
@@ -26,7 +26,7 @@ func (s *Store) SaveNotifyChannel(ctx context.Context, kind string, enabled bool
 
 func (s *Store) GetNotifyChannel(ctx context.Context, kind string) (NotifyChannel, error) {
 	var c NotifyChannel
-	err := s.pool.QueryRow(ctx, `SELECT kind, enabled, config FROM wgpanel.notify_channels WHERE kind = $1`, kind).
+	err := s.pool.QueryRow(ctx, `SELECT kind, enabled, config FROM protean.notify_channels WHERE kind = $1`, kind).
 		Scan(&c.Kind, &c.Enabled, &c.Config)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return NotifyChannel{}, ErrNotFound
@@ -35,7 +35,7 @@ func (s *Store) GetNotifyChannel(ctx context.Context, kind string) (NotifyChanne
 }
 
 func (s *Store) ListNotifyChannels(ctx context.Context) ([]NotifyChannel, error) {
-	rows, err := s.pool.Query(ctx, `SELECT kind, enabled, config FROM wgpanel.notify_channels ORDER BY kind`)
+	rows, err := s.pool.Query(ctx, `SELECT kind, enabled, config FROM protean.notify_channels ORDER BY kind`)
 	if err != nil {
 		return nil, err
 	}
@@ -80,7 +80,7 @@ func (s *Store) GetNotifySettings(ctx context.Context) (NotifySettings, error) {
 		       report_include_events, report_include_status, last_report_at,
 		       ctnt_provider, ctnt_endpoint, ctnt_address, ctnt_time,
 		       ev_site_connect, ev_site_disconnect, ev_client_connect, ev_client_disconnect, ev_unknown_peer
-		FROM wgpanel.notify_settings WHERE id = true
+		FROM protean.notify_settings WHERE id = true
 	`).Scan(&n.EvIfaceUpDown, &n.EvPeerOnOff, &n.ReportEnabled, &n.ReportIntervalHours,
 		&n.ReportIncludeEvents, &n.ReportIncludeStatus, &n.LastReportAt,
 		&n.CtntProvider, &n.CtntEndpoint, &n.CtntAddress, &n.CtntTime,
@@ -93,7 +93,7 @@ func (s *Store) GetNotifySettings(ctx context.Context) (NotifySettings, error) {
 
 func (s *Store) SaveNotifySettings(ctx context.Context, n NotifySettings) error {
 	_, err := s.pool.Exec(ctx, `
-		UPDATE wgpanel.notify_settings SET
+		UPDATE protean.notify_settings SET
 			ev_iface_updown = $1, ev_peer_onoff = $2, report_enabled = $3,
 			report_interval_hours = $4, report_include_events = $5, report_include_status = $6,
 			ctnt_provider = $7, ctnt_endpoint = $8, ctnt_address = $9, ctnt_time = $10,
@@ -111,7 +111,7 @@ func (s *Store) SaveNotifySettings(ctx context.Context, n NotifySettings) error 
 // record exists.
 func (s *Store) SetPeerCategory(ctx context.Context, provider, peerID, category string) error {
 	_, err := s.pool.Exec(ctx, `
-		INSERT INTO wgpanel.peer_category (provider, peer_id, category) VALUES ($1, $2, $3)
+		INSERT INTO protean.peer_category (provider, peer_id, category) VALUES ($1, $2, $3)
 		ON CONFLICT (provider, peer_id) DO UPDATE SET category = EXCLUDED.category
 	`, provider, peerID, category)
 	return err
@@ -119,7 +119,7 @@ func (s *Store) SetPeerCategory(ctx context.Context, provider, peerID, category 
 
 // PeerCategories returns peer_id -> category for a provider.
 func (s *Store) PeerCategories(ctx context.Context, provider string) (map[string]string, error) {
-	rows, err := s.pool.Query(ctx, `SELECT peer_id, category FROM wgpanel.peer_category WHERE provider = $1`, provider)
+	rows, err := s.pool.Query(ctx, `SELECT peer_id, category FROM protean.peer_category WHERE provider = $1`, provider)
 	if err != nil {
 		return nil, err
 	}
@@ -136,7 +136,7 @@ func (s *Store) PeerCategories(ctx context.Context, provider string) (map[string
 }
 
 func (s *Store) DeletePeerCategory(ctx context.Context, provider, peerID string) error {
-	_, err := s.pool.Exec(ctx, `DELETE FROM wgpanel.peer_category WHERE provider = $1 AND peer_id = $2`, provider, peerID)
+	_, err := s.pool.Exec(ctx, `DELETE FROM protean.peer_category WHERE provider = $1 AND peer_id = $2`, provider, peerID)
 	return err
 }
 
@@ -144,18 +144,18 @@ func (s *Store) DeletePeerCategory(ctx context.Context, provider, peerID string)
 func (s *Store) SetPeerMuted(ctx context.Context, provider, peerID string, muted bool) error {
 	if muted {
 		_, err := s.pool.Exec(ctx, `
-			INSERT INTO wgpanel.notify_peer_mute (provider, peer_id) VALUES ($1, $2)
+			INSERT INTO protean.notify_peer_mute (provider, peer_id) VALUES ($1, $2)
 			ON CONFLICT DO NOTHING
 		`, provider, peerID)
 		return err
 	}
-	_, err := s.pool.Exec(ctx, `DELETE FROM wgpanel.notify_peer_mute WHERE provider = $1 AND peer_id = $2`, provider, peerID)
+	_, err := s.pool.Exec(ctx, `DELETE FROM protean.notify_peer_mute WHERE provider = $1 AND peer_id = $2`, provider, peerID)
 	return err
 }
 
 // MutedPeers returns the set of muted peer ids for a provider.
 func (s *Store) MutedPeers(ctx context.Context, provider string) (map[string]bool, error) {
-	rows, err := s.pool.Query(ctx, `SELECT peer_id FROM wgpanel.notify_peer_mute WHERE provider = $1`, provider)
+	rows, err := s.pool.Query(ctx, `SELECT peer_id FROM protean.notify_peer_mute WHERE provider = $1`, provider)
 	if err != nil {
 		return nil, err
 	}
@@ -172,13 +172,13 @@ func (s *Store) MutedPeers(ctx context.Context, provider string) (map[string]boo
 }
 
 func (s *Store) MarkReportSent(ctx context.Context) error {
-	_, err := s.pool.Exec(ctx, `UPDATE wgpanel.notify_settings SET last_report_at = now() WHERE id = true`)
+	_, err := s.pool.Exec(ctx, `UPDATE protean.notify_settings SET last_report_at = now() WHERE id = true`)
 	return err
 }
 
 // AddNotifyPending appends an event to the report accumulation buffer.
 func (s *Store) AddNotifyPending(ctx context.Context, text string) error {
-	_, err := s.pool.Exec(ctx, `INSERT INTO wgpanel.notify_pending (text) VALUES ($1)`, text)
+	_, err := s.pool.Exec(ctx, `INSERT INTO protean.notify_pending (text) VALUES ($1)`, text)
 	return err
 }
 
@@ -188,7 +188,7 @@ type PendingEvent struct {
 }
 
 func (s *Store) ListNotifyPending(ctx context.Context) ([]PendingEvent, error) {
-	rows, err := s.pool.Query(ctx, `SELECT ts, text FROM wgpanel.notify_pending ORDER BY ts`)
+	rows, err := s.pool.Query(ctx, `SELECT ts, text FROM protean.notify_pending ORDER BY ts`)
 	if err != nil {
 		return nil, err
 	}
@@ -205,6 +205,6 @@ func (s *Store) ListNotifyPending(ctx context.Context) ([]PendingEvent, error) {
 }
 
 func (s *Store) ClearNotifyPending(ctx context.Context) error {
-	_, err := s.pool.Exec(ctx, `DELETE FROM wgpanel.notify_pending`)
+	_, err := s.pool.Exec(ctx, `DELETE FROM protean.notify_pending`)
 	return err
 }

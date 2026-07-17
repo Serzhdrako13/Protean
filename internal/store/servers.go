@@ -33,7 +33,7 @@ func (s *Store) CreateServer(ctx context.Context, srv Server) error {
 		srv.Port = 22
 	}
 	_, err := s.pool.Exec(ctx, `
-		INSERT INTO wgpanel.servers (id, label, host, port, ssh_user, enc_key_pem, host_key, public_host)
+		INSERT INTO protean.servers (id, label, host, port, ssh_user, enc_key_pem, host_key, public_host)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 	`, srv.ID, srv.Label, srv.Host, srv.Port, srv.SSHUser, srv.EncKeyPEM, srv.HostKey, srv.PublicHost)
 	return err
@@ -44,7 +44,7 @@ func (s *Store) UpdateServer(ctx context.Context, srv Server) error {
 		srv.Port = 22
 	}
 	_, err := s.pool.Exec(ctx, `
-		UPDATE wgpanel.servers SET
+		UPDATE protean.servers SET
 			label = $2, host = $3, port = $4, ssh_user = $5,
 			enc_key_pem = $6, host_key = $7, public_host = $8, updated_at = now()
 		WHERE id = $1
@@ -56,7 +56,7 @@ func (s *Store) GetServer(ctx context.Context, id string) (Server, error) {
 	var srv Server
 	err := s.pool.QueryRow(ctx, `
 		SELECT id, label, host, port, ssh_user, enc_key_pem, host_key, public_host, enabled, created_at, updated_at
-		FROM wgpanel.servers WHERE id = $1
+		FROM protean.servers WHERE id = $1
 	`, id).Scan(&srv.ID, &srv.Label, &srv.Host, &srv.Port, &srv.SSHUser, &srv.EncKeyPEM,
 		&srv.HostKey, &srv.PublicHost, &srv.Enabled, &srv.CreatedAt, &srv.UpdatedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -68,7 +68,7 @@ func (s *Store) GetServer(ctx context.Context, id string) (Server, error) {
 func (s *Store) ListServers(ctx context.Context) ([]Server, error) {
 	rows, err := s.pool.Query(ctx, `
 		SELECT id, label, host, port, ssh_user, enc_key_pem, host_key, public_host, enabled, created_at, updated_at
-		FROM wgpanel.servers ORDER BY id
+		FROM protean.servers ORDER BY id
 	`)
 	if err != nil {
 		return nil, err
@@ -88,7 +88,7 @@ func (s *Store) ListServers(ctx context.Context) ([]Server, error) {
 
 // UpdateServerEnabled toggles a server's enabled flag.
 func (s *Store) UpdateServerEnabled(ctx context.Context, id string, enabled bool) error {
-	tag, err := s.pool.Exec(ctx, `UPDATE wgpanel.servers SET enabled = $2 WHERE id = $1`, id, enabled)
+	tag, err := s.pool.Exec(ctx, `UPDATE protean.servers SET enabled = $2 WHERE id = $1`, id, enabled)
 	if err != nil {
 		return err
 	}
@@ -99,7 +99,7 @@ func (s *Store) UpdateServerEnabled(ctx context.Context, id string, enabled bool
 }
 
 func (s *Store) DeleteServer(ctx context.Context, id string) error {
-	_, err := s.pool.Exec(ctx, `DELETE FROM wgpanel.servers WHERE id = $1`, id)
+	_, err := s.pool.Exec(ctx, `DELETE FROM protean.servers WHERE id = $1`, id)
 	return err
 }
 
@@ -123,7 +123,7 @@ var providerKeyedTables = []string{
 // (e.g. "myserver:wg0") across all the tables in providerKeyedTables.
 func (s *Store) DeleteProviderData(ctx context.Context, provider string) error {
 	for _, table := range providerKeyedTables {
-		if _, err := s.pool.Exec(ctx, `DELETE FROM wgpanel.`+table+` WHERE provider = $1`, provider); err != nil {
+		if _, err := s.pool.Exec(ctx, `DELETE FROM protean.`+table+` WHERE provider = $1`, provider); err != nil {
 			return fmt.Errorf("delete %s for %s: %w", table, provider, err)
 		}
 	}
@@ -132,6 +132,6 @@ func (s *Store) DeleteProviderData(ctx context.Context, provider string) error {
 
 func (s *Store) CountServers(ctx context.Context) (int, error) {
 	var n int
-	err := s.pool.QueryRow(ctx, `SELECT count(*) FROM wgpanel.servers`).Scan(&n)
+	err := s.pool.QueryRow(ctx, `SELECT count(*) FROM protean.servers`).Scan(&n)
 	return n, err
 }

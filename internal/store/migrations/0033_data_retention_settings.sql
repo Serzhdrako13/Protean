@@ -7,7 +7,7 @@
 -- category (e.g. only 'denied' access requests, never pending/approved/
 -- granted; only bans whose banned_until has already passed, never an
 -- active/future ban).
-CREATE TABLE wgpanel.data_retention_settings (
+CREATE TABLE protean.data_retention_settings (
     id                      boolean PRIMARY KEY DEFAULT true CHECK (id),
     access_requests_enabled boolean NOT NULL DEFAULT false,
     access_requests_days    int NOT NULL DEFAULT 90,

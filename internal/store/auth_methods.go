@@ -20,7 +20,7 @@ func defaultInternalAuthSettings() InternalAuthSettings {
 
 func (s *Store) GetInternalAuthSettings(ctx context.Context) (InternalAuthSettings, error) {
 	t := defaultInternalAuthSettings()
-	err := s.pool.QueryRow(ctx, `SELECT enabled FROM wgpanel.internal_auth_settings WHERE id = true`).Scan(&t.Enabled)
+	err := s.pool.QueryRow(ctx, `SELECT enabled FROM protean.internal_auth_settings WHERE id = true`).Scan(&t.Enabled)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return t, nil
 	}
@@ -29,7 +29,7 @@ func (s *Store) GetInternalAuthSettings(ctx context.Context) (InternalAuthSettin
 
 func (s *Store) SetInternalAuthSettings(ctx context.Context, t InternalAuthSettings) error {
 	_, err := s.pool.Exec(ctx, `
-		INSERT INTO wgpanel.internal_auth_settings (id, enabled, updated_at)
+		INSERT INTO protean.internal_auth_settings (id, enabled, updated_at)
 		VALUES (true, $1, now())
 		ON CONFLICT (id) DO UPDATE SET enabled = EXCLUDED.enabled, updated_at = now()
 	`, t.Enabled)
@@ -57,7 +57,7 @@ func (s *Store) GetLDAPSettings(ctx context.Context) (LDAPSettings, error) {
 	t := defaultLDAPSettings()
 	err := s.pool.QueryRow(ctx, `
 		SELECT enabled, url, skip_tls_verify, bind_dn, enc_bind_password, user_base_dn, user_filter, group_base_dn
-		FROM wgpanel.ldap_settings WHERE id = true
+		FROM protean.ldap_settings WHERE id = true
 	`).Scan(&t.Enabled, &t.URL, &t.SkipTLSVerify, &t.BindDN, &t.EncBindPassword, &t.UserBaseDN, &t.UserFilter, &t.GroupBaseDN)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return t, nil
@@ -67,7 +67,7 @@ func (s *Store) GetLDAPSettings(ctx context.Context) (LDAPSettings, error) {
 
 func (s *Store) SetLDAPSettings(ctx context.Context, t LDAPSettings) error {
 	_, err := s.pool.Exec(ctx, `
-		INSERT INTO wgpanel.ldap_settings (
+		INSERT INTO protean.ldap_settings (
 			id, enabled, url, skip_tls_verify, bind_dn, enc_bind_password, user_base_dn, user_filter, group_base_dn, updated_at
 		) VALUES (true, $1, $2, $3, $4, $5, $6, $7, $8, now())
 		ON CONFLICT (id) DO UPDATE SET
@@ -104,7 +104,7 @@ func (s *Store) GetOIDCSettings(ctx context.Context) (OIDCSettings, error) {
 	t := defaultOIDCSettings()
 	err := s.pool.QueryRow(ctx, `
 		SELECT enabled, issuer_url, client_id, enc_client_secret, scopes, username_claim, groups_claim, redirect_base_url
-		FROM wgpanel.oidc_settings WHERE id = true
+		FROM protean.oidc_settings WHERE id = true
 	`).Scan(&t.Enabled, &t.IssuerURL, &t.ClientID, &t.EncClientSecret, &t.Scopes, &t.UsernameClaim, &t.GroupsClaim, &t.RedirectBaseURL)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return t, nil
@@ -114,7 +114,7 @@ func (s *Store) GetOIDCSettings(ctx context.Context) (OIDCSettings, error) {
 
 func (s *Store) SetOIDCSettings(ctx context.Context, t OIDCSettings) error {
 	_, err := s.pool.Exec(ctx, `
-		INSERT INTO wgpanel.oidc_settings (
+		INSERT INTO protean.oidc_settings (
 			id, enabled, issuer_url, client_id, enc_client_secret, scopes, username_claim, groups_claim, redirect_base_url, updated_at
 		) VALUES (true, $1, $2, $3, $4, $5, $6, $7, $8, now())
 		ON CONFLICT (id) DO UPDATE SET
@@ -138,7 +138,7 @@ type AuthGroupRule struct {
 
 func (s *Store) ListAuthGroupRules(ctx context.Context, method string) ([]AuthGroupRule, error) {
 	rows, err := s.pool.Query(ctx, `
-		SELECT method, role, group_value FROM wgpanel.auth_group_rules WHERE method = $1 ORDER BY role, group_value
+		SELECT method, role, group_value FROM protean.auth_group_rules WHERE method = $1 ORDER BY role, group_value
 	`, method)
 	if err != nil {
 		return nil, err
@@ -157,7 +157,7 @@ func (s *Store) ListAuthGroupRules(ctx context.Context, method string) ([]AuthGr
 
 func (s *Store) AddAuthGroupRule(ctx context.Context, r AuthGroupRule) error {
 	_, err := s.pool.Exec(ctx, `
-		INSERT INTO wgpanel.auth_group_rules (method, role, group_value) VALUES ($1, $2, $3)
+		INSERT INTO protean.auth_group_rules (method, role, group_value) VALUES ($1, $2, $3)
 		ON CONFLICT (method, role, group_value) DO NOTHING
 	`, r.Method, r.Role, r.GroupValue)
 	return err
@@ -165,7 +165,7 @@ func (s *Store) AddAuthGroupRule(ctx context.Context, r AuthGroupRule) error {
 
 func (s *Store) DeleteAuthGroupRule(ctx context.Context, method, role, groupValue string) error {
 	_, err := s.pool.Exec(ctx, `
-		DELETE FROM wgpanel.auth_group_rules WHERE method = $1 AND role = $2 AND group_value = $3
+		DELETE FROM protean.auth_group_rules WHERE method = $1 AND role = $2 AND group_value = $3
 	`, method, role, groupValue)
 	return err
 }

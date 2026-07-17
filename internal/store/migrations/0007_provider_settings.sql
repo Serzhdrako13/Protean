@@ -5,7 +5,7 @@
 --                       (hub NATs; clients get a default route)
 -- Both default off: a fresh VPN is a standalone parallel tunnel that does not
 -- merge networks and does not provide internet egress.
-CREATE TABLE wgpanel.provider_settings (
+CREATE TABLE protean.provider_settings (
     provider        TEXT PRIMARY KEY,
     mesh_enabled    BOOLEAN NOT NULL DEFAULT false,
     internet_egress BOOLEAN NOT NULL DEFAULT false,

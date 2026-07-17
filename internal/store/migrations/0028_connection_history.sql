@@ -4,7 +4,7 @@
 -- Same convention as traffic_samples (migration 0020): bigserial PK,
 -- denormalized "server:instance" provider key (no FK), pruned by a raw
 -- DELETE on a retention window rather than kept forever.
-CREATE TABLE IF NOT EXISTS wgpanel.connection_history (
+CREATE TABLE IF NOT EXISTS protean.connection_history (
     id        bigserial   PRIMARY KEY,
     ts        timestamptz NOT NULL,
     provider  text        NOT NULL,
@@ -13,6 +13,6 @@ CREATE TABLE IF NOT EXISTS wgpanel.connection_history (
     event     text        NOT NULL CHECK (event IN ('connect', 'disconnect'))
 );
 CREATE INDEX IF NOT EXISTS idx_connection_history_provider_ts
-    ON wgpanel.connection_history (provider, ts);
+    ON protean.connection_history (provider, ts);
 CREATE INDEX IF NOT EXISTS idx_connection_history_peer_ts
-    ON wgpanel.connection_history (peer_id, ts);
+    ON protean.connection_history (peer_id, ts);

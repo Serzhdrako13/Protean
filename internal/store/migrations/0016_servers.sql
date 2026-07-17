@@ -1,7 +1,7 @@
 -- Multi-server support: each row is a remote host the panel manages over SSH.
 -- SSH private key is stored encrypted (AES, same Encryptor as peer secrets).
 -- host_key pins the server's SSH host key (authorized_keys line); empty = TOFU.
-CREATE TABLE IF NOT EXISTS wgpanel.servers (
+CREATE TABLE IF NOT EXISTS protean.servers (
     id          text        PRIMARY KEY,          -- slug, used in URLs + as the DB scope prefix
     label       text        NOT NULL DEFAULT '',
     host        text        NOT NULL,

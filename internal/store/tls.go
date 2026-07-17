@@ -49,7 +49,7 @@ func (s *Store) GetTLSState(ctx context.Context) (TLSState, error) {
 		SELECT mode, ss_key_algo, ss_validity_days, ss_renew_before_days, ss_sans,
 		       acme_directory_url, acme_domains, acme_email, acme_challenge, acme_trust_root_pem,
 		       manual_cert_pem, manual_key_enc
-		FROM wgpanel.tls_state WHERE id = true
+		FROM protean.tls_state WHERE id = true
 	`).Scan(
 		&t.Mode, &t.SSKeyAlgo, &t.SSValidityDays, &t.SSRenewBeforeDays, &t.SSSans,
 		&t.AcmeDirectoryURL, &t.AcmeDomains, &t.AcmeEmail, &t.AcmeChallenge, &t.AcmeTrustRootPEM,
@@ -67,7 +67,7 @@ func (s *Store) GetTLSState(ctx context.Context) (TLSState, error) {
 // SetTLSState upserts the singleton row.
 func (s *Store) SetTLSState(ctx context.Context, t TLSState) error {
 	_, err := s.pool.Exec(ctx, `
-		INSERT INTO wgpanel.tls_state (
+		INSERT INTO protean.tls_state (
 			id, mode, ss_key_algo, ss_validity_days, ss_renew_before_days, ss_sans,
 			acme_directory_url, acme_domains, acme_email, acme_challenge, acme_trust_root_pem,
 			manual_cert_pem, manual_key_enc, updated_at
@@ -112,7 +112,7 @@ func (s *Store) GetTLSSelfSigned(ctx context.Context) (TLSSelfSigned, bool, erro
 	var issuedAt, expiresAt *time.Time
 	err := s.pool.QueryRow(ctx, `
 		SELECT ca_cert_pem, ca_key_enc, leaf_cert_pem, leaf_key_enc, issued_at, expires_at
-		FROM wgpanel.tls_self_signed WHERE id = true
+		FROM protean.tls_self_signed WHERE id = true
 	`).Scan(&t.CACertPEM, &t.CAKeyEnc, &t.LeafCertPEM, &t.LeafKeyEnc, &issuedAt, &expiresAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return TLSSelfSigned{}, false, nil
@@ -134,7 +134,7 @@ func (s *Store) GetTLSSelfSigned(ctx context.Context) (TLSSelfSigned, bool, erro
 // always creates/replaces the whole row including any existing leaf).
 func (s *Store) SaveTLSSelfSignedCA(ctx context.Context, caCertPEM string, caKeyEnc []byte) error {
 	_, err := s.pool.Exec(ctx, `
-		INSERT INTO wgpanel.tls_self_signed (id, ca_cert_pem, ca_key_enc)
+		INSERT INTO protean.tls_self_signed (id, ca_cert_pem, ca_key_enc)
 		VALUES (true, $1, $2)
 		ON CONFLICT (id) DO UPDATE SET ca_cert_pem = EXCLUDED.ca_cert_pem, ca_key_enc = EXCLUDED.ca_key_enc
 	`, caCertPEM, caKeyEnc)
@@ -145,7 +145,7 @@ func (s *Store) SaveTLSSelfSignedCA(ctx context.Context, caCertPEM string, caKey
 // by the auto-renew worker) without touching the CA.
 func (s *Store) SaveTLSSelfSignedLeaf(ctx context.Context, leafCertPEM string, leafKeyEnc []byte, issuedAt, expiresAt time.Time) error {
 	_, err := s.pool.Exec(ctx, `
-		UPDATE wgpanel.tls_self_signed
+		UPDATE protean.tls_self_signed
 		SET leaf_cert_pem = $1, leaf_key_enc = $2, issued_at = $3, expires_at = $4
 		WHERE id = true
 	`, leafCertPEM, leafKeyEnc, issuedAt, expiresAt)
@@ -158,7 +158,7 @@ func (s *Store) SaveTLSSelfSignedLeaf(ctx context.Context, leafCertPEM string, l
 // every other secret column in this package.
 func (s *Store) AcmeCacheGet(ctx context.Context, key string) ([]byte, bool, error) {
 	var data []byte
-	err := s.pool.QueryRow(ctx, `SELECT value FROM wgpanel.acme_cache WHERE key = $1`, key).Scan(&data)
+	err := s.pool.QueryRow(ctx, `SELECT value FROM protean.acme_cache WHERE key = $1`, key).Scan(&data)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, false, nil
 	}
@@ -170,13 +170,13 @@ func (s *Store) AcmeCacheGet(ctx context.Context, key string) ([]byte, bool, err
 
 func (s *Store) AcmeCachePut(ctx context.Context, key string, data []byte) error {
 	_, err := s.pool.Exec(ctx, `
-		INSERT INTO wgpanel.acme_cache (key, value) VALUES ($1, $2)
+		INSERT INTO protean.acme_cache (key, value) VALUES ($1, $2)
 		ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value
 	`, key, data)
 	return err
 }
 
 func (s *Store) AcmeCacheDelete(ctx context.Context, key string) error {
-	_, err := s.pool.Exec(ctx, `DELETE FROM wgpanel.acme_cache WHERE key = $1`, key)
+	_, err := s.pool.Exec(ctx, `DELETE FROM protean.acme_cache WHERE key = $1`, key)
 	return err
 }

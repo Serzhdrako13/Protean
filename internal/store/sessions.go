@@ -19,7 +19,7 @@ type Session struct {
 
 func (s *Store) CreateSession(ctx context.Context, userID int64, tokenHash string, expiresAt time.Time) error {
 	_, err := s.pool.Exec(ctx, `
-		INSERT INTO wgpanel.sessions (user_id, token_hash, expires_at)
+		INSERT INTO protean.sessions (user_id, token_hash, expires_at)
 		VALUES ($1, $2, $3)
 	`, userID, tokenHash, expiresAt)
 	return err
@@ -36,8 +36,8 @@ func (s *Store) GetSession(ctx context.Context, tokenHash string) (Session, erro
 	var sess Session
 	err := s.pool.QueryRow(ctx, `
 		SELECT s.user_id, u.username, u.role, u.auth_source, s.expires_at, u.password_changed_at
-		FROM wgpanel.sessions s
-		JOIN wgpanel.users u ON u.id = s.user_id
+		FROM protean.sessions s
+		JOIN protean.users u ON u.id = s.user_id
 		WHERE s.token_hash = $1 AND s.expires_at > now()
 		  AND u.enabled = true
 		  AND (u.role <> 'user' OR u.portal_access_enabled = true)
@@ -49,11 +49,11 @@ func (s *Store) GetSession(ctx context.Context, tokenHash string) (Session, erro
 }
 
 func (s *Store) DeleteSession(ctx context.Context, tokenHash string) error {
-	_, err := s.pool.Exec(ctx, `DELETE FROM wgpanel.sessions WHERE token_hash = $1`, tokenHash)
+	_, err := s.pool.Exec(ctx, `DELETE FROM protean.sessions WHERE token_hash = $1`, tokenHash)
 	return err
 }
 
 func (s *Store) DeleteExpiredSessions(ctx context.Context) error {
-	_, err := s.pool.Exec(ctx, `DELETE FROM wgpanel.sessions WHERE expires_at <= now()`)
+	_, err := s.pool.Exec(ctx, `DELETE FROM protean.sessions WHERE expires_at <= now()`)
 	return err
 }

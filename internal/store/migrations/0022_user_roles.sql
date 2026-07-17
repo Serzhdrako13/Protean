@@ -1,4 +1,4 @@
-ALTER TABLE wgpanel.users
+ALTER TABLE protean.users
     ADD COLUMN role TEXT NOT NULL DEFAULT 'admin' CHECK (role IN ('admin', 'user'));
 
 -- Links an existing peer (its URLID, same identifier the panel already uses
@@ -6,12 +6,12 @@ ALTER TABLE wgpanel.users
 -- Peers themselves aren't stored in one place (wg-family lives on the host,
 -- cert-based peers have their own tables) -- this is deliberately just a
 -- thin ownership pointer, not a peers table of its own.
-CREATE TABLE wgpanel.peer_owner (
+CREATE TABLE protean.peer_owner (
     provider   TEXT        NOT NULL,
     peer_key   TEXT        NOT NULL,
-    user_id    BIGINT      NOT NULL REFERENCES wgpanel.users(id) ON DELETE CASCADE,
+    user_id    BIGINT      NOT NULL REFERENCES protean.users(id) ON DELETE CASCADE,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     PRIMARY KEY (provider, peer_key)
 );
 
-CREATE INDEX peer_owner_user_id_idx ON wgpanel.peer_owner(user_id);
+CREATE INDEX peer_owner_user_id_idx ON protean.peer_owner(user_id);

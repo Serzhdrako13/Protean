@@ -16,7 +16,7 @@ type AuditEntry struct {
 // fail the request if auditing itself fails.
 func (s *Store) AddAuditEntry(ctx context.Context, username, action, target string) error {
 	_, err := s.pool.Exec(ctx, `
-		INSERT INTO wgpanel.audit_log (username, action, target) VALUES ($1, $2, $3)
+		INSERT INTO protean.audit_log (username, action, target) VALUES ($1, $2, $3)
 	`, username, action, target)
 	return err
 }
@@ -27,7 +27,7 @@ func (s *Store) ListAuditEntries(ctx context.Context, limit int) ([]AuditEntry, 
 	}
 	rows, err := s.pool.Query(ctx, `
 		SELECT ts, username, action, target
-		FROM wgpanel.audit_log
+		FROM protean.audit_log
 		ORDER BY ts DESC
 		LIMIT $1
 	`, limit)

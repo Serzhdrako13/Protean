@@ -18,7 +18,7 @@ type XrayInstance struct {
 
 func (s *Store) SaveXrayInstance(ctx context.Context, x XrayInstance) error {
 	_, err := s.pool.Exec(ctx, `
-		INSERT INTO wgpanel.xray_instances (provider, strategy, enc_params, enc_relay, updated_at)
+		INSERT INTO protean.xray_instances (provider, strategy, enc_params, enc_relay, updated_at)
 		VALUES ($1, $2, $3, $4, now())
 		ON CONFLICT (provider) DO UPDATE SET
 			strategy = EXCLUDED.strategy, enc_params = EXCLUDED.enc_params,
@@ -31,7 +31,7 @@ func (s *Store) GetXrayInstance(ctx context.Context, provider string) (XrayInsta
 	var x XrayInstance
 	err := s.pool.QueryRow(ctx, `
 		SELECT provider, strategy, enc_params, enc_relay
-		FROM wgpanel.xray_instances WHERE provider = $1
+		FROM protean.xray_instances WHERE provider = $1
 	`, provider).Scan(&x.Provider, &x.Strategy, &x.EncParams, &x.EncRelay)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return XrayInstance{}, ErrNotFound
@@ -40,7 +40,7 @@ func (s *Store) GetXrayInstance(ctx context.Context, provider string) (XrayInsta
 }
 
 func (s *Store) DeleteXrayInstance(ctx context.Context, provider string) error {
-	_, err := s.pool.Exec(ctx, `DELETE FROM wgpanel.xray_instances WHERE provider = $1`, provider)
+	_, err := s.pool.Exec(ctx, `DELETE FROM protean.xray_instances WHERE provider = $1`, provider)
 	return err
 }
 
@@ -52,7 +52,7 @@ type XrayClient struct {
 
 func (s *Store) SaveXrayClient(ctx context.Context, provider, name string, encCred []byte) error {
 	_, err := s.pool.Exec(ctx, `
-		INSERT INTO wgpanel.xray_clients (provider, name, enc_cred)
+		INSERT INTO protean.xray_clients (provider, name, enc_cred)
 		VALUES ($1, $2, $3)
 		ON CONFLICT (provider, name) DO UPDATE SET enc_cred = EXCLUDED.enc_cred
 	`, provider, name, encCred)
@@ -61,7 +61,7 @@ func (s *Store) SaveXrayClient(ctx context.Context, provider, name string, encCr
 
 func (s *Store) ListXrayClients(ctx context.Context, provider string) ([]XrayClient, error) {
 	rows, err := s.pool.Query(ctx, `
-		SELECT name, enc_cred FROM wgpanel.xray_clients WHERE provider = $1 ORDER BY name
+		SELECT name, enc_cred FROM protean.xray_clients WHERE provider = $1 ORDER BY name
 	`, provider)
 	if err != nil {
 		return nil, err
@@ -79,6 +79,6 @@ func (s *Store) ListXrayClients(ctx context.Context, provider string) ([]XrayCli
 }
 
 func (s *Store) DeleteXrayClient(ctx context.Context, provider, name string) error {
-	_, err := s.pool.Exec(ctx, `DELETE FROM wgpanel.xray_clients WHERE provider = $1 AND name = $2`, provider, name)
+	_, err := s.pool.Exec(ctx, `DELETE FROM protean.xray_clients WHERE provider = $1 AND name = $2`, provider, name)
 	return err
 }

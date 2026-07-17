@@ -1,6 +1,6 @@
 -- IKEv2 clients: issued cert (public) + AES-encrypted key, the PKCS#12 export
 -- password (so the same .p12 can be re-downloaded), and routing metadata.
-CREATE TABLE wgpanel.ikev2_clients (
+CREATE TABLE protean.ikev2_clients (
     cn           TEXT PRIMARY KEY,
     cert_pem     TEXT NOT NULL,
     enc_key_pem  BYTEA NOT NULL,

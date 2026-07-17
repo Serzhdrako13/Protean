@@ -8,8 +8,8 @@
 -- amneziawg need none (conf path is derived from local_name by convention).
 -- config is a JSON-encoded string (not jsonb) -- scanned as plain text and
 -- decoded in Go, no pgx JSONB-specific handling needed.
-CREATE TABLE IF NOT EXISTS wgpanel.server_instances (
-    server_id  text        NOT NULL REFERENCES wgpanel.servers(id) ON DELETE CASCADE,
+CREATE TABLE IF NOT EXISTS protean.server_instances (
+    server_id  text        NOT NULL REFERENCES protean.servers(id) ON DELETE CASCADE,
     local_name text        NOT NULL,
     type       text        NOT NULL,
     config     text        NOT NULL DEFAULT '{}',

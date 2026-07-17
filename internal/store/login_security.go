@@ -38,7 +38,7 @@ func (s *Store) GetLoginSecuritySettings(ctx context.Context) (LoginSecuritySett
 	err := s.pool.QueryRow(ctx, `
 		SELECT enabled, track_by_username, track_by_ip, fail_threshold, count_window_minutes,
 		       ban_base_minutes, escalation_factor, escalation_reset_minutes, max_ban_minutes
-		FROM wgpanel.login_security_settings WHERE id = true
+		FROM protean.login_security_settings WHERE id = true
 	`).Scan(
 		&t.Enabled, &t.TrackByUsername, &t.TrackByIP, &t.FailThreshold, &t.CountWindowMinutes,
 		&t.BanBaseMinutes, &t.EscalationFactor, &t.EscalationResetMinutes, &t.MaxBanMinutes,
@@ -55,7 +55,7 @@ func (s *Store) GetLoginSecuritySettings(ctx context.Context) (LoginSecuritySett
 // SetLoginSecuritySettings upserts the singleton row.
 func (s *Store) SetLoginSecuritySettings(ctx context.Context, t LoginSecuritySettings) error {
 	_, err := s.pool.Exec(ctx, `
-		INSERT INTO wgpanel.login_security_settings (
+		INSERT INTO protean.login_security_settings (
 			id, enabled, track_by_username, track_by_ip, fail_threshold, count_window_minutes,
 			ban_base_minutes, escalation_factor, escalation_reset_minutes, max_ban_minutes, updated_at
 		) VALUES (true, $1, $2, $3, $4, $5, $6, $7, $8, $9, now())
@@ -85,7 +85,7 @@ type LoginIPRule struct {
 
 func (s *Store) ListLoginIPRules(ctx context.Context) ([]LoginIPRule, error) {
 	rows, err := s.pool.Query(ctx, `
-		SELECT ip_or_cidr, kind, note, created_at FROM wgpanel.login_ip_rules ORDER BY created_at
+		SELECT ip_or_cidr, kind, note, created_at FROM protean.login_ip_rules ORDER BY created_at
 	`)
 	if err != nil {
 		return nil, err
@@ -104,7 +104,7 @@ func (s *Store) ListLoginIPRules(ctx context.Context) ([]LoginIPRule, error) {
 
 func (s *Store) AddLoginIPRule(ctx context.Context, r LoginIPRule) error {
 	_, err := s.pool.Exec(ctx, `
-		INSERT INTO wgpanel.login_ip_rules (ip_or_cidr, kind, note)
+		INSERT INTO protean.login_ip_rules (ip_or_cidr, kind, note)
 		VALUES ($1, $2, $3)
 		ON CONFLICT (ip_or_cidr) DO UPDATE SET kind = EXCLUDED.kind, note = EXCLUDED.note
 	`, r.IPOrCIDR, r.Kind, r.Note)
@@ -112,7 +112,7 @@ func (s *Store) AddLoginIPRule(ctx context.Context, r LoginIPRule) error {
 }
 
 func (s *Store) DeleteLoginIPRule(ctx context.Context, ipOrCIDR string) error {
-	_, err := s.pool.Exec(ctx, `DELETE FROM wgpanel.login_ip_rules WHERE ip_or_cidr = $1`, ipOrCIDR)
+	_, err := s.pool.Exec(ctx, `DELETE FROM protean.login_ip_rules WHERE ip_or_cidr = $1`, ipOrCIDR)
 	return err
 }
 
@@ -121,7 +121,7 @@ func (s *Store) DeleteLoginIPRule(ctx context.Context, ipOrCIDR string) error {
 // a password/TOTP code.
 func (s *Store) RecordLoginAttempt(ctx context.Context, username, ip string, success bool, reason string) error {
 	_, err := s.pool.Exec(ctx, `
-		INSERT INTO wgpanel.login_attempts (username, ip, success, reason) VALUES ($1, $2, $3, $4)
+		INSERT INTO protean.login_attempts (username, ip, success, reason) VALUES ($1, $2, $3, $4)
 	`, username, ip, success, reason)
 	return err
 }
@@ -136,7 +136,7 @@ func (s *Store) CountRecentFailures(ctx context.Context, keyType, keyValue strin
 	}
 	var n int
 	err := s.pool.QueryRow(ctx,
-		`SELECT count(*) FROM wgpanel.login_attempts WHERE `+col+` = $1 AND success = false AND ts > $2`,
+		`SELECT count(*) FROM protean.login_attempts WHERE `+col+` = $1 AND success = false AND ts > $2`,
 		keyValue, since,
 	).Scan(&n)
 	return n, err
@@ -156,7 +156,7 @@ func (s *Store) GetLoginBanState(ctx context.Context, keyType, keyValue string) 
 	b.KeyType, b.KeyValue = keyType, keyValue
 	err := s.pool.QueryRow(ctx, `
 		SELECT banned_until, escalation_level, updated_at
-		FROM wgpanel.login_ban_state WHERE key_type = $1 AND key_value = $2
+		FROM protean.login_ban_state WHERE key_type = $1 AND key_value = $2
 	`, keyType, keyValue).Scan(&b.BannedUntil, &b.EscalationLevel, &b.UpdatedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return LoginBanState{}, false, nil
@@ -169,7 +169,7 @@ func (s *Store) GetLoginBanState(ctx context.Context, keyType, keyValue string) 
 
 func (s *Store) UpsertLoginBanState(ctx context.Context, keyType, keyValue string, bannedUntil time.Time, escalationLevel int) error {
 	_, err := s.pool.Exec(ctx, `
-		INSERT INTO wgpanel.login_ban_state (key_type, key_value, banned_until, escalation_level, updated_at)
+		INSERT INTO protean.login_ban_state (key_type, key_value, banned_until, escalation_level, updated_at)
 		VALUES ($1, $2, $3, $4, now())
 		ON CONFLICT (key_type, key_value) DO UPDATE SET
 			banned_until = EXCLUDED.banned_until,
@@ -184,7 +184,7 @@ func (s *Store) UpsertLoginBanState(ctx context.Context, keyType, keyValue strin
 // back in early but still one violation away from the next escalated ban."
 func (s *Store) ClearLoginBanState(ctx context.Context, keyType, keyValue string) error {
 	_, err := s.pool.Exec(ctx, `
-		UPDATE wgpanel.login_ban_state SET banned_until = now(), escalation_level = 0, updated_at = now()
+		UPDATE protean.login_ban_state SET banned_until = now(), escalation_level = 0, updated_at = now()
 		WHERE key_type = $1 AND key_value = $2
 	`, keyType, keyValue)
 	return err
@@ -195,7 +195,7 @@ func (s *Store) ClearLoginBanState(ctx context.Context, keyType, keyValue string
 func (s *Store) ListActiveLoginBans(ctx context.Context) ([]LoginBanState, error) {
 	rows, err := s.pool.Query(ctx, `
 		SELECT key_type, key_value, banned_until, escalation_level, updated_at
-		FROM wgpanel.login_ban_state WHERE banned_until > now() ORDER BY banned_until DESC
+		FROM protean.login_ban_state WHERE banned_until > now() ORDER BY banned_until DESC
 	`)
 	if err != nil {
 		return nil, err
@@ -226,7 +226,7 @@ type LoginAttemptRow struct {
 // bounded by limit.
 func (s *Store) ListRecentLoginAttempts(ctx context.Context, limit int) ([]LoginAttemptRow, error) {
 	rows, err := s.pool.Query(ctx, `
-		SELECT ts, username, ip, success, reason FROM wgpanel.login_attempts
+		SELECT ts, username, ip, success, reason FROM protean.login_attempts
 		ORDER BY ts DESC LIMIT $1
 	`, limit)
 	if err != nil {
@@ -261,14 +261,14 @@ func (s *Store) GetLoginAttemptStats(ctx context.Context, since time.Time, topN 
 	var stats LoginAttemptStats
 	err := s.pool.QueryRow(ctx, `
 		SELECT count(*), count(*) FILTER (WHERE NOT success)
-		FROM wgpanel.login_attempts WHERE ts > $1
+		FROM protean.login_attempts WHERE ts > $1
 	`, since).Scan(&stats.TotalAttempts, &stats.FailedAttempts)
 	if err != nil {
 		return LoginAttemptStats{}, err
 	}
 
 	rows, err := s.pool.Query(ctx, `
-		SELECT ip, count(*) FROM wgpanel.login_attempts
+		SELECT ip, count(*) FROM protean.login_attempts
 		WHERE ts > $1 AND NOT success AND ip != ''
 		GROUP BY ip ORDER BY count(*) DESC LIMIT $2
 	`, since, topN)

@@ -18,7 +18,7 @@ type Subnet struct {
 func (s *Store) ListAllSubnets(ctx context.Context) ([]Subnet, error) {
 	rows, err := s.pool.Query(ctx, `
 		SELECT id, provider, cidr::text, label, created_at
-		FROM wgpanel.subnets
+		FROM protean.subnets
 		ORDER BY cidr
 	`)
 	if err != nil {
@@ -41,7 +41,7 @@ func (s *Store) ListAllSubnets(ctx context.Context) ([]Subnet, error) {
 func (s *Store) CreateSubnet(ctx context.Context, cidr, label string) (Subnet, error) {
 	var sn Subnet
 	err := s.pool.QueryRow(ctx, `
-		INSERT INTO wgpanel.subnets (cidr, label)
+		INSERT INTO protean.subnets (cidr, label)
 		VALUES ($1, $2)
 		RETURNING id, provider, cidr::text, label, created_at
 	`, cidr, label).Scan(&sn.ID, &sn.Provider, &sn.CIDR, &sn.Label, &sn.CreatedAt)
@@ -49,6 +49,6 @@ func (s *Store) CreateSubnet(ctx context.Context, cidr, label string) (Subnet, e
 }
 
 func (s *Store) DeleteSubnet(ctx context.Context, id int64) error {
-	_, err := s.pool.Exec(ctx, `DELETE FROM wgpanel.subnets WHERE id = $1`, id)
+	_, err := s.pool.Exec(ctx, `DELETE FROM protean.subnets WHERE id = $1`, id)
 	return err
 }

@@ -5,26 +5,26 @@
 
 -- Cert client tables were keyed by CN alone; add a provider scope so different
 -- servers' clients can't collide, and re-key the primary key.
-ALTER TABLE wgpanel.openvpn_clients ADD COLUMN IF NOT EXISTS provider text NOT NULL DEFAULT 'default:openvpn';
-ALTER TABLE wgpanel.openvpn_clients ALTER COLUMN provider DROP DEFAULT;
-ALTER TABLE wgpanel.openvpn_clients DROP CONSTRAINT IF EXISTS openvpn_clients_pkey;
-ALTER TABLE wgpanel.openvpn_clients ADD PRIMARY KEY (provider, cn);
+ALTER TABLE protean.openvpn_clients ADD COLUMN IF NOT EXISTS provider text NOT NULL DEFAULT 'default:openvpn';
+ALTER TABLE protean.openvpn_clients ALTER COLUMN provider DROP DEFAULT;
+ALTER TABLE protean.openvpn_clients DROP CONSTRAINT IF EXISTS openvpn_clients_pkey;
+ALTER TABLE protean.openvpn_clients ADD PRIMARY KEY (provider, cn);
 
-ALTER TABLE wgpanel.ikev2_clients ADD COLUMN IF NOT EXISTS provider text NOT NULL DEFAULT 'default:ikev2';
-ALTER TABLE wgpanel.ikev2_clients ALTER COLUMN provider DROP DEFAULT;
-ALTER TABLE wgpanel.ikev2_clients DROP CONSTRAINT IF EXISTS ikev2_clients_pkey;
-ALTER TABLE wgpanel.ikev2_clients ADD PRIMARY KEY (provider, cn);
+ALTER TABLE protean.ikev2_clients ADD COLUMN IF NOT EXISTS provider text NOT NULL DEFAULT 'default:ikev2';
+ALTER TABLE protean.ikev2_clients ALTER COLUMN provider DROP DEFAULT;
+ALTER TABLE protean.ikev2_clients DROP CONSTRAINT IF EXISTS ikev2_clients_pkey;
+ALTER TABLE protean.ikev2_clients ADD PRIMARY KEY (provider, cn);
 
 -- Prefix existing provider-keyed rows with the default server. Guarded by
 -- NOT LIKE '%:%' so no-op if already scoped (idempotent, safe re-run).
-UPDATE wgpanel.peer_secrets       SET provider = 'default:' || provider WHERE provider NOT LIKE '%:%';
-UPDATE wgpanel.peer_expiry        SET provider = 'default:' || provider WHERE provider NOT LIKE '%:%';
-UPDATE wgpanel.disabled_peers     SET provider = 'default:' || provider WHERE provider NOT LIKE '%:%';
-UPDATE wgpanel.peer_category      SET provider = 'default:' || provider WHERE provider NOT LIKE '%:%';
-UPDATE wgpanel.notify_peer_mute   SET provider = 'default:' || provider WHERE provider NOT LIKE '%:%';
-UPDATE wgpanel.ca_material        SET provider = 'default:' || provider WHERE provider NOT LIKE '%:%';
-UPDATE wgpanel.revoked_certs      SET provider = 'default:' || provider WHERE provider NOT LIKE '%:%';
-UPDATE wgpanel.crl_number         SET provider = 'default:' || provider WHERE provider NOT LIKE '%:%';
-UPDATE wgpanel.cert_server_routes SET provider = 'default:' || provider WHERE provider NOT LIKE '%:%';
-UPDATE wgpanel.conf_backups       SET provider = 'default:' || provider WHERE provider NOT LIKE '%:%';
-UPDATE wgpanel.provider_settings  SET provider = 'default:' || provider WHERE provider NOT LIKE '%:%';
+UPDATE protean.peer_secrets       SET provider = 'default:' || provider WHERE provider NOT LIKE '%:%';
+UPDATE protean.peer_expiry        SET provider = 'default:' || provider WHERE provider NOT LIKE '%:%';
+UPDATE protean.disabled_peers     SET provider = 'default:' || provider WHERE provider NOT LIKE '%:%';
+UPDATE protean.peer_category      SET provider = 'default:' || provider WHERE provider NOT LIKE '%:%';
+UPDATE protean.notify_peer_mute   SET provider = 'default:' || provider WHERE provider NOT LIKE '%:%';
+UPDATE protean.ca_material        SET provider = 'default:' || provider WHERE provider NOT LIKE '%:%';
+UPDATE protean.revoked_certs      SET provider = 'default:' || provider WHERE provider NOT LIKE '%:%';
+UPDATE protean.crl_number         SET provider = 'default:' || provider WHERE provider NOT LIKE '%:%';
+UPDATE protean.cert_server_routes SET provider = 'default:' || provider WHERE provider NOT LIKE '%:%';
+UPDATE protean.conf_backups       SET provider = 'default:' || provider WHERE provider NOT LIKE '%:%';
+UPDATE protean.provider_settings  SET provider = 'default:' || provider WHERE provider NOT LIKE '%:%';

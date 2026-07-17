@@ -20,7 +20,7 @@ type OwnedNodePeerKey struct {
 // SetNodePeer assigns (or reassigns) a peer to a node.
 func (s *Store) SetNodePeer(ctx context.Context, provider, peerKey string, nodeID int64) error {
 	_, err := s.pool.Exec(ctx, `
-		INSERT INTO wgpanel.node_peer (provider, peer_key, node_id)
+		INSERT INTO protean.node_peer (provider, peer_key, node_id)
 		VALUES ($1, $2, $3)
 		ON CONFLICT (provider, peer_key) DO UPDATE SET node_id = EXCLUDED.node_id, created_at = now()
 	`, provider, peerKey, nodeID)
@@ -29,14 +29,14 @@ func (s *Store) SetNodePeer(ctx context.Context, provider, peerKey string, nodeI
 
 // ClearNodePeer unassigns a peer (no-op if it had no node owner).
 func (s *Store) ClearNodePeer(ctx context.Context, provider, peerKey string) error {
-	_, err := s.pool.Exec(ctx, `DELETE FROM wgpanel.node_peer WHERE provider = $1 AND peer_key = $2`, provider, peerKey)
+	_, err := s.pool.Exec(ctx, `DELETE FROM protean.node_peer WHERE provider = $1 AND peer_key = $2`, provider, peerKey)
 	return err
 }
 
 // ListNodeOwnedPeerKeys returns every peer assigned to a node, across all providers.
 func (s *Store) ListNodeOwnedPeerKeys(ctx context.Context, nodeID int64) ([]OwnedNodePeerKey, error) {
 	rows, err := s.pool.Query(ctx, `
-		SELECT provider, peer_key, created_at FROM wgpanel.node_peer WHERE node_id = $1 ORDER BY provider, peer_key
+		SELECT provider, peer_key, created_at FROM protean.node_peer WHERE node_id = $1 ORDER BY provider, peer_key
 	`, nodeID)
 	if err != nil {
 		return nil, err
@@ -57,7 +57,7 @@ func (s *Store) ListNodeOwnedPeerKeys(ctx context.Context, nodeID int64) ([]Owne
 func (s *Store) GetNodePeerOwnerID(ctx context.Context, provider, peerKey string) (int64, bool, error) {
 	var nodeID int64
 	err := s.pool.QueryRow(ctx, `
-		SELECT node_id FROM wgpanel.node_peer WHERE provider = $1 AND peer_key = $2
+		SELECT node_id FROM protean.node_peer WHERE provider = $1 AND peer_key = $2
 	`, provider, peerKey).Scan(&nodeID)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return 0, false, nil
@@ -82,8 +82,8 @@ type NodePeerRow struct {
 func (s *Store) ListNodeOwnersForProvider(ctx context.Context, provider string) ([]NodePeerRow, error) {
 	rows, err := s.pool.Query(ctx, `
 		SELECT np.peer_key, np.node_id, n.name
-		FROM wgpanel.node_peer np
-		JOIN wgpanel.nodes n ON n.id = np.node_id
+		FROM protean.node_peer np
+		JOIN protean.nodes n ON n.id = np.node_id
 		WHERE np.provider = $1
 	`, provider)
 	if err != nil {
@@ -117,8 +117,8 @@ type GlobalNodePeerRow struct {
 func (s *Store) ListAllNodeOwnedPeers(ctx context.Context) ([]GlobalNodePeerRow, error) {
 	rows, err := s.pool.Query(ctx, `
 		SELECT np.provider, np.peer_key, np.node_id, n.name
-		FROM wgpanel.node_peer np
-		JOIN wgpanel.nodes n ON n.id = np.node_id
+		FROM protean.node_peer np
+		JOIN protean.nodes n ON n.id = np.node_id
 		ORDER BY np.provider, n.name
 	`)
 	if err != nil {
@@ -147,8 +147,8 @@ func (s *Store) HasNetworkNodePeer(ctx context.Context, provider string, exclude
 	var exists bool
 	err := s.pool.QueryRow(ctx, `
 		SELECT EXISTS (
-			SELECT 1 FROM wgpanel.node_peer np
-			JOIN wgpanel.nodes n ON n.id = np.node_id
+			SELECT 1 FROM protean.node_peer np
+			JOIN protean.nodes n ON n.id = np.node_id
 			WHERE np.provider = $1 AND n.role = 'network_node' AND np.node_id != $2
 		)
 	`, provider, excludeNodeID).Scan(&exists)
