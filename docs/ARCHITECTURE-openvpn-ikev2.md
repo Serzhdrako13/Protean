@@ -41,7 +41,7 @@ iptables) both can, so mesh membership is available to all four.
 
 ## Per-provider settings (implemented)
 
-Each provider has independent settings (`wgpanel.provider_settings`), edited on
+Each provider has independent settings (`protean.provider_settings`), edited on
 the provider's **Network** page:
 
 - **mesh_enabled** (default off) — join the cross-provider no-NAT mesh. Off =
@@ -126,7 +126,7 @@ path — it works today via standalone mode. Full write-up in
   client form.
 
 ### IKEv2 (strongSwan) — implemented
-- swanctl config in `/etc/swanctl/conf.d/wgpanel.conf`; certs under
+- swanctl config in `/etc/swanctl/conf.d/protean.conf`; certs under
   `x509`/`x509ca`/`private`; `EnsureServer` writes them and runs
   `swanctl --load-all` + enables `strongswan` ("Set up IKEv2 server").
 - Panel is its own CA (shared `pki`, separate `ca_material` row "ikev2").

@@ -12,7 +12,7 @@ type ActiveSA struct {
 // ParseListSAs best-effort-parses `swanctl --list-sas` human output. The
 // format is line-oriented; an established SA block looks roughly like:
 //
-//	wgpanel: #12, ESTABLISHED, IKEv2, ...
+//	protean: #12, ESTABLISHED, IKEv2, ...
 //	  local  'vpn.example.com' @ 203.0.113.10[4500]
 //	  remote 'office-a' @ 198.51.100.9[4500]
 //

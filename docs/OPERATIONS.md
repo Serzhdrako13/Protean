@@ -41,7 +41,7 @@
 | Компонент | Роль | Обязателен | Отказ = |
 |---|---|---|---|
 | Контейнер `panel` | Веб-UI, API, воркеры, SSH-клиенты | да | сервис недоступен |
-| Postgres (схема `wgpanel`) | всё состояние: пользователи, сессии, зашифрованные секреты, серверы, подсети, аудит, CRL, xray-клиенты, снапшоты конфигов | да | панель **не стартует** и `/healthz` → 503 |
+| Postgres (схема `protean`) | всё состояние: пользователи, сессии, зашифрованные секреты, серверы, подсети, аудит, CRL, xray-клиенты, снапшоты конфигов | да | панель **не стартует** и `/healthz` → 503 |
 | Управляемый VPN-хост(ы) | где реально живут wg/awg/ovpn/ikev2/xray | для работы VPN | «host degraded», но панель **жива** |
 | Reverse proxy (nginx/caddy) | TLS-терминация | де-факто да (Secure-cookie) | логин не работает по HTTP |
 
@@ -369,14 +369,14 @@ sudo -l -U protean
 UI на `/account` (нужен текущий пароль). Аварийный сброс:
 
 ```sql
-DELETE FROM wgpanel.users WHERE username = 'admin';
+DELETE FROM protean.users WHERE username = 'admin';
 -- перезапустить контейнер с нужным ADMIN_PASSWORD в .env → сид сработает снова
 ```
 
 Потеря 2FA-устройства:
 
 ```sql
-UPDATE wgpanel.users SET totp_enabled=false, totp_secret='' WHERE username='admin';
+UPDATE protean.users SET totp_enabled=false, totp_secret='' WHERE username='admin';
 ```
 
 Проверка чистого старта — в логе `listening addr=:8080` без предшествующих
@@ -391,7 +391,7 @@ UPDATE wgpanel.users SET totp_enabled=false, totp_secret='' WHERE username='admi
 
 | Данные | Место | Зачем |
 |---|---|---|
-| Пользователи, сессии, подсети, аудит, CRL, xray-клиенты, настройки, **зашифрованные** приватные ключи клиентов/CA/SSH/notify | Postgres, схема `wgpanel` | без этого нельзя повторно выдать конфиг созданного клиента |
+| Пользователи, сессии, подсети, аудит, CRL, xray-клиенты, настройки, **зашифрованные** приватные ключи клиентов/CA/SSH/notify | Postgres, схема `protean` | без этого нельзя повторно выдать конфиг созданного клиента |
 | Полная конфигурация интерфейса + всех пиров | conf-файл на хосте (`/etc/wireguard/wg0.conf`, `/etc/amnezia/amneziawg/awg0.conf`) | это и есть источник истины по состоянию wg/awg |
 | Cert-провайдеры: CA/cert/key/conf | на хосте (`/etc/openvpn/server`, `/etc/swanctl`) + CA-ключ в БД (зашифрован) | PKI |
 | `SECRET_KEY` | `.env` (вне БД) | **без него все зашифрованные секреты в БД нерасшифровываемы** |
@@ -404,13 +404,13 @@ UPDATE wgpanel.users SET totp_enabled=false, totp_secret='' WHERE username='admi
 
 ```sh
 # Логический дамп только схемы панели (роль/контейнер — свои):
-docker exec -i <pg-container> pg_dump -U <admin> -n wgpanel -Fc wgpanel > wgpanel-$(date +%F).dump
+docker exec -i <pg-container> pg_dump -U <admin> -n protean -Fc protean > protean-$(date +%F).dump
 ```
 
 Восстановление:
 
 ```sh
-docker exec -i <pg-container> pg_restore -U <admin> -d wgpanel --clean --if-exists < wgpanel-YYYY-MM-DD.dump
+docker exec -i <pg-container> pg_restore -U <admin> -d protean --clean --if-exists < protean-YYYY-MM-DD.dump
 ```
 
 ### 6.3 Бэкап конфигов хоста и SECRET_KEY
@@ -423,7 +423,7 @@ docker exec -i <pg-container> pg_restore -U <admin> -d wgpanel --clean --if-exis
 ### 6.4 Встроенные снапшоты конфига (conf_backups)
 
 Перед **каждой** перезаписью conf панель кладёт снапшот прежнего содержимого в
-`wgpanel.conf_backups` — **последние 20 на провайдер** (лишние удаляются). Это
+`protean.conf_backups` — **последние 20 на провайдер** (лишние удаляются). Это
 страховка от неудачной правки, доступная в UI: **страница
 `/providers/{provider}/backups`** (кнопка Restore у нужного снапшота). Если апплай
 падает и бэкап тоже не удался — WARN `wgfamily: config backup failed (continuing)`.
@@ -431,7 +431,7 @@ docker exec -i <pg-container> pg_restore -U <admin> -d wgpanel --clean --if-exis
 Восстановление вручную из БД:
 
 ```sql
-SELECT id, saved_at, left(content, 60) FROM wgpanel.conf_backups
+SELECT id, saved_at, left(content, 60) FROM protean.conf_backups
   WHERE provider='wireguard' ORDER BY saved_at DESC;
 -- скопировать нужный content в /etc/wireguard/wg0.conf на хосте, затем:
 --   systemctl restart wg-quick@wg0
@@ -506,12 +506,12 @@ blue-green с двумя живыми экземплярами на одну Б�
 - Применяются **автоматически на старте** (`store.Migrate`), в порядке имён
   файлов, каждая **в своей транзакции**; при ошибке — rollback этой миграции и
   падение старта (`fatal migrate`). Уже применённые пропускаются (учёт в
-  `wgpanel.schema_migrations`).
+  `protean.schema_migrations`).
 - Сейчас **19 миграций** (`0001_init.sql` … `0019_xray_clients.sql`), встроены в
   бинарь через `embed`.
 - Проверить состояние:
   ```sql
-  SELECT filename, applied_at FROM wgpanel.schema_migrations ORDER BY filename;
+  SELECT filename, applied_at FROM protean.schema_migrations ORDER BY filename;
   ```
 
 ### 8.3 Безопасность обновления и откат

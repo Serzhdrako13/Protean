@@ -116,7 +116,7 @@ docker compose up -d --build
 поэтому `SSH_*` можно не задавать):
 
 ```sh
-DATABASE_URL=postgres://wgpanel:ПАРОЛЬ@postgres:5432/wgpanel?sslmode=disable
+DATABASE_URL=postgres://protean:ПАРОЛЬ@postgres:5432/protean?sslmode=disable
 SESSION_SECRET=<случайная строка ≥16 символов>
 SECRET_KEY=<64 hex-символа = 32 байта; openssl rand -hex 32>
 ADMIN_USERNAME=admin

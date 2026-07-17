@@ -147,7 +147,7 @@ server {
 контейнер с новым `ADMIN_PASSWORD` — сидинг сработает снова:
 
 ```sql
-DELETE FROM wgpanel.users WHERE username = 'admin';
+DELETE FROM protean.users WHERE username = 'admin';
 ```
 
 **2FA (TOTP)** включается на `/account` (по желанию, по умолчанию выкл):
@@ -156,7 +156,7 @@ DELETE FROM wgpanel.users WHERE username = 'admin';
 пароль. Если 2FA-устройство потеряно, снять флаг в БД:
 
 ```sql
-UPDATE wgpanel.users SET totp_enabled=false, totp_secret='' WHERE username='admin';
+UPDATE protean.users SET totp_enabled=false, totp_secret='' WHERE username='admin';
 ```
 
 **Логи**: `LOG_LEVEL` (debug|info|warn|error) и `LOG_FORMAT` (text|json,
@@ -199,7 +199,7 @@ scrape_configs:
 
 Что нужно бэкапить, чтобы всё восстановить:
 
-- **Postgres, схема `wgpanel`**: сессии, справочник подсетей и *зашифрованные*
+- **Postgres, схема `protean`**: сессии, справочник подсетей и *зашифрованные*
   приватные ключи клиентов, которые панель сгенерировала сама. Без этого
   бэкапа скачать конфиг уже созданного клиента повторно не получится —
   придётся пересоздавать клиента.
@@ -213,11 +213,11 @@ scrape_configs:
   секретах CI/CD или password-менеджере), не только в `.env` на диске.
 
 Перед каждой перезаписью конфига панель автоматически кладёт снапшот
-предыдущего содержимого в таблицу `wgpanel.conf_backups` (последние 20 на
+предыдущего содержимого в таблицу `protean.conf_backups` (последние 20 на
 интерфейс) — страховка от неудачной правки. Восстановить вручную:
 
 ```sql
-SELECT saved_at, left(content, 60) FROM wgpanel.conf_backups
+SELECT saved_at, left(content, 60) FROM protean.conf_backups
   WHERE provider='wireguard' ORDER BY saved_at DESC;
 -- скопировать нужный content обратно в /etc/wireguard/wg0.conf на хосте,
 -- затем: systemctl restart wg-quick@wg0

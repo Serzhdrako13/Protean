@@ -37,7 +37,7 @@ type SiteClient struct {
 func (p ServerParams) RenderConnections() string {
 	name := p.ConnName
 	if name == "" {
-		name = "wgpanel"
+		name = "protean"
 	}
 	localTS := p.LocalTS
 	if len(localTS) == 0 {
