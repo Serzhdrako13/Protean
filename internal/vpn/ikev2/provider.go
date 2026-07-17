@@ -569,10 +569,24 @@ func (p *Provider) writeConnAndLoad(ctx context.Context, pushRoutes []string, eg
 	if err := p.opts.SSH.WriteFile(ctx, p.opts.SwanctlDir+"/conf.d/"+p.opts.ConnName+".conf", conf.RenderConnections()); err != nil {
 		return fmt.Errorf("write swanctl conf: %w", err)
 	}
-	if _, err := p.opts.SSH.Run(ctx, "sudo swanctl --load-all"); err != nil {
-		return fmt.Errorf("swanctl load-all: %w", err)
+	// charon reporting "active" via systemd doesn't guarantee its vici
+	// plugin has bound /run/charon.vici yet (Type=simple, no readiness
+	// notification for that specific milestone) -- confirmed live,
+	// consistently racing on ALT Linux right after EnsureServer's own
+	// "enable" call, though the same race could in principle hit any
+	// distro under enough load. Retry briefly rather than fail outright
+	// on what's usually a sub-second startup window.
+	for attempt := 0; attempt < 5; attempt++ {
+		_, err = p.opts.SSH.Run(ctx, "sudo swanctl --load-all")
+		if err == nil {
+			return nil
+		}
+		if !strings.Contains(err.Error(), "connecting to") {
+			break // a real config/credential error -- retrying won't help
+		}
+		time.Sleep(500 * time.Millisecond)
 	}
-	return nil
+	return fmt.Errorf("swanctl load-all: %w", err)
 }
 
 // applyClients regenerates the swanctl connections from the persisted routes so

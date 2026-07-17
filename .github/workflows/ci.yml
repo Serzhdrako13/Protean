@@ -162,14 +162,11 @@ jobs:
           - { family: zypper, image: "opensuse/leap:16",   tag: opensuse-leap16 }
           # pacman family
           - { family: pacman, image: "archlinux:latest", tag: arch }
-          # apt-rpm hybrid, Timeweb only -- no OS_FAMILY case in
-          # detect_os today; attempted honestly, not expected to pass
-          # (see test/e2elab/README.md).
-          - { family: altlinux, image: "alt:p10", tag: altlinux-p10, best_effort: true }
-          # Astra Linux 2.12 (Timeweb only) has no publicly available
-          # Docker base image -- not covered by this automated harness;
-          # documented in test/e2elab/README.md rather than silently
-          # dropped.
+          # apt-rpm hybrid, Timeweb only.
+          - { family: altlinux, image: "alt:p10", tag: altlinux-p10 }
+          # Astra Linux 2.12 (Timeweb only) has no official Docker base
+          # image -- not covered by this automated harness yet, see
+          # test/e2elab/README.md.
     continue-on-error: ${{ matrix.best_effort == true }}
     steps:
       - uses: actions/checkout@v4

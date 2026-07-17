@@ -206,7 +206,13 @@ func BootstrapHost(ctx context.Context, cfg Config, auth BootstrapAuth, serviceU
 // whole thing is safe wrapped in the single quotes BootstrapHost uses.
 func provisionScript(serviceUser, installerPath, b64, pubLine string) string {
 	dir := installerPath[:strings.LastIndexByte(installerPath, '/')]
-	confDirs := "/etc/wireguard /etc/amnezia/amneziawg /etc/openvpn/server /etc/openvpn/server/ccd " +
+	// /etc/openvpn itself (not just .../server below it): most distros
+	// leave this world-traversable, but ALT Linux's openvpn package
+	// creates it as 750 root:openvpn -- confirmed live, protean isn't in
+	// that group, so it couldn't even traverse into its own (correctly
+	// owned) server/ccd subdirectories underneath. Listing it here too
+	// keeps the fix general rather than distro-special-cased.
+	confDirs := "/etc/wireguard /etc/amnezia/amneziawg /etc/openvpn /etc/openvpn/server /etc/openvpn/server/ccd " +
 		"/etc/swanctl /etc/swanctl/x509 /etc/swanctl/x509ca /etc/swanctl/private /etc/swanctl/conf.d " +
 		"/etc/swanctl/x509crl /usr/local/etc/xray"
 	quotedUser := ShellQuote(serviceUser)
@@ -229,6 +235,14 @@ func provisionScript(serviceUser, installerPath, b64, pubLine string) string {
 	//    defaults -- this account is key-only, same as every other server
 	//    the panel manages.
 	b.WriteString("usermod -L " + quotedUser + "\n")
+
+	// 2b) ALT Linux gates /usr/bin/sudo execution to root+wheel (mode
+	//     4750 root:wheel, not world-executable like every other distro
+	//     here) -- confirmed live. Without wheel membership the account
+	//     can't even invoke sudo, independent of its sudoers rule being
+	//     correct. `-a` (append) preserves any other group membership;
+	//     a no-op everywhere the group doesn't exist.
+	b.WriteString("getent group wheel >/dev/null 2>&1 && usermod -aG wheel " + quotedUser + " || true\n")
 
 	// 3) Install the panel's own key into the account's real home,
 	//    resolved via getent (not `~`, which would resolve to the
@@ -267,7 +281,12 @@ func provisionScript(serviceUser, installerPath, b64, pubLine string) string {
 	b.WriteString(serviceUser + " ALL=(root) NOPASSWD: " + installerPath +
 		", /usr/bin/wg, /usr/bin/awg, /usr/sbin/swanctl\n")
 	b.WriteString("WGP\n")
-	b.WriteString("chmod 440 /etc/sudoers.d/protean\n")
+	// 0400 not 0440: a subset of the same permission (root-read-only; the
+	// file is root:root, so the dropped group-read bit changes nothing
+	// real), and required outright on ALT Linux -- its sudo refuses to
+	// run at all if any file under sudoers.d fails a strict 0400 check,
+	// confirmed live.
+	b.WriteString("chmod 400 /etc/sudoers.d/protean\n")
 	b.WriteString("visudo -cf /etc/sudoers.d/protean\n")
 
 	// 6) Config dirs writable by the service account (it writes confs

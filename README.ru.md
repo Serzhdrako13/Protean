@@ -46,13 +46,13 @@ VPN-инфраструктурой, если она у вас уже настр�
 ## Как это работает
 
 ```
-┌─────────────────────────────┐        SSH          ┌─────────────────────────────┐
-│   Docker: панель (Go)        │ ───────────────────▶│   Хост (та же VPS)           │
-│   - React + AntD SPA (API)   │  wg / wg-quick /     │   - wg0 (WireGuard)          │
-│   - Postgres (auth, подсети, │    awg / awg-quick / │   - awg0 (AmneziaWG)         │
-│     зашифрованные приватные  │    systemctl restart │   - /etc/wireguard/wg0.conf  │
-│     ключи клиентов)          │                      │   - /etc/amnezia/.../awg0... │
-└─────────────────────────────┘                      └─────────────────────────────┘
+┌──────────────────────────────┐        SSH         ┌──────────────────────────────────────┐
+│   Docker: панель (Go)        │ ──────────────────▶│   Хост (та же VPS)                   │
+│   - React + AntD SPA (API)   │  wg/awg, openvpn,  │   - wg0 / awg0 (WireGuard/AmneziaWG) │
+│   - Postgres (auth, подсети, │  swanctl, xray CLI,│   - OpenVPN сервер                   │
+│     зашифрованные ключи/CA)  │  systemctl         │   - strongSwan (IKEv2)               │
+│                              │                    │   - Xray (DPI-resistant)             │
+└──────────────────────────────┘                    └──────────────────────────────────────┘
 ```
 
 - **Источник истины по состоянию VPN — конфиг-файл на хосте**
@@ -319,12 +319,12 @@ docker compose -f docker-compose.standalone.yml --env-file .env.standalone up -d
 | dnf | CentOS Stream 9, 10; Rocky Linux 8, 9, 10; AlmaLinux 8, 9, 10; Fedora 43, 44 |
 | zypper | openSUSE Leap 15.6, 16 |
 | pacman | Arch Linux |
+| гибрид apt поверх rpm | ALT Linux (только у Timeweb) |
 
-ALT Linux (гибрид apt поверх rpm) и Astra Linux — варианты, доступные
-только у Timeweb, которые пока не поддерживаются; что именно пробовали
-и почему не завелось — в `test/e2elab/README.md`. Там же полная
-методология, находки по каждому дистрибутиву и инфраструктура
-нагрузочного теста.
+Astra Linux (только у Timeweb) пока не покрыт — нет официального
+Docker-образа; что для этого потребуется — в `test/e2elab/README.md`.
+Там же полная методология, находки по каждому дистрибутиву и
+инфраструктура нагрузочного теста.
 
 **Требования к железу**: ОС не влияет на объём CPU/RAM — только на то,
 заведётся ли Protean на ней вообще (вопрос совместимости выше).

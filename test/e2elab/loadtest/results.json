@@ -1,14 +1,14 @@
 [
-  {"protocol": "ikev2", "concurrency": 1, "succeeded": 1, "aggregate_mbps": 613.77, "per_client_mbps": 613.77, "cpu_percent": 23.2, "rss_kb": 12256},
-  {"protocol": "ikev2", "concurrency": 10, "succeeded": 10, "aggregate_mbps": 3350.76, "per_client_mbps": 335.08, "cpu_percent": 10.9, "rss_kb": 12884},
-  {"protocol": "ikev2", "concurrency": 50, "succeeded": 50, "aggregate_mbps": 7780.55, "per_client_mbps": 155.61, "cpu_percent": 16.5, "rss_kb": 14532},
-  {"protocol": "openvpn", "concurrency": 1, "succeeded": 1, "aggregate_mbps": 748.07, "per_client_mbps": 748.07, "cpu_percent": 121.2, "rss_kb": 9500},
-  {"protocol": "openvpn", "concurrency": 10, "succeeded": 10, "aggregate_mbps": 842.06, "per_client_mbps": 84.21, "cpu_percent": 125.9, "rss_kb": 10900},
-  {"protocol": "openvpn", "concurrency": 50, "succeeded": 50, "aggregate_mbps": 1837.54, "per_client_mbps": 36.75, "cpu_percent": 126.4, "rss_kb": 17068},
-  {"protocol": "wireguard", "concurrency": 1, "succeeded": 1, "aggregate_mbps": 2200.42, "per_client_mbps": 2200.42, "cpu_percent": 42.9, "rss_kb": 0},
-  {"protocol": "wireguard", "concurrency": 10, "succeeded": 10, "aggregate_mbps": 7713.15, "per_client_mbps": 771.32, "cpu_percent": 24.8, "rss_kb": 0},
-  {"protocol": "wireguard", "concurrency": 50, "succeeded": 50, "aggregate_mbps": 8485.96, "per_client_mbps": 169.72, "cpu_percent": 27.2, "rss_kb": 0},
-  {"protocol": "xray", "concurrency": 1, "succeeded": 1, "aggregate_mbps": 3572.85, "per_client_mbps": 3572.85, "cpu_percent": 0.1, "rss_kb": 34636},
-  {"protocol": "xray", "concurrency": 10, "succeeded": 10, "aggregate_mbps": 11074.70, "per_client_mbps": 1107.47, "cpu_percent": 0.3, "rss_kb": 39132},
-  {"protocol": "xray", "concurrency": 50, "succeeded": 50, "aggregate_mbps": 14340.86, "per_client_mbps": 286.82, "cpu_percent": 268.1, "rss_kb": 45756}
+  {"protocol": "ikev2", "concurrency": 1, "succeeded": 1, "aggregate_mbps": 561.03, "per_client_mbps": 561.03, "cpu_percent": 5.4, "rss_kb": 11932},
+  {"protocol": "ikev2", "concurrency": 10, "succeeded": 10, "aggregate_mbps": 3151.73, "per_client_mbps": 315.17, "cpu_percent": 40.9, "rss_kb": 12592},
+  {"protocol": "ikev2", "concurrency": 50, "succeeded": 50, "aggregate_mbps": 6224.72, "per_client_mbps": 124.49, "cpu_percent": 29.2, "rss_kb": 14224},
+  {"protocol": "openvpn", "concurrency": 1, "succeeded": 1, "aggregate_mbps": 737.26, "per_client_mbps": 737.26, "cpu_percent": 120.6, "rss_kb": 9700},
+  {"protocol": "openvpn", "concurrency": 10, "succeeded": 10, "aggregate_mbps": 830.24, "per_client_mbps": 83.02, "cpu_percent": 126.7, "rss_kb": 10060},
+  {"protocol": "openvpn", "concurrency": 50, "succeeded": 50, "aggregate_mbps": 1276.54, "per_client_mbps": 25.53, "cpu_percent": 127.3, "rss_kb": 17212},
+  {"protocol": "wireguard", "concurrency": 1, "succeeded": 1, "aggregate_mbps": 2276.26, "per_client_mbps": 2276.26, "cpu_percent": 43.6, "rss_kb": 0},
+  {"protocol": "wireguard", "concurrency": 10, "succeeded": 10, "aggregate_mbps": 7494.88, "per_client_mbps": 749.49, "cpu_percent": 29.5, "rss_kb": 0},
+  {"protocol": "wireguard", "concurrency": 50, "succeeded": 50, "aggregate_mbps": 10989.27, "per_client_mbps": 219.79, "cpu_percent": 28.3, "rss_kb": 0},
+  {"protocol": "xray", "concurrency": 1, "succeeded": 1, "aggregate_mbps": 3680.35, "per_client_mbps": 3680.35, "cpu_percent": 0.1, "rss_kb": 33764},
+  {"protocol": "xray", "concurrency": 10, "succeeded": 10, "aggregate_mbps": 11425.34, "per_client_mbps": 1142.53, "cpu_percent": 0.2, "rss_kb": 37676},
+  {"protocol": "xray", "concurrency": 50, "succeeded": 50, "aggregate_mbps": 12897.17, "per_client_mbps": 257.94, "cpu_percent": 249.8, "rss_kb": 47052}
 ]

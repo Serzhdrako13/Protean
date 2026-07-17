@@ -20,8 +20,8 @@ set -uo pipefail
 
 # --------------------------------------------------------------- OS detection
 
-OS_FAMILY=""     # debian | rpm | arch | suse
-PKG_MANAGER=""   # apt | dnf | yum | pacman | zypper
+OS_FAMILY=""     # debian | rpm | arch | suse | altlinux
+PKG_MANAGER=""   # apt | dnf | yum | pacman | zypper | apt-rpm
 PRETTY_NAME=""
 HAS_SYSTEMD=0
 SELINUX_ENFORCING=0
@@ -37,17 +37,27 @@ detect_os() {
 		*" arch "*|*" archlinux "*)           OS_FAMILY="arch" ;;
 		*" debian "*|*" ubuntu "*)            OS_FAMILY="debian" ;;
 		*" rhel "*|*" fedora "*|*" centos "*) OS_FAMILY="rpm" ;;
+		*" altlinux "*)                       OS_FAMILY="altlinux" ;;
 		*)
 			case "${ID:-}" in
 				opensuse*|sles|suse) OS_FAMILY="suse" ;;
 				arch|endeavouros|manjaro|garuda|arcolinux|cachyos|artix) OS_FAMILY="arch" ;;
 				debian|ubuntu|linuxmint|pop|kali|raspbian|elementary|zorin|mx|deepin) OS_FAMILY="debian" ;;
 				fedora|rhel|centos|rocky|almalinux|ol|amzn|mageia) OS_FAMILY="rpm" ;;
+				altlinux) OS_FAMILY="altlinux" ;;
 			esac
 			;;
 	esac
 
-	if   command -v apt-get >/dev/null 2>&1 && [ "$OS_FAMILY" = "debian" ]; then PKG_MANAGER="apt"
+	# apt-rpm, not "apt": ALT's apt-get wraps rpm, not dpkg -- syntax matches
+	# Debian's apt-get exactly, but the package SET doesn't (no "wireguard"
+	# metapackage, only "wireguard-tools"; strongswan-swanctl isn't a
+	# separate package, same single-package shape as RHEL/Arch/SUSE) --
+	# confirmed live against alt:p10. Giving it its own PKG_MANAGER value
+	# routes it through those distros' fallback branches instead of
+	# Debian's, without changing any of that existing logic.
+	if   command -v apt-get >/dev/null 2>&1 && [ "$OS_FAMILY" = "debian" ];   then PKG_MANAGER="apt"
+	elif command -v apt-get >/dev/null 2>&1 && [ "$OS_FAMILY" = "altlinux" ]; then PKG_MANAGER="apt-rpm"
 	elif command -v dnf     >/dev/null 2>&1 && [ "$OS_FAMILY" = "rpm" ];    then PKG_MANAGER="dnf"
 	elif command -v yum     >/dev/null 2>&1 && [ "$OS_FAMILY" = "rpm" ];    then PKG_MANAGER="yum"
 	elif command -v pacman  >/dev/null 2>&1 && [ "$OS_FAMILY" = "arch" ];   then PKG_MANAGER="pacman"
@@ -86,7 +96,7 @@ provider_installable() {
 			case "$OS_FAMILY" in
 				debian|rpm) return 0 ;;                 # PPA/DEB822 or COPR
 				arch) have yay || have paru ;;          # needs an AUR helper
-				suse) return 1 ;;                       # no known package
+				suse|altlinux) return 1 ;;              # no known package
 			esac
 			;;
 		wireguard|openvpn|ikev2) return 0 ;;
@@ -162,6 +172,7 @@ cmd_detect() {
 pkg_install() {
 	case "$PKG_MANAGER" in
 		apt)    export DEBIAN_FRONTEND=noninteractive; apt-get update -y && apt-get install -y "$@" ;;
+		apt-rpm) export DEBIAN_FRONTEND=noninteractive; apt-get update -y && apt-get install -y "$@" ;;
 		dnf)    dnf install -y "$@" ;;
 		yum)    yum install -y "$@" ;;
 		pacman) pacman -Sy --noconfirm --needed "$@" ;;
@@ -204,8 +215,14 @@ selinux_note() {
 
 install_wireguard() {
 	case "$PKG_MANAGER" in
-		apt)    pkg_install wireguard ;;
-		*)      pkg_install wireguard-tools ;;
+		apt)     pkg_install wireguard ;;
+		# ALT splits wg-quick into its own package (wireguard-tools alone
+		# only ships /usr/sbin/wg) -- confirmed live. Everything this
+		# panel does server-side goes through the wg-quick@.service unit
+		# (EnsureServer/ServiceName), so without this package the service
+		# doesn't exist at all, not just a missing convenience CLI.
+		apt-rpm) pkg_install wireguard-tools wireguard-tools-wg-quick ;;
+		*)       pkg_install wireguard-tools ;;
 	esac
 	modprobe wireguard 2>/dev/null || echo "[!] could not load wireguard module (kernel may be <5.6 or need a dkms package)"
 	selinux_note
@@ -261,7 +278,7 @@ install_openvpn() {
 		fi
 	fi
 	case "$PKG_MANAGER" in
-		apt|dnf|yum|pacman) pkg_install openvpn easy-rsa ;;
+		apt|apt-rpm|dnf|yum|pacman) pkg_install openvpn easy-rsa ;;
 		zypper)             pkg_install openvpn easy-rsa ;;
 	esac
 	ensure_openvpn_alias
@@ -283,9 +300,23 @@ install_openvpn() {
 # binary the distro already installed.
 ensure_openvpn_alias() {
 	[ -e /etc/systemd/system/openvpn-server@.service ] && return 0
-	if [ -e /usr/lib/systemd/system/openvpn-server@.service ] || [ -e /lib/systemd/system/openvpn-server@.service ]; then
-		return 0 # native template already uses the expected convention
-	fi
+	local native
+	for native in /usr/lib/systemd/system/openvpn-server@.service /lib/systemd/system/openvpn-server@.service; do
+		[ -e "$native" ] || continue
+		# A native template exists, but that alone isn't enough: ALT's own
+		# ships one that --chroots into /var/lib/openvpn and drops to a
+		# dedicated user via CLI flags (not systemd User=) -- confirmed
+		# live, this makes it reinterpret the panel's absolute
+		# --crl-verify/--client-config-dir paths as relative to the
+		# chroot, so they resolve to a path that doesn't exist there
+		# ("/var/lib/openvpn//etc/openvpn/server/crl.pem: No such file or
+		# directory") even though the real file is right where the panel
+		# wrote it. Only trust the native template when it doesn't chroot.
+		if ! grep -q -- '--chroot' "$native"; then
+			return 0 # native template already uses the expected convention
+		fi
+		break
+	done
 	local bin
 	bin="$(command -v openvpn || echo /usr/sbin/openvpn)"
 	cat > /etc/systemd/system/openvpn-server@.service <<EOF
@@ -321,6 +352,24 @@ install_ikev2() {
 		*)      pkg_install strongswan ;;
 	esac
 	ensure_ipsec_alias
+	# ALT's swanctl binary was built with a different --with-swanctldir
+	# default (/etc/strongswan/swanctl, not the universal /etc/swanctl
+	# every other family here uses) -- confirmed live: `swanctl --load-all`
+	# ran without error but silently loaded nothing ("no files found" for
+	# every subdirectory), since the panel always writes to /etc/swanctl
+	# (ikev2.Options.SwanctlDir, hardcoded, same on every distro). Alias
+	# the whole tree rather than duplicating every write.
+	if [ "$OS_FAMILY" = "altlinux" ] && [ ! -L /etc/strongswan/swanctl ]; then
+		# The package ships this as a real, non-empty directory (a
+		# template swanctl.conf inside) -- confirmed live, not just an
+		# absent path. rm -rf it before replacing with the alias symlink;
+		# its content becomes unused once /etc/swanctl (what the panel
+		# actually manages) is symlinked in its place. Unguarded rmdir
+		# failing here under `set -e` previously killed the rest of this
+		# script silently, including every install_* call after this one.
+		rm -rf /etc/strongswan/swanctl
+		ln -sf /etc/swanctl /etc/strongswan/swanctl
+	fi
 	provider_installed ikev2
 }
 
@@ -367,7 +416,43 @@ install_xray() {
 	if [ "$OS_FAMILY" = "suse" ] && ! id nobody >/dev/null 2>&1; then
 		pkg_install system-user-nobody || true
 	fi
-	bash -c "$(curl -fsSL https://github.com/XTLS/Xray-install/raw/main/install-release.sh)" @ install
+	if ! bash -c "$(curl -fsSL https://github.com/XTLS/Xray-install/raw/main/install-release.sh)" @ install; then
+		# The official installer refuses outright on package managers/OSes
+		# it doesn't recognize ("error: The script does not support the
+		# package manager in this operating system") -- confirmed live on
+		# ALT Linux. Fall back to fetching the release binary directly
+		# (same technique as test/e2elab/loadtest/client.Dockerfile) and
+		# writing the same unit shape the installer itself would have,
+		# rather than depending on it recognizing every distro here.
+		echo "[i] official Xray installer doesn't support this OS; installing the release binary directly" >&2
+		curl -fsSL -o /tmp/xray.zip https://github.com/XTLS/Xray-core/releases/latest/download/Xray-linux-64.zip
+		mkdir -p /usr/local/bin /usr/local/etc/xray
+		unzip -o /tmp/xray.zip -d /usr/local/bin xray
+		chmod +x /usr/local/bin/xray
+		rm -f /tmp/xray.zip
+		cat > /etc/systemd/system/xray.service <<'EOF'
+[Unit]
+Description=Xray Service
+Documentation=https://github.com/xtls
+After=network.target nss-lookup.target
+
+[Service]
+User=nobody
+CapabilityBoundingSet=CAP_NET_ADMIN CAP_NET_BIND_SERVICE
+AmbientCapabilities=CAP_NET_ADMIN CAP_NET_BIND_SERVICE
+NoNewPrivileges=true
+ExecStart=/usr/local/bin/xray run -config /usr/local/etc/xray/config.json
+Restart=on-failure
+RestartPreventExitStatus=23
+LimitNPROC=10000
+LimitNOFILE=1000000
+RuntimeDirectory=xray
+RuntimeDirectoryMode=0755
+
+[Install]
+WantedBy=multi-user.target
+EOF
+	fi
 	# Upstream unit runs as User=nobody, but /usr/local/etc/xray is locked
 	# to 750 protean:protean (config holds plaintext client UUIDs/Reality
 	# keys, so it's not world-readable like the other conf dirs) -- nobody

@@ -46,13 +46,13 @@ that SSH channel.
 ## How it works
 
 ```
-┌─────────────────────────────┐        SSH          ┌─────────────────────────────┐
-│   Docker: panel (Go)         │ ───────────────────▶│   Host (the same VPS)        │
-│   - React + AntD SPA (API)   │  wg / wg-quick /     │   - wg0 (WireGuard)          │
-│   - Postgres (auth, subnets, │    awg / awg-quick / │   - awg0 (AmneziaWG)         │
-│     encrypted client         │    systemctl restart │   - /etc/wireguard/wg0.conf  │
-│     private keys)            │                      │   - /etc/amnezia/.../awg0... │
-└─────────────────────────────┘                      └─────────────────────────────┘
+┌──────────────────────────────┐         SSH         ┌──────────────────────────────────────┐
+│   Docker: panel (Go)         │ ───────────────────▶│   Host (the same VPS)                │
+│   - React + AntD SPA (API)   │  wg/awg, openvpn,   │   - wg0 / awg0 (WireGuard/AmneziaWG) │
+│   - Postgres (auth, subnets, │  swanctl, xray CLIs,│   - OpenVPN server                   │
+│     encrypted keys/CA certs) │  systemctl          │   - strongSwan (IKEv2)               │
+│                              │                     │   - Xray (DPI-resistant)             │
+└──────────────────────────────┘                     └──────────────────────────────────────┘
 ```
 
 - **The config file on the host is the source of truth for VPN state**
@@ -330,11 +330,12 @@ every version below run in CI (nightly + on demand):
 | dnf | CentOS Stream 9, 10; Rocky Linux 8, 9, 10; AlmaLinux 8, 9, 10; Fedora 43, 44 |
 | zypper | openSUSE Leap 15.6, 16 |
 | pacman | Arch Linux |
+| apt-rpm hybrid | ALT Linux (Timeweb-only) |
 
-ALT Linux (apt-over-rpm hybrid) and Astra Linux are Timeweb-only options
-we don't yet support — see `test/e2elab/README.md` for exactly what was
-tried and why. Full methodology, per-distro findings, and the load-test
-harness are in `test/e2elab/README.md`.
+Astra Linux (Timeweb-only) has no official Docker image and isn't
+covered yet — see `test/e2elab/README.md` for what that would take. Full
+methodology, per-distro findings, and the load-test harness are also in
+`test/e2elab/README.md`.
 
 **Sizing**: the OS doesn't affect how much CPU/RAM you need — only
 whether Protean runs on it at all (the compatibility question above).

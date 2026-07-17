@@ -85,7 +85,7 @@ parallel list that could silently drift from it.
 | dnf | `dockerfiles/dnf.Dockerfile` | Rocky Linux 9 |
 | zypper | `dockerfiles/zypper.Dockerfile` | openSUSE Leap 15.6 |
 | pacman | `dockerfiles/pacman.Dockerfile` | Arch Linux |
-| apt-rpm hybrid | `dockerfiles/altlinux.Dockerfile` | ALT Linux — attempted live, genuinely doesn't work yet (see below) |
+| apt-rpm hybrid | `dockerfiles/altlinux.Dockerfile` | ALT Linux |
 
 The CI `e2e-lab` job (nightly + manual only) runs the same suite across
 every Hetzner/Timeweb catalog image researched for this pass — one
@@ -97,22 +97,32 @@ representative per family isn't the CI bar, every version is:
 | dnf | `centos:stream9`, `centos:stream10`, `rockylinux:8`, `rockylinux:9`, `rockylinux:10`, `almalinux:8`, `almalinux:9`, `almalinux:10`, `fedora:43`, `fedora:44` |
 | zypper | `opensuse/leap:15.6`, `opensuse/leap:16` |
 | pacman | `archlinux:latest` |
-| apt-rpm hybrid | `alt:p10` (best-effort, see above) |
+| apt-rpm hybrid | `alt:p10` |
 
 \*18.04/20.04 are EOL upstream / deprecated by Hetzner — run best-effort
 (`continue-on-error` in CI) for existing-fleet coverage, not as a target
 for new deployments.
 
-**Astra Linux 2.12** (Timeweb-only) has no publicly available Docker base
-image and isn't covered by this automated harness — reported here rather
-than silently dropped.
+**Astra Linux 2.12** (Timeweb-only) has no official Docker image, and
+isn't covered by this automated harness yet — reported here rather than
+silently dropped. Researched, not just assumed impossible: Astra Common Edition's own
+package repository is public, no registration needed
+(`https://dl.astralinux.ru/astra/frozen/2.12_x86-64/2.12.46/repository/`,
+a plain apt repo — Astra CE is Debian-based), and a community image
+(`nikolai2038/astralinux`, built via `debootstrap` against that same
+repo, stale ~2 years but a real reference) already proves the approach
+works. A `debootstrap`-based multi-stage Dockerfile (builder stage
+bootstraps a rootfs from that repo, final stage is `FROM scratch` +
+`COPY --from=builder`) is the concrete next step whenever this gets
+picked up — genuinely higher-risk/unknown than any family above, since
+none of it has been tried hands-on yet.
 
-All four non-experimental families pass the full suite
+All five families pass the full suite
 (OpenVPN/IKEv2/Xray/IPForward/SSHFailureHandling). Getting there surfaced
-five real, previously-undiscovered bugs — fixed in `scripts/protean-installer.sh`
-(kept byte-identical to `internal/hostboot/installer.sh`, which is what
-actually reaches a real host — see that file's header) unless noted
-otherwise:
+thirteen real, previously-undiscovered bugs — fixed in
+`scripts/protean-installer.sh` (kept byte-identical to
+`internal/hostboot/installer.sh`, which is what actually reaches a real
+host — see that file's header) unless noted otherwise:
 
 1. **RHEL-clones have no `ipsec.service` alias.** Debian/Ubuntu's
    strongswan package declares `Alias=ipsec.service` natively; RHEL-family's
@@ -165,36 +175,77 @@ otherwise:
    scriptlet calls `systemctl` with no live systemd bus during a container
    build — `pkg_install`'s zypper branch now tolerates it.
 
-### ALT Linux: attempted live, genuinely doesn't work yet
-
-Unlike the four families above, ALT was actually run rather than assumed
-to fail. Three test-harness-only fixes got it as far as booting and
-provisioning the `protean` account:
-
-- No `/sbin/init` compat symlink — only the real binary at
-  `/lib/systemd/systemd` exists. Fixed by changing the Dockerfile's `CMD`.
-- `sudo` refuses to run at all if **any** file under `/etc/sudoers.d/`
-  fails its strict `0400`-mode check — the base image's own
-  `99-sudopw` ships at `0500`, which alone blocked sudo for every user,
-  independent of `ci-bootstrap`'s own sudoers rule being correct. Fixed
-  by chmod'ing the whole directory to `0400` in the Dockerfile.
-- `/usr/bin/sudo` itself is `4750 root:wheel` on ALT — not
-  world-executable like the other four families — so `ci-bootstrap`
-  couldn't even exec it without group membership. Fixed by adding
-  `-G wheel` to its `useradd`.
-
-With all three fixed, bootstrap itself succeeds (creating the `protean`
-service account) — but then **every provider test fails identically**:
-`sudo /usr/local/lib/protean/protean-installer.sh ...` as the `protean`
-user hits the exact same "Permission denied" as `ci-bootstrap` did,
-because `protean` is created by the panel's own (distro-agnostic)
-bootstrap provisioning code, which doesn't know about ALT's wheel-gated
-sudo model and doesn't add it to that group. Fixing that is real product
-work (an `OS_FAMILY` case in `detect_os` plus wheel-awareness in
-provisioning) that this pass didn't attempt — `TestE2ELabSSHFailureHandling`
-(the one test needing no sudo) is the only one that passes; the other
-four fail on this one root cause. Reported here precisely rather than as
-a vague "doesn't work."
+6. **ALT Linux wasn't recognized at all.** `detect_os` had no case for
+   `ID=altlinux`, so `OS_FAMILY`/`PKG_MANAGER` stayed empty and every
+   install failed with "no supported package manager" — not a real gap,
+   just a missing detection case. ALT's `apt-get` wraps rpm, not dpkg:
+   package *names* mostly match Debian's, but not always (see below), so
+   it gets its own `PKG_MANAGER="apt-rpm"` rather than being folded into
+   `"apt"` — that distinction is what routes it through the correct
+   per-package fallback branches everywhere else in this file.
+7. **`wg-quick` is a separate package on ALT** (`wireguard-tools-wg-quick`)
+   — `wireguard-tools` alone only ships `/usr/sbin/wg`. Since every
+   server-side operation here goes through the `wg-quick@.service` unit
+   (`EnsureServer`'s `ServiceName`), without this package the *service*
+   doesn't exist at all, not just a missing convenience CLI. Fixed in
+   `install_wireguard()`.
+8. **ALT's `sudo` is gated to `root:wheel`, mode `4750`** — not
+   world-executable like every other family here — and separately
+   **refuses to run at all if *any* file under `/etc/sudoers.d/` fails a
+   strict `0400`-mode check** (the base image ships one at `0500`, which
+   alone blocked every user's sudo, independent of the panel's own
+   sudoers rule being correct). Both are genuine product-side gaps, not
+   test-harness quirks: the panel's own bootstrap
+   (`internal/sshexec/provision.go`) creates the `protean` service
+   account and its sudoers rule, so it's `protean` itself that couldn't
+   sudo on a real ALT host, not just the test's `ci-bootstrap` identity.
+   Fixed by adding `protean` to the `wheel` group when that group exists
+   (a no-op everywhere else) and switching the sudoers file to `0400`
+   (a strict subset of the old `0440` — root still reads it fine on every
+   distro; only the redundant group-read bit is gone).
+9. **ALT's `openvpn` package locks down `/etc/openvpn` itself** to
+   `750 root:openvpn` — every *other* distro leaves it world-traversable.
+   `protean` isn't in the `openvpn` group, so it couldn't even traverse
+   into its own correctly-owned `server`/`ccd` subdirectories underneath.
+   Fixed by adding `/etc/openvpn` itself (not just `.../server`) to
+   bootstrap's `confDirs` list in `provision.go`.
+10. **ALT's native `openvpn-server@.service` chroots into
+    `/var/lib/openvpn`** and drops to a dedicated `openvpn` user via CLI
+    flags (not systemd `User=`) — unlike every other family's version of
+    this unit. That makes it reinterpret the panel's absolute
+    `--crl-verify`/`--client-config-dir` paths as relative to the chroot,
+    resolving to a path that doesn't exist there even though the real
+    file is exactly where the panel wrote it. `ensure_openvpn_alias()`
+    (already needed for openSUSE, finding 5) now also checks whether a
+    native template chroots, not just whether one merely exists, before
+    trusting it.
+11. **Xray's official installer refuses outright on ALT**
+    ("error: The script does not support the package manager in this
+    operating system") — a third-party limitation, not something fixable
+    in `protean-installer.sh`'s own logic. Fixed by falling back to
+    fetching the release binary directly (same technique as
+    `test/e2elab/loadtest/client.Dockerfile`) and writing the same unit
+    shape the installer itself would have, whenever the official script
+    fails for any reason — a general fallback, not an ALT-only branch.
+12. **ALT's `swanctl` binary defaults to a different config tree**
+    (`/etc/strongswan/swanctl`, not the universal `/etc/swanctl` every
+    other family uses) — a different `--with-swanctldir` build-time
+    default. `swanctl --load-all` ran without error but silently loaded
+    *nothing*, since the panel always writes to `/etc/swanctl`
+    (`ikev2.Options.SwanctlDir`, hardcoded, identical on every distro).
+    Fixed in `install_ikev2()` by aliasing the whole tree (the package
+    ships the default path as a real, non-empty directory with a
+    template `swanctl.conf` inside — replaced with a symlink, not merged).
+13. **charon's vici socket isn't always ready the instant `enable --now`
+    returns** — a genuine product reliability gap, not ALT-specific,
+    just consistently timing-sensitive enough there to actually hit it:
+    `EnsureServer` called `swanctl --load-all` immediately after enabling
+    `ipsec`, with no retry, and systemd reporting a `Type=simple` unit
+    "active" doesn't guarantee its vici plugin has bound the socket yet.
+    Fixed with a short bounded retry in
+    `internal/vpn/ikev2/provider.go`'s `writeConnAndLoad`, specifically
+    for the "connecting to ... failed" class of error (a real
+    config/credential error still fails immediately, no retry wasted).
 
 Two additional container-environment-only fixes (test harness, not the
 product — wouldn't affect a real host):
