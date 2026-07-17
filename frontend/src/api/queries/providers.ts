@@ -110,6 +110,15 @@ export function usePeerMutations(provider: string) {
     mutationFn: (id: string) => HttpUtil.post<{ muted: boolean }>(`${base}/${encodeURIComponent(id)}/mute`),
     onSuccess: invalidate,
   });
+  // Adopts an already-issued client certificate (e.g. from a VPN server
+  // being taken over by the panel) instead of issuing a new one -- only
+  // works once the provider's CA is the one that actually signed it (see
+  // useCAImportMutation in api/queries/ca.ts).
+  const importPeer = useMutation({
+    mutationFn: (input: { cert_pem: string; key_pem?: string }) =>
+      HttpUtil.post<{ url_id: string }>(`${base}/import`, input),
+    onSuccess: invalidate,
+  });
 
-  return { create, update, remove, enable, disable, rotate, toggleMute };
+  return { create, update, remove, enable, disable, rotate, toggleMute, importPeer };
 }

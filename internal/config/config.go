@@ -106,6 +106,12 @@ type Config struct {
 	// convention, so an admin can edit app names/links/steps as software
 	// changes without rebuilding the panel (see internal/vpnsetup).
 	VPNSetupContentDir string
+
+	// XrayModulesDir holds admin-authored Xray strategy modules (JSON files
+	// describing a new transport/camouflage combo) -- a Docker volume mount
+	// by convention, so a new DPI-evasion countermeasure can be dropped in
+	// without a rebuild or restart (see internal/vpn/xray/filemodule.go).
+	XrayModulesDir string
 }
 
 func Load() (Config, error) {
@@ -123,11 +129,12 @@ func Load() (Config, error) {
 
 		EmergencyAdminUsername: os.Getenv("EMERGENCY_ADMIN_USERNAME"),
 		EmergencyAdminPassword: os.Getenv("EMERGENCY_ADMIN_PASSWORD"),
-		SecretKeyHex:      os.Getenv("SECRET_KEY"),
-		PublicHost:        os.Getenv("PUBLIC_HOST"),
-		MetricsToken:      os.Getenv("METRICS_TOKEN"),
+		SecretKeyHex:           os.Getenv("SECRET_KEY"),
+		PublicHost:             os.Getenv("PUBLIC_HOST"),
+		MetricsToken:           os.Getenv("METRICS_TOKEN"),
 
 		VPNSetupContentDir: getEnv("VPN_SETUP_CONTENT_DIR", "/data/vpn-setup"),
+		XrayModulesDir:     getEnv("XRAY_MODULES_DIR", "/data/xray-modules"),
 	}
 	// WG_INTERFACES (comma list) drives multi-instance; falls back to the
 	// legacy single WG_INTERFACE, then "wg0".

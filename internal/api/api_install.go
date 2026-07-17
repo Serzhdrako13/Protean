@@ -3,11 +3,13 @@ package api
 import "net/http"
 
 type apiProviderInstall struct {
-	Name        string `json:"name"`
-	Label       string `json:"label"`
-	Managed     bool   `json:"managed"`
-	Installed   bool   `json:"installed"`
-	Installable bool   `json:"installable"`
+	Name          string `json:"name"`
+	Label         string `json:"label"`
+	Managed       bool   `json:"managed"`
+	Installed     bool   `json:"installed"`
+	Installable   bool   `json:"installable"`
+	ServiceActive bool   `json:"service_active"`
+	ConfigExists  bool   `json:"config_exists"`
 }
 
 type apiInstallStatus struct {
@@ -43,6 +45,8 @@ func (s *Server) buildInstallStatus(r *http.Request, serverID string) apiInstall
 		if pi, ok := info.Providers[p.Name]; ok {
 			pv.Installed = pi.Installed
 			pv.Installable = pi.Installable
+			pv.ServiceActive = pi.ServiceActive
+			pv.ConfigExists = pi.ConfigExists
 		}
 		out.Providers = append(out.Providers, pv)
 	}

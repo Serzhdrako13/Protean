@@ -1,0 +1,71 @@
+This directory holds admin-authored Xray "modules" -- JSON files describing
+a new server strategy (transport + camouflage + client type) that the panel
+picks up WITHOUT a rebuild or restart. Drop a *.json file in here and it
+shows up in the Xray page's strategy dropdown immediately.
+
+This file itself is NOT a module (it doesn't end in .json, and filenames
+starting with "_" are skipped anyway) -- it's just documentation. Copy the
+JSON below into a new file, e.g. my-strategy.json, strip these comments
+(plain JSON has no comment syntax), and edit the values.
+
+{
+  "name": "example-ws-camouflage",
+  "label": "Example: VLESS + WebSocket + TLS camouflage",
+
+  // "cred": which credential kind each client gets -- "uuid" (VLESS/VMess)
+  // or "password" (Trojan-style). The panel generates/stores this per
+  // client automatically; you never enter it here.
+  "cred": "uuid",
+
+  // "client_format": how the client list gets built into the inbound's
+  // settings.clients array. One of "vless", "vmess", "trojan" (Shadowsocks-
+  // style single-instance-credential strategies aren't supported by
+  // modules yet -- see the compiled "shadowsocks-2022" strategy for that).
+  "client_format": "vless",
+
+  // "multi_client": whether more than one client can share this strategy.
+  "multi_client": true,
+
+  // "params": the fields the admin fills in on the Xray page when applying
+  // this strategy. "type": "int" or "bool" coerces the value to a real
+  // JSON number/bool wherever it's substituted into "inbound" below;
+  // anything else (or omitted) stays a JSON string.
+  "params": [
+    {"key": "port", "label": "Listen port", "default": "443", "required": true, "type": "int"},
+    {"key": "domain", "label": "Camouflage domain (TLS SNI)", "placeholder": "www.example.com", "required": true},
+    {"key": "ws_path", "label": "WebSocket path", "default": "/ws", "required": true}
+  ],
+
+  // "instance_secrets": server-generated values NEVER shown to the admin
+  // (unlike "params" above) -- generated once and reused on every re-apply.
+  // Only needed for strategies like Reality that need instance-level
+  // crypto; leave empty otherwise. Available kinds: "reality_keypair"
+  // (fills "key" with the private half, "pair_key" with the public half),
+  // "short_id", "uuid", "password".
+  "instance_secrets": [],
+
+  // "inbound": the actual Xray inbound object, exactly as xray-core expects
+  // it, EXCEPT any leaf value written as "{{some_key}}" gets replaced with
+  // that param's real (typed) value at build time -- "{{clients}}" is a
+  // special token replaced by the built client array. Because only whole
+  // leaf values get substituted, a typo in a placeholder can never produce
+  // broken JSON -- it fails loudly (with a clear error) at apply time
+  // instead of silently reaching the host.
+  "inbound": {
+    "listen": "0.0.0.0",
+    "port": "{{port}}",
+    "protocol": "vless",
+    "settings": {"clients": "{{clients}}", "decryption": "none"},
+    "streamSettings": {
+      "network": "ws",
+      "security": "tls",
+      "tlsSettings": {"serverName": "{{domain}}"},
+      "wsSettings": {"path": "{{ws_path}}"}
+    }
+  },
+
+  // "client_link_template": the share-link handed to each client, same
+  // "{{token}}" substitution as above (plus "{{host}}", "{{name}}", and
+  // "{{uuid}}"/"{{password}}" for this specific client's credential).
+  "client_link_template": "vless://{{uuid}}@{{host}}:{{port}}?type=ws&security=tls&sni={{domain}}&path={{ws_path}}#{{name}}"
+}

@@ -253,14 +253,34 @@ func provisionScript(serviceUser, installerPath, b64, pubLine string) string {
 	//    lists several ways a bare `sudo systemctl` escalates to a root
 	//    shell (pager/editor spawn, `systemctl link` of an attacker unit).
 	b.WriteString("cat > /etc/sudoers.d/protean <<'WGP'\n")
+	// swanctl lives at /usr/sbin/swanctl on every real Debian-family
+	// distro (confirmed via `dpkg -L strongswan-swanctl` on both a fresh
+	// Debian 12 e2e-lab container and a real Ubuntu 24.04 host) -- NOT
+	// /usr/bin, unlike wg/awg. Granting the wrong path here doesn't error
+	// at bootstrap time; it silently makes every `sudo swanctl ...` call
+	// (CRL reload, session listing) prompt for a password instead of
+	// running, which then fails outright since there's no TTY/password to
+	// give it. Found live via the e2e lab (test/e2elab) -- a genuinely
+	// fresh host is what finally exercised this path end-to-end; earlier
+	// live testing against an aging host masked it behind an unrelated
+	// stale-file-permission failure that returned first.
 	b.WriteString(serviceUser + " ALL=(root) NOPASSWD: " + installerPath +
-		", /usr/bin/wg, /usr/bin/awg, /usr/bin/swanctl\n")
+		", /usr/bin/wg, /usr/bin/awg, /usr/sbin/swanctl\n")
 	b.WriteString("WGP\n")
 	b.WriteString("chmod 440 /etc/sudoers.d/protean\n")
 	b.WriteString("visudo -cf /etc/sudoers.d/protean\n")
 
 	// 6) Config dirs writable by the service account (it writes confs
-	//    without sudo).
-	b.WriteString("for d in " + confDirs + "; do install -d -m 750 -o " + quotedUser + " \"$d\"; done\n")
+	//    without sudo). `install -d` only sets ownership on the directory
+	//    entry itself -- on a host being ADOPTED with an already-configured
+	//    VPN, these dirs can already contain root-owned files (CA/CRL/conf
+	//    from before this service account existed), and an in-place
+	//    overwrite (`cat > file`, see sshexec.Client.WriteFile) needs write
+	//    permission on the file itself, not just the directory. `chown -R`
+	//    so pre-existing content becomes writable too, not just anything
+	//    created from now on. Safe: every dir in confDirs is exclusively
+	//    VPN config, nothing shared with unrelated files.
+	b.WriteString("for d in " + confDirs + "; do install -d -m 750 -o " + quotedUser + " \"$d\"; chown -R " +
+		quotedUser + ":" + quotedUser + " \"$d\"; done\n")
 	return b.String()
 }

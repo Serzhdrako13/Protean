@@ -596,8 +596,8 @@ Stateless double-submit. Токен `<nonce>.<hmac(nonce)>` (nonce — 16 бай
 
 ## 13. Модель данных
 
-Postgres, схема `wgpanel`. Раннер миграций — рукописный (`migrate.go`): таблица
-`wgpanel.schema_migrations`, файлы из `embed` применяются в лексикографическом
+Postgres, схема `protean`. Раннер миграций — рукописный (`migrate.go`): таблица
+`protean.schema_migrations`, файлы из `embed` применяются в лексикографическом
 порядке, каждый в своей транзакции с записью факта применения. Библиотеки миграций
 нет намеренно (нужды малы и статичны).
 
@@ -1155,7 +1155,7 @@ go test -race ./...                  # юнит + in-process интеграци�
 
 ```sh
 docker compose -f docker-compose.test.yml up -d
-PROTEAN_TEST_DB='postgres://wgpanel:wgpanel@localhost:5433/wgpanel?sslmode=disable' \
+PROTEAN_TEST_DB='postgres://protean:protean@localhost:5433/protean?sslmode=disable' \
   go test -tags dbtest ./internal/store/
 docker compose -f docker-compose.test.yml down -v
 ```
@@ -1172,6 +1172,24 @@ sudo PROTEAN_INTEGRATION=1 go test -tags integration ./internal/vpn/wgfamily/ -r
 Гоняет в одноразовом network namespace.
 
 - **Xray** — юнит-тесты пакета `internal/vpn/xray` (`*_test.go`).
+
+- **Полный интеграционный стенд** (тег `e2elab`, реальный systemd-контейнер):
+
+```sh
+docker build -t protean-e2elab:test test/e2elab
+PROTEAN_E2ELAB=1 go test -tags e2elab ./test/e2elab/... -v -timeout 15m
+```
+
+Единственный набор, гоняющий по-настоящему: реальный systemd-контейнер
+поднимает OpenVPN + strongSwan (IKEv2) + Xray, код панели
+(`sshexec.BootstrapHost`/`openvpn`/`ikev2`/`xray`/`vpn.Installer`)
+настраивает его по реальному SSH ровно как при добавлении сервера, а
+тесты проверяют реальный результат — отозванный сертификат
+действительно отклоняется реальным CRL (парсится `pki.ParseCRL`),
+`ip_forward` реально переключается, остановленный хост даёт чистую
+ошибку, а не зависание. Подробности — `test/e2elab/README.md`. Нужен
+Docker с поддержкой `--privileged`; в CI гоняется только ночным cron'ом
+или вручную (`workflow_dispatch`), никогда на обычный push/PR.
 
 Docker (весь app):
 

@@ -7,19 +7,19 @@ import (
 	"testing"
 	"time"
 
-	pkcs12 "software.sslmate.com/src/go-pkcs12"
 	"protean/internal/vpn/pki"
+	pkcs12 "software.sslmate.com/src/go-pkcs12"
 )
 
 func TestRenderConnections(t *testing.T) {
 	p := ServerParams{
-		ConnName: "wgpanel", ServerID: "vpn.example.com", Pool: "10.9.0.0/24",
+		ConnName: "protean", ServerID: "vpn.example.com", Pool: "10.9.0.0/24",
 		DNS: []string{"10.9.0.1"}, LocalTS: []string{"192.168.5.0/24"},
 		CACertFile: "ca.crt", ServerCert: "server.crt",
 	}
 	out := p.RenderConnections()
 	for _, want := range []string{
-		"connections {", "wgpanel {", "version = 2", "pools = wgpanel-pool",
+		"connections {", "protean {", "version = 2", "pools = protean-pool",
 		"certs = server.crt", "cacerts = ca.crt", "id = vpn.example.com",
 		"local_ts = 192.168.5.0/24", "addrs = 10.9.0.0/24", "dns = 10.9.0.1",
 	} {
@@ -31,7 +31,7 @@ func TestRenderConnections(t *testing.T) {
 
 func TestRenderConnectionsSiteClients(t *testing.T) {
 	p := ServerParams{
-		ConnName: "wgpanel", ServerID: "vpn.example.com", Pool: "10.9.0.0/24",
+		ConnName: "protean", ServerID: "vpn.example.com", Pool: "10.9.0.0/24",
 		LocalTS: []string{"192.168.5.0/24"}, CACertFile: "ca.crt", ServerCert: "server.crt",
 		SiteClients: []SiteClient{
 			{CN: "branch-office", Subnets: []string{"10.20.0.0/24", "10.21.0.0/24"}},
@@ -39,7 +39,7 @@ func TestRenderConnectionsSiteClients(t *testing.T) {
 	}
 	out := p.RenderConnections()
 	for _, want := range []string{
-		"wgpanel-branch-office {", // dedicated conn
+		"protean-branch-office {", // dedicated conn
 		"id = branch-office",      // matched on client cert CN
 		"remote_ts = 10.20.0.0/24,10.21.0.0/24",
 	} {
@@ -48,7 +48,7 @@ func TestRenderConnectionsSiteClients(t *testing.T) {
 		}
 	}
 	// Road-warrior base connection has no remote_ts.
-	base := out[strings.Index(out, "wgpanel {"):strings.Index(out, "wgpanel-branch-office {")]
+	base := out[strings.Index(out, "protean {"):strings.Index(out, "protean-branch-office {")]
 	if strings.Contains(base, "remote_ts") {
 		t.Errorf("base road-warrior conn should not set remote_ts\n%s", base)
 	}
@@ -93,10 +93,10 @@ func TestUUIDFromStable(t *testing.T) {
 }
 
 func TestParseListSAs(t *testing.T) {
-	const s = `wgpanel: #12, ESTABLISHED, IKEv2, spi ...
+	const s = `protean: #12, ESTABLISHED, IKEv2, spi ...
   local  'vpn.example.com' @ 203.0.113.10[4500]
   remote 'office-a' @ 198.51.100.9[4500]
-wgpanel: #13, CONNECTING, IKEv2
+protean: #13, CONNECTING, IKEv2
   remote 'pending' @ 198.51.100.20[500]`
 
 	sas := ParseListSAs(s)

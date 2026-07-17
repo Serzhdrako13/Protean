@@ -37,6 +37,11 @@ services:
       # boot, then edit the files here directly as apps/instructions change;
       # no rebuild/redeploy needed, the panel re-reads on every request.
       - ./vpn-setup-content:/data/vpn-setup
+      # Admin-authored Xray strategy modules (new transport/camouflage combos
+      # as JSON, no code needed) -- auto-seeded with one annotated example on
+      # first boot, then drop/edit *.json files here as DPI-evasion needs
+      # change; no rebuild/restart needed, the panel re-reads on every request.
+      - ./xray-modules:/data/xray-modules
     networks:
       - postgres-net
     extra_hosts:

@@ -20,7 +20,7 @@ import (
 	"protean/internal/vpn"
 )
 
-const testNS = "wgpaneltest"
+const testNS = "proteantest"
 
 // localRunner satisfies SSHRunner by executing commands locally inside the
 // test network namespace, and file ops directly on the host filesystem.

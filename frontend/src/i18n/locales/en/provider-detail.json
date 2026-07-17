@@ -94,7 +94,8 @@
     },
     "trafficCardTitle": "Traffic",
     "topClientsCardTitle": "Top clients by traffic",
-    "addClientButton": "Add client"
+    "addClientButton": "Add client",
+    "importPeerButton": "Import existing certificate"
   },
   "modals": {
     "form": {
@@ -119,6 +120,14 @@
     },
     "manualSetup": {
       "title": "Manual setup — {{name}}"
+    },
+    "importPeer": {
+      "title": "Import existing certificate",
+      "description": "Adopt a client certificate already issued by this server before the panel took it over — instead of issuing a new one. Only works once the provider's current CA is the one that actually signed this certificate (import it first on the Settings tab if you haven't yet).",
+      "certPem": "Client certificate (PEM)",
+      "keyPem": "Private key (PEM, optional)",
+      "keyPemTooltip": "Pasting the key enables config/QR downloads for this client later. Without it, the client keeps using its own existing config file — the panel can still see and manage (e.g. revoke) it either way.",
+      "importedMessage": "Certificate imported"
     }
   }
 }

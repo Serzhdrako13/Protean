@@ -320,6 +320,7 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("PUT /api/providers/{provider}/mesh-settings", s.requireAuthAPI(s.apiMeshSettingsUpdate))
 	mux.HandleFunc("GET /api/providers/{provider}/logs", s.requireAuthAPI(s.apiServiceLogsGet))
 	mux.HandleFunc("POST /api/providers/{provider}/service", s.requireAuthAPI(s.apiServiceAction))
+	mux.HandleFunc("GET /api/providers/{provider}/ca", s.requireAuthAPI(s.apiCAInfo))
 	mux.HandleFunc("POST /api/providers/{provider}/ca", s.requireAuthAPI(s.apiCAImport))
 	mux.HandleFunc("GET /api/providers/{provider}/backups", s.requireAuthAPI(s.apiBackupsList))
 	mux.HandleFunc("POST /api/providers/{provider}/backups/{id}/restore", s.requireAuthAPI(s.apiRestoreBackup))
@@ -333,6 +334,7 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("GET /api/traffic/aggregate", s.requireAuthAPI(s.apiTrafficAggregate))
 
 	mux.HandleFunc("POST /api/providers/{provider}/peers", s.requireAuthAPI(s.apiCreatePeer))
+	mux.HandleFunc("POST /api/providers/{provider}/peers/import", s.requireAuthAPI(s.apiImportPeer))
 	mux.HandleFunc("PUT /api/providers/{provider}/peers/{id}", s.requireAuthAPI(s.apiUpdatePeer))
 	mux.HandleFunc("DELETE /api/providers/{provider}/peers/{id}", s.requireAuthAPI(s.apiDeletePeer))
 	mux.HandleFunc("POST /api/providers/{provider}/peers/{id}/disable", s.requireAuthAPI(s.apiDisablePeer))

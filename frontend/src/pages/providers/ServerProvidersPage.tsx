@@ -81,15 +81,19 @@ function StatusCell({ r }: { r: ProviderSummary }) {
 // is actually up. Replaces the old page-level "Установить VPN" button,
 // which always applied to the whole server rather than one specific row.
 function ProviderSetupCell({
-  r, installed, onInstall,
-}: { r: ProviderSummary; installed: boolean; onInstall: (type: string) => Promise<unknown> }) {
+  r, installed, serviceActive, configExists, onInstall,
+}: {
+  r: ProviderSummary; installed: boolean; serviceActive: boolean; configExists: boolean;
+  onInstall: (type: string) => Promise<unknown>;
+}) {
   const { t } = useTranslation(['server-providers', 'common']);
   const setup = useProviderSetupMutation(r.key);
   const qc = useQueryClient();
+  const [warnOpen, setWarnOpen] = useState(false);
 
   if (r.status.Up) return null;
 
-  async function onClick() {
+  async function doSetup() {
     try {
       if (!installed) await onInstall(r.type);
       await setup.mutateAsync();
@@ -100,16 +104,44 @@ function ProviderSetupCell({
     }
   }
 
+  // Best-effort: the host already looks provisioned for this type (its own
+  // service is active, or its conventional config file exists) -- "Set up"
+  // would silently replace the CA/config, breaking every existing client
+  // unless its CA/CRL was imported first (see the Settings tab CA card).
+  function onClick() {
+    if (serviceActive || configExists) {
+      setWarnOpen(true);
+      return;
+    }
+    void doSetup();
+  }
+
   return (
-    <Button
-      size="small"
-      icon={<DownloadOutlined />}
-      onClick={onClick}
-      loading={setup.isPending}
-      title={t('tooltips.installVpn')}
-    >
-      {t('actions.installVpn')}
-    </Button>
+    <>
+      <Button
+        size="small"
+        icon={<DownloadOutlined />}
+        onClick={onClick}
+        loading={setup.isPending}
+        title={t('tooltips.installVpn')}
+      >
+        {t('actions.installVpn')}
+      </Button>
+      <Modal
+        title={t('modals.setupWarning.title')}
+        open={warnOpen}
+        onCancel={() => setWarnOpen(false)}
+        onOk={() => { setWarnOpen(false); void doSetup(); }}
+        okText={t('modals.setupWarning.confirmProceed')}
+        okButtonProps={{ danger: true }}
+      >
+        <Typography.Paragraph>
+          {t('modals.setupWarning.description', { label: r.friendly_label || splitKey(r.key).local })}
+        </Typography.Paragraph>
+        <Typography.Paragraph type="secondary">{t('modals.setupWarning.hint')}</Typography.Paragraph>
+        <Link to={`/providers/${r.key}`}>{t('modals.setupWarning.goToCa')}</Link>
+      </Modal>
+    </>
   );
 }
 
@@ -355,13 +387,18 @@ export function ServerProvidersPage() {
     {
       title: '',
       key: 'setup',
-      render: (_: unknown, r: ProviderSummary) => (
-        <ProviderSetupCell
-          r={r}
-          installed={installStatus?.providers.find((p) => p.name === r.type)?.installed ?? false}
-          onInstall={(type) => installMut.mutateAsync(type)}
-        />
-      ),
+      render: (_: unknown, r: ProviderSummary) => {
+        const pi = installStatus?.providers.find((p) => p.name === r.type);
+        return (
+          <ProviderSetupCell
+            r={r}
+            installed={pi?.installed ?? false}
+            serviceActive={pi?.service_active ?? false}
+            configExists={pi?.config_exists ?? false}
+            onInstall={(type) => installMut.mutateAsync(type)}
+          />
+        );
+      },
     },
   ];
 

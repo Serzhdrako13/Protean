@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"protean/internal/vpn"
+	"protean/internal/vpn/pki"
 )
 
 type fakeSSH struct{ files map[string]string }
@@ -188,5 +189,98 @@ func TestRemovePeerRevokesCert(t *testing.T) {
 	}
 	if _, ok := st.clients["gone"]; ok {
 		t.Error("client should be deleted after revoke")
+	}
+}
+
+func TestImportPeerAcceptsCertSignedByCurrentCA(t *testing.T) {
+	p, _, st := testProvider()
+	ctx := context.Background()
+	ca, err := p.getCA(ctx) // auto-generates+persists the internal CA
+	if err != nil {
+		t.Fatalf("getCA: %v", err)
+	}
+	creds, err := ca.IssueClient("adopted-client", time.Hour)
+	if err != nil {
+		t.Fatalf("IssueClient: %v", err)
+	}
+
+	peer, err := p.ImportPeer(ctx, creds.CertPEM, creds.KeyPEM)
+	if err != nil {
+		t.Fatalf("ImportPeer: %v", err)
+	}
+	if peer.Name != "adopted-client" {
+		t.Errorf("peer name = %q, want adopted-client", peer.Name)
+	}
+	c, ok := st.clients["adopted-client"]
+	if !ok {
+		t.Fatal("client not stored")
+	}
+	if len(c.encKey) == 0 {
+		t.Error("expected the pasted key to be sealed and stored")
+	}
+}
+
+func TestImportPeerAcceptsCertWithoutKey(t *testing.T) {
+	p, _, st := testProvider()
+	ctx := context.Background()
+	ca, err := p.getCA(ctx)
+	if err != nil {
+		t.Fatalf("getCA: %v", err)
+	}
+	creds, err := ca.IssueClient("keyless-client", time.Hour)
+	if err != nil {
+		t.Fatalf("IssueClient: %v", err)
+	}
+
+	peer, err := p.ImportPeer(ctx, creds.CertPEM, "")
+	if err != nil {
+		t.Fatalf("ImportPeer without key: %v", err)
+	}
+	if peer.Name != "keyless-client" {
+		t.Errorf("peer name = %q, want keyless-client", peer.Name)
+	}
+	if c := st.clients["keyless-client"]; len(c.encKey) != 0 {
+		t.Error("expected no server-held key when none was pasted")
+	}
+}
+
+func TestImportPeerRejectsCertFromDifferentCA(t *testing.T) {
+	p, _, _ := testProvider()
+	ctx := context.Background()
+	if _, err := p.getCA(ctx); err != nil { // provider's own CA exists first
+		t.Fatalf("getCA: %v", err)
+	}
+	foreignCA, err := pki.NewInternalCA(time.Hour)
+	if err != nil {
+		t.Fatalf("NewInternalCA: %v", err)
+	}
+	creds, err := foreignCA.IssueClient("impostor", time.Hour)
+	if err != nil {
+		t.Fatalf("IssueClient: %v", err)
+	}
+
+	if _, err := p.ImportPeer(ctx, creds.CertPEM, creds.KeyPEM); err == nil {
+		t.Error("expected ImportPeer to reject a cert signed by a different CA")
+	}
+}
+
+func TestImportPeerRejectsMismatchedKey(t *testing.T) {
+	p, _, _ := testProvider()
+	ctx := context.Background()
+	ca, err := p.getCA(ctx)
+	if err != nil {
+		t.Fatalf("getCA: %v", err)
+	}
+	creds, err := ca.IssueClient("mismatched", time.Hour)
+	if err != nil {
+		t.Fatalf("IssueClient: %v", err)
+	}
+	other, err := ca.IssueClient("other", time.Hour)
+	if err != nil {
+		t.Fatalf("IssueClient: %v", err)
+	}
+
+	if _, err := p.ImportPeer(ctx, creds.CertPEM, other.KeyPEM); err == nil {
+		t.Error("expected ImportPeer to reject a key that doesn't match the certificate")
 	}
 }

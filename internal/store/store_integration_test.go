@@ -4,7 +4,7 @@
 // the `dbtest` tag). Bring the DB up first:
 //
 //	docker compose -f docker-compose.test.yml up -d
-//	PROTEAN_TEST_DB='postgres://wgpanel:wgpanel@localhost:5433/wgpanel?sslmode=disable' \
+//	PROTEAN_TEST_DB='postgres://protean:protean@localhost:5433/protean?sslmode=disable' \
 //	  go test -tags dbtest ./internal/store/
 //
 // The schema is dropped and re-migrated at the start of each run.
@@ -33,7 +33,7 @@ func testDB(t *testing.T) *Store {
 	if err != nil {
 		t.Fatalf("connect: %v", err)
 	}
-	if _, err := raw.Exec(ctx, `DROP SCHEMA IF EXISTS wgpanel CASCADE`); err != nil {
+	if _, err := raw.Exec(ctx, `DROP SCHEMA IF EXISTS protean CASCADE`); err != nil {
 		raw.Close()
 		t.Fatalf("drop schema: %v", err)
 	}
@@ -236,6 +236,43 @@ func TestCertsCAAndClientsAndCRL(t *testing.T) {
 	if n1 != 1 || n2 != 2 {
 		t.Errorf("CRL numbers not monotonic: %d, %d", n1, n2)
 	}
+
+	// CRL import (adopting an existing server): bulk-insert preserving the
+	// original RevokedAt, idempotent against a cert already recorded above,
+	// and seeding crl_number without regressing it.
+	importedAt := time.Now().Add(-30 * 24 * time.Hour).Truncate(time.Second)
+	err = s.ImportRevokedCerts(ctx, "openvpn", []RevokedCertRow{
+		{Serial: "12345", CN: "office-a", RevokedAt: importedAt}, // already present -- must stay untouched (ON CONFLICT DO NOTHING)
+		{Serial: "99999", CN: "old-client", RevokedAt: importedAt},
+	})
+	if err != nil {
+		t.Fatalf("ImportRevokedCerts: %v", err)
+	}
+	rows, err = s.ListRevokedCerts(ctx, "openvpn")
+	if err != nil || len(rows) != 2 {
+		t.Fatalf("ListRevokedCerts after import: %+v err=%v", rows, err)
+	}
+	for _, r := range rows {
+		if r.Serial == "12345" && r.RevokedAt.Equal(importedAt) {
+			t.Errorf("import must not overwrite the pre-existing 12345 row's original RevokedAt")
+		}
+		if r.Serial == "99999" && !r.RevokedAt.Equal(importedAt) {
+			t.Errorf("imported row 99999 RevokedAt = %v, want %v", r.RevokedAt, importedAt)
+		}
+	}
+
+	if err := s.SeedCRLNumber(ctx, "openvpn", 50); err != nil {
+		t.Fatalf("SeedCRLNumber(50): %v", err)
+	}
+	if n, _ := s.NextCRLNumber(ctx, "openvpn"); n != 51 {
+		t.Errorf("NextCRLNumber after seeding to 50 = %d, want 51", n)
+	}
+	if err := s.SeedCRLNumber(ctx, "openvpn", 5); err != nil { // lower than current -- must not regress
+		t.Fatalf("SeedCRLNumber(5): %v", err)
+	}
+	if n, _ := s.NextCRLNumber(ctx, "openvpn"); n != 52 {
+		t.Errorf("SeedCRLNumber with a lower value regressed the counter: got %d, want 52", n)
+	}
 }
 
 func TestExpiryDisabledCategoryMute(t *testing.T) {
@@ -378,7 +415,7 @@ func TestServersCRUD(t *testing.T) {
 	if n, _ := s.CountServers(ctx); n != 0 {
 		t.Fatalf("fresh DB should have 0 servers, got %d", n)
 	}
-	srv := Server{ID: "default", Label: "HQ", Host: "10.0.0.1", Port: 22, SSHUser: "wgpanel",
+	srv := Server{ID: "default", Label: "HQ", Host: "10.0.0.1", Port: 22, SSHUser: "protean",
 		EncKeyPEM: []byte("sealed"), HostKey: "ssh-ed25519 AAAA", PublicHost: "vpn.example.com"}
 	if err := s.CreateServer(ctx, srv); err != nil {
 		t.Fatalf("CreateServer: %v", err)
@@ -513,7 +550,7 @@ func TestServerInstanceLabels(t *testing.T) {
 	s := testDB(t)
 	ctx := context.Background()
 
-	srv := Server{ID: "hq", Label: "HQ", Host: "10.0.0.1", Port: 22, SSHUser: "wgpanel", EncKeyPEM: []byte("sealed")}
+	srv := Server{ID: "hq", Label: "HQ", Host: "10.0.0.1", Port: 22, SSHUser: "protean", EncKeyPEM: []byte("sealed")}
 	if err := s.CreateServer(ctx, srv); err != nil {
 		t.Fatalf("CreateServer: %v", err)
 	}

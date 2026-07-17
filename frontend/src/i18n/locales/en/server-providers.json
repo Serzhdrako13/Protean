@@ -58,6 +58,13 @@
     "redescribe": {
       "title": "Portal description",
       "description": "A short note about what this VPN is for — e.g. \"home network, internet egress blocked\", \"backup slow connection\", \"bypasses blocks, not part of the internal network\". Shown to portal users next to the name. Leave empty to show no note."
+    },
+    "setupWarning": {
+      "title": "This host already looks configured",
+      "description": "\"{{label}}\" already appears to have this VPN type configured on the host (its service is running, or its config file already exists). Continuing will replace its CA and configuration — existing clients using the current CA will stop connecting unless you import it first.",
+      "hint": "Detection only checks the panel's own conventional service/config path, so a foreign install using a non-standard location won't be caught either way. If this host has existing clients you want to keep, cancel and import its CA (and CRL, and client certificates) from the Settings tab first.",
+      "goToCa": "Open provider page to import its CA →",
+      "confirmProceed": "Replace it anyway"
     }
   },
   "form": {

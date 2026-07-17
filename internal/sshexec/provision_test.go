@@ -24,9 +24,10 @@ func TestProvisionScriptContent(t *testing.T) {
 		"getent passwd 'protean'",
 		"grep -qxF 'ssh-ed25519 AAAAKEY panel'",
 		"install -d -m 755 /usr/local/lib/protean",
-		"protean ALL=(root) NOPASSWD: /usr/local/lib/protean/protean-installer.sh, /usr/bin/wg, /usr/bin/awg, /usr/bin/swanctl",
+		"protean ALL=(root) NOPASSWD: /usr/local/lib/protean/protean-installer.sh, /usr/bin/wg, /usr/bin/awg, /usr/sbin/swanctl",
 		"visudo -cf /etc/sudoers.d/protean",
 		"install -d -m 750 -o 'protean'",
+		"chown -R 'protean':'protean'",
 	}
 	for _, want := range mustContain {
 		if !strings.Contains(script, want) {

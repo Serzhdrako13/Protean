@@ -1,8 +1,8 @@
-ALTER TABLE wgpanel.server_instances ADD COLUMN label TEXT NOT NULL DEFAULT '';
+ALTER TABLE protean.server_instances ADD COLUMN label TEXT NOT NULL DEFAULT '';
 
 -- A portal user's request for access to one provider instance. No peer
 -- exists yet at request time -- that's why this is keyed by (user_id,
--- provider) rather than a peer id, unlike wgpanel.peer_owner.
+-- provider) rather than a peer id, unlike protean.peer_owner.
 --
 -- status: pending  = just requested, admin hasn't acted.
 --         approved  = admin said yes, but there's no confirmed-working peer
@@ -12,9 +12,9 @@ ALTER TABLE wgpanel.server_instances ADD COLUMN label TEXT NOT NULL DEFAULT '';
 --         granted   = a real peer exists and passed the sanity check --
 --                     the only status the portal renders as "available".
 --         denied    = admin said no.
-CREATE TABLE wgpanel.access_request (
+CREATE TABLE protean.access_request (
     id         BIGSERIAL PRIMARY KEY,
-    user_id    BIGINT      NOT NULL REFERENCES wgpanel.users(id) ON DELETE CASCADE,
+    user_id    BIGINT      NOT NULL REFERENCES protean.users(id) ON DELETE CASCADE,
     provider   TEXT        NOT NULL,
     status     TEXT        NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'granted', 'denied')),
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),

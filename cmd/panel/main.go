@@ -23,8 +23,9 @@ import (
 	"protean/internal/config"
 	"protean/internal/servers"
 	"protean/internal/store"
-	"protean/internal/vpnsetup"
 	"protean/internal/vpn"
+	"protean/internal/vpn/xray"
+	"protean/internal/vpnsetup"
 	"protean/internal/webtls"
 )
 
@@ -187,6 +188,17 @@ func main() {
 		slog.Warn("vpn-setup: could not seed content dir, falling back to built-in defaults", "dir", cfg.VPNSetupContentDir, "err", err)
 	}
 	srv.SetVPNSetupDir(cfg.VPNSetupContentDir)
+
+	if err := xray.SeedExampleModule(cfg.XrayModulesDir); err != nil {
+		slog.Warn("xray: could not seed example module", "dir", cfg.XrayModulesDir, "err", err)
+	}
+	xray.SetModulesDir(cfg.XrayModulesDir)
+	if loaded, warnings := xray.LoadModulesDir(cfg.XrayModulesDir); loaded > 0 || len(warnings) > 0 {
+		slog.Info("xray: file-based modules loaded", "dir", cfg.XrayModulesDir, "loaded", loaded)
+		for _, w := range warnings {
+			slog.Warn("xray: module skipped", "dir", cfg.XrayModulesDir, "reason", w)
+		}
+	}
 
 	// The panel's own web TLS: a self-signed cert is bootstrapped on first
 	// ever run and kept forever as a permanent fallback, so the panel is

@@ -14,6 +14,9 @@
 package pki
 
 import (
+	"crypto"
+	"crypto/ecdsa"
+	"crypto/ed25519"
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/x509"
@@ -45,10 +48,15 @@ const (
 )
 
 // CA is an in-memory certificate authority. Persist its PEM material via
-// CACertPEM/CAKeyPEM and reload with LoadCA.
+// CACertPEM/CAKeyPEM and reload with LoadCA. The CA's own signing key is a
+// crypto.Signer (RSA, ECDSA, or Ed25519) so an externally supplied CA
+// (LoadCA) isn't limited to RSA -- easy-rsa/step-ca/openssl CAs commonly use
+// EC keys. Leaf keys issued BY this CA (IssueServer/IssueClient) are always
+// freshly generated RSA regardless of the CA's own key type -- a CA's key
+// algorithm has no bearing on what it can sign.
 type CA struct {
 	cert    *x509.Certificate
-	key     *rsa.PrivateKey
+	key     crypto.Signer
 	certDER []byte
 	// now is injectable for deterministic tests.
 	now func() time.Time
@@ -97,7 +105,7 @@ func LoadCA(caCertPEM, caKeyPEM string) (*CA, error) {
 	if err != nil {
 		return nil, fmt.Errorf("parse CA cert: %w", err)
 	}
-	key, err := parseRSAKeyPEM(caKeyPEM)
+	key, err := parsePrivateKeyPEM(caKeyPEM)
 	if err != nil {
 		return nil, fmt.Errorf("parse CA key: %w", err)
 	}
@@ -110,7 +118,7 @@ func LoadCA(caCertPEM, caKeyPEM string) (*CA, error) {
 func (c *CA) CACertPEM() string { return string(encodeCert(c.certDER)) }
 
 // CAKeyPEM returns the CA private key PEM. Callers must store this encrypted.
-func (c *CA) CAKeyPEM() string { return string(encodeRSAKey(c.key)) }
+func (c *CA) CAKeyPEM() string { return string(encodeKey(c.key)) }
 
 func (c *CA) IssueServer(cn string, dnsNames []string, ips []net.IP, validFor time.Duration) (string, string, error) {
 	creds, err := c.issue(cn, validFor, x509.ExtKeyUsageServerAuth, dnsNames, ips)
@@ -196,6 +204,36 @@ func (c *CA) CreateCRL(revoked []RevokedCert, number int64, thisUpdate, nextUpda
 	return string(pem.EncodeToMemory(&pem.Block{Type: "X509 CRL", Bytes: der})), nil
 }
 
+// ParseCRL parses an externally supplied CRL PEM (e.g. from a VPN server
+// being adopted into the panel) into its revoked entries and its own
+// sequence number, so the caller can import both into the panel's
+// revoked_certs/crl_number tables (store.ImportRevokedCerts/SeedCRLNumber)
+// before the panel issues its own CRL. Deliberately doesn't verify the
+// CRL's signature against a CA here -- the caller already trusts whatever
+// CA it just imported alongside this CRL; signature verification of a CRL
+// against a CA it's about to replace isn't a meaningful check.
+func ParseCRL(crlPEM string) (revoked []RevokedCert, number int64, err error) {
+	block, _ := pem.Decode([]byte(crlPEM))
+	if block == nil {
+		return nil, 0, fmt.Errorf("no PEM block")
+	}
+	if block.Type != "X509 CRL" {
+		return nil, 0, fmt.Errorf("expected an X509 CRL PEM block, got %q", block.Type)
+	}
+	crl, err := x509.ParseRevocationList(block.Bytes)
+	if err != nil {
+		return nil, 0, fmt.Errorf("parse CRL: %w", err)
+	}
+	revoked = make([]RevokedCert, 0, len(crl.RevokedCertificateEntries))
+	for _, e := range crl.RevokedCertificateEntries {
+		revoked = append(revoked, RevokedCert{Serial: e.SerialNumber, RevokedAt: e.RevocationTime})
+	}
+	if crl.Number != nil {
+		number = crl.Number.Int64()
+	}
+	return revoked, number, nil
+}
+
 // SerialFromCertPEM extracts the certificate serial number from a PEM cert,
 // used to record a revocation for a stored client cert.
 func SerialFromCertPEM(certPEM string) (*big.Int, error) {
@@ -204,6 +242,53 @@ func SerialFromCertPEM(certPEM string) (*big.Int, error) {
 		return nil, err
 	}
 	return cert.SerialNumber, nil
+}
+
+// VerifyClientCert checks that certPEM is a valid, currently-usable client
+// certificate issued by this CA -- used when importing an already-issued
+// client cert from an adopted server, so the panel never starts managing a
+// cert it can't actually verify (wrong CA, expired, not a client cert). On
+// success it returns the certificate's common name.
+func (c *CA) VerifyClientCert(certPEM string) (cn string, err error) {
+	cert, _, err := parseCertPEM(certPEM)
+	if err != nil {
+		return "", err
+	}
+	if cert.Subject.CommonName == "" {
+		return "", fmt.Errorf("certificate has no common name")
+	}
+	roots := x509.NewCertPool()
+	roots.AddCert(c.cert)
+	if _, err := cert.Verify(x509.VerifyOptions{
+		Roots:     roots,
+		KeyUsages: []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth},
+	}); err != nil {
+		return "", fmt.Errorf("certificate does not verify against this CA: %w", err)
+	}
+	return cert.Subject.CommonName, nil
+}
+
+// MatchesPrivateKey reports whether keyPEM is the private key for certPEM's
+// public key -- used when importing a client cert alongside its key, so a
+// mismatched pair is rejected up front rather than silently stored and
+// discovered broken only when a client tries to connect.
+func MatchesPrivateKey(certPEM, keyPEM string) error {
+	cert, _, err := parseCertPEM(certPEM)
+	if err != nil {
+		return err
+	}
+	key, err := parsePrivateKeyPEM(keyPEM)
+	if err != nil {
+		return err
+	}
+	pub, ok := key.Public().(interface{ Equal(crypto.PublicKey) bool })
+	if !ok {
+		return fmt.Errorf("unsupported key type %T", key.Public())
+	}
+	if !pub.Equal(cert.PublicKey) {
+		return fmt.Errorf("private key does not match the certificate's public key")
+	}
+	return nil
 }
 
 func (c *CA) issue(cn string, validFor time.Duration, eku x509.ExtKeyUsage, dnsNames []string, ips []net.IP) (ClientCreds, error) {
@@ -235,7 +320,7 @@ func (c *CA) issue(cn string, validFor time.Duration, eku x509.ExtKeyUsage, dnsN
 	}
 	return ClientCreds{
 		CertPEM: string(encodeCert(der)),
-		KeyPEM:  string(encodeRSAKey(key)),
+		KeyPEM:  string(encodeKey(key)),
 	}, nil
 }
 
@@ -253,14 +338,17 @@ func encodeCert(der []byte) []byte {
 	return pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der})
 }
 
-func encodeRSAKey(key *rsa.PrivateKey) []byte {
+func encodeKey(key crypto.Signer) []byte {
 	return pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: mustPKCS8(key)})
 }
 
-func mustPKCS8(key *rsa.PrivateKey) []byte {
+func mustPKCS8(key crypto.Signer) []byte {
+	// MarshalPKCS8PrivateKey already handles RSA/ECDSA/Ed25519 generically.
 	b, err := x509.MarshalPKCS8PrivateKey(key)
 	if err != nil {
-		// RSA keys always marshal; a failure is a programming error.
+		// A key we ourselves generated (RSA) or already validated via
+		// parsePrivateKeyPEM always marshals; a failure here is a
+		// programming error.
 		panic(err)
 	}
 	return b
@@ -278,7 +366,12 @@ func parseCertPEM(s string) (*x509.Certificate, []byte, error) {
 	return cert, block.Bytes, nil
 }
 
-func parseRSAKeyPEM(s string) (*rsa.PrivateKey, error) {
+// parsePrivateKeyPEM parses a CA private key in any of the formats a real
+// external CA (easy-rsa, step-ca, openssl) is likely to hand out: PKCS8
+// (RSA/ECDSA/Ed25519, the modern "PRIVATE KEY" block), legacy PKCS1 RSA
+// ("RSA PRIVATE KEY"), and legacy SEC1 EC ("EC PRIVATE KEY", what
+// `openssl ecparam -genkey`/`openssl ec` produce).
+func parsePrivateKeyPEM(s string) (crypto.Signer, error) {
 	block, _ := pem.Decode([]byte(s))
 	if block == nil {
 		return nil, fmt.Errorf("no PEM block")
@@ -289,13 +382,20 @@ func parseRSAKeyPEM(s string) (*rsa.PrivateKey, error) {
 		if err != nil {
 			return nil, err
 		}
-		rk, ok := k.(*rsa.PrivateKey)
-		if !ok {
-			return nil, fmt.Errorf("not an RSA key")
+		switch key := k.(type) {
+		case *rsa.PrivateKey:
+			return key, nil
+		case *ecdsa.PrivateKey:
+			return key, nil
+		case ed25519.PrivateKey:
+			return key, nil
+		default:
+			return nil, fmt.Errorf("unsupported PKCS8 key type %T", k)
 		}
-		return rk, nil
 	case "RSA PRIVATE KEY":
 		return x509.ParsePKCS1PrivateKey(block.Bytes)
+	case "EC PRIVATE KEY":
+		return x509.ParseECPrivateKey(block.Bytes)
 	default:
 		return nil, fmt.Errorf("unsupported key PEM type %q", block.Type)
 	}

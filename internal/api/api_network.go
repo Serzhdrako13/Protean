@@ -277,6 +277,22 @@ func (s *Server) apiMeshSettingsUpdate(w http.ResponseWriter, r *http.Request) {
 	}
 	s.audit(r.Context(), "network.update", providerName)
 
+	// Turning on mesh/egress routes traffic THROUGH this host -- re-check
+	// net.ipv4.ip_forward every time rather than trusting it was set once
+	// during the interactive setup-host.sh bootstrap: a reboot without the
+	// sysctl.d drop-in surviving, or the value flipped back out-of-band,
+	// would otherwise silently break routing until someone noticed.
+	turningOn := (req.MeshEnabled && !prev.MeshEnabled) || (req.InternetEgress && !prev.InternetEgress)
+	if turningOn {
+		if inst, ok := s.installerForProvider(providerName); ok {
+			if err := inst.EnsureIPForward(r.Context()); err != nil {
+				slog.Error("ensure ip_forward failed", "provider", providerName, "err", err)
+			} else {
+				s.audit(r.Context(), "server.ip_forward_enabled", providerName)
+			}
+		}
+	}
+
 	out, _ := s.buildAPIMeshSettings(r, providerName)
 	if applyErr != nil {
 		writeJSON(w, http.StatusOK, apiEnvelope{Success: false, Msg: msgf(r, "settings saved, but applying failed: %v", "настройки сохранены, но применение не удалось: %v", applyErr), Obj: out})

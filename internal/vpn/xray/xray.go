@@ -76,19 +76,62 @@ type Strategy interface {
 	ClientLink(p Params, c Client, host string) (string, error)
 }
 
+// InstanceSecrets is implemented by strategies (compiled or file-based) that
+// need instance-level secret params generated automatically -- never entered
+// by the operator, unlike Params() -- e.g. Reality's keypair + short id.
+// Optional, matching this package's other type-asserted capabilities; most
+// strategies need none.
+type InstanceSecrets interface {
+	InstanceSecrets() []SecretSpec
+}
+
+// SecretSpec describes one instance-level secret to generate on first use
+// (and preserve across re-applies of the same strategy).
+type SecretSpec struct {
+	Key string // param key the generated value is stored under
+	// Kind selects the generator: "reality_keypair" (fills Key with the
+	// private half and PairKey with the public half), "short_id", "uuid",
+	// or "password".
+	Kind string
+	// PairKey is the second param key filled by "reality_keypair" (the
+	// public half) -- unused by the other kinds.
+	PairKey string
+}
+
 var registry = map[string]Strategy{}
 
 // Register adds a strategy to the compile-time registry (called from init()).
 func Register(s Strategy) { registry[s.Name()] = s }
 
-// Get returns a registered strategy by name.
-func Get(name string) (Strategy, bool) { s, ok := registry[name]; return s, ok }
+// Get returns a strategy by name -- a compiled one first, else (if
+// SetModulesDir was called) a fresh scan of the file-based modules
+// directory. See loadModuleFiles for why this re-scans on every call rather
+// than caching: a dropped-in or edited module file takes effect immediately.
+func Get(name string) (Strategy, bool) {
+	if s, ok := registry[name]; ok {
+		return s, true
+	}
+	if dir := currentModulesDir(); dir != "" {
+		mods, _ := loadModuleFiles(dir)
+		for _, m := range mods {
+			if m.Name() == name {
+				return m, true
+			}
+		}
+	}
+	return nil, false
+}
 
-// All returns every registered strategy, sorted by name for stable UIs.
+// All returns every registered strategy (compiled + file-based modules),
+// sorted by name for stable UIs.
 func All() []Strategy {
 	out := make([]Strategy, 0, len(registry))
 	for _, s := range registry {
 		out = append(out, s)
+	}
+	if dir := currentModulesDir(); dir != "" {
+		mods, _ := loadModuleFiles(dir)
+		out = append(out, mods...)
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Name() < out[j].Name() })
 	return out

@@ -158,6 +158,17 @@ func (p *Provider) ImportCA(ctx context.Context, certPEM, keyPEM string) error {
 	return nil
 }
 
+// RebuildCRL regenerates the CRL from all recorded revocations (including any
+// just imported via ImportCA's crl_pem) and pushes it to the host, without
+// waiting for a full re-provision.
+func (p *Provider) RebuildCRL(ctx context.Context) error {
+	ca, err := p.getCA(ctx)
+	if err != nil {
+		return err
+	}
+	return p.rebuildCRL(ctx, ca)
+}
+
 func (p *Provider) Status(ctx context.Context) (vpn.ServerStatus, error) {
 	status := vpn.ServerStatus{Provider: p.opts.Instance}
 	active, err := p.serviceActive(ctx)
@@ -319,6 +330,47 @@ func (p *Provider) AddPeerFromCSR(ctx context.Context, csrPEM string, spec vpn.P
 	return vpn.NewPeerResult{Peer: vpn.Peer{
 		ID: cn, Provider: p.opts.Instance, Name: cn, PublicKey: cn, AllowedIPs: spec.AllowedIPs,
 	}}, nil
+}
+
+// ImportPeer adopts an already-issued client certificate (e.g. from a VPN
+// server being taken over by the panel) instead of issuing a new one. The
+// cert must verify against the current CA -- a cert from a DIFFERENT CA
+// (the panel's own internal one, or a CA not yet imported) is rejected, so
+// this only works after ImportCA has adopted the matching CA. keyPEM is
+// optional: pasting it enables config/QR downloads later, matching the
+// CSR-enrolled-peer trade-off already explained elsewhere in the UI; without
+// it the client keeps using its own existing config file.
+func (p *Provider) ImportPeer(ctx context.Context, certPEM, keyPEM string) (vpn.Peer, error) {
+	certPEM = strings.TrimSpace(certPEM)
+	keyPEM = strings.TrimSpace(keyPEM)
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	ca, err := p.getCA(ctx)
+	if err != nil {
+		return vpn.Peer{}, err
+	}
+	cn, err := ca.VerifyClientCert(certPEM)
+	if err != nil {
+		return vpn.Peer{}, err
+	}
+	var enc []byte
+	if keyPEM != "" {
+		if err := pki.MatchesPrivateKey(certPEM, keyPEM); err != nil {
+			return vpn.Peer{}, err
+		}
+		enc, err = p.opts.Enc.Seal(keyPEM)
+		if err != nil {
+			return vpn.Peer{}, err
+		}
+	}
+	if err := p.writeCCD(ctx, cn, "", nil); err != nil {
+		return vpn.Peer{}, err
+	}
+	if err := p.opts.Store.SaveOpenVPNClient(ctx, p.opts.Instance, cn, certPEM, enc, "", ""); err != nil {
+		return vpn.Peer{}, err
+	}
+	return vpn.Peer{ID: cn, Provider: p.opts.Instance, Name: cn, PublicKey: cn}, nil
 }
 
 func (p *Provider) UpdatePeer(ctx context.Context, id string, spec vpn.PeerSpec) error {

@@ -11,16 +11,16 @@ import (
 var migrationFiles embed.FS
 
 // Migrate applies any embedded migration files not yet recorded in
-// wgpanel.schema_migrations, in filename order. It's intentionally a
+// protean.schema_migrations, in filename order. It's intentionally a
 // hand-rolled runner rather than a migration library dependency: the
 // panel's migration needs are small and static.
 func Migrate(ctx context.Context, s *Store) error {
 	pool := s.pool
-	if _, err := pool.Exec(ctx, `CREATE SCHEMA IF NOT EXISTS wgpanel`); err != nil {
+	if _, err := pool.Exec(ctx, `CREATE SCHEMA IF NOT EXISTS protean`); err != nil {
 		return fmt.Errorf("create schema: %w", err)
 	}
 	if _, err := pool.Exec(ctx, `
-		CREATE TABLE IF NOT EXISTS wgpanel.schema_migrations (
+		CREATE TABLE IF NOT EXISTS protean.schema_migrations (
 			filename    TEXT PRIMARY KEY,
 			applied_at  TIMESTAMPTZ NOT NULL DEFAULT now()
 		)
@@ -41,7 +41,7 @@ func Migrate(ctx context.Context, s *Store) error {
 	for _, name := range names {
 		var applied bool
 		err := pool.QueryRow(ctx,
-			`SELECT EXISTS(SELECT 1 FROM wgpanel.schema_migrations WHERE filename = $1)`, name,
+			`SELECT EXISTS(SELECT 1 FROM protean.schema_migrations WHERE filename = $1)`, name,
 		).Scan(&applied)
 		if err != nil {
 			return fmt.Errorf("check migration %s: %w", name, err)
@@ -64,7 +64,7 @@ func Migrate(ctx context.Context, s *Store) error {
 			return fmt.Errorf("apply migration %s: %w", name, err)
 		}
 		if _, err := tx.Exec(ctx,
-			`INSERT INTO wgpanel.schema_migrations (filename) VALUES ($1)`, name,
+			`INSERT INTO protean.schema_migrations (filename) VALUES ($1)`, name,
 		); err != nil {
 			tx.Rollback(ctx)
 			return fmt.Errorf("record migration %s: %w", name, err)

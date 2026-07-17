@@ -47,9 +47,20 @@
   },
   "ca": {
     "title": "Certificate authority (CA)",
-    "description": "Import an external CA instead of the self-signed one the panel generates by default. After importing you need to run \"Configure server\" again — existing client certificates will need to be reissued.",
+    "description": "Import an external CA instead of the self-signed one the panel generates by default — e.g. to adopt a server that already has clients issued by easy-rsa, step-ca, or similar. After importing you need to run \"Configure server\" again — existing client certificates were issued by the OLD CA and won't validate under the new one; import them separately below (\"Import existing certificate\" in the client table) or reissue them.",
+    "tlsCryptNote": "OpenVPN only: if this host already has a tls-crypt.key at the expected path, \"Configure server\" keeps it as-is rather than generating a new one — leave the existing file in place, there's nothing to paste here for it.",
+    "status": {
+      "notConfigured": "No CA configured yet — one will be generated automatically the first time you configure the server",
+      "internal": "Internal (panel-generated)",
+      "external": "External (imported)",
+      "createdAt": "Issued {{date}}"
+    },
     "caCert": "CA certificate (PEM)",
     "caKey": "CA private key (PEM)",
+    "crlPem": {
+      "label": "CRL (PEM, optional)",
+      "tip": "Paste the adopted server's current CRL alongside its CA so already-revoked certificates stay revoked instead of silently working again once the panel takes over. Applied immediately, without waiting for \"Configure server\"."
+    },
     "import": "Import",
     "importedMessage": "CA imported — click \"Configure server\" on the Overview tab to apply"
   },

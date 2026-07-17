@@ -35,6 +35,14 @@ type HostInfo struct {
 type ProviderInfo struct {
 	Installed   bool `json:"installed"`
 	Installable bool `json:"installable"`
+	// ServiceActive/ConfigExists are best-effort signals (checked against the
+	// panel's own conventional service unit/config path) that the host
+	// already looks provisioned for this provider -- surfaced so "Set up"
+	// can warn before silently replacing an existing CA/config. A foreign
+	// install using a non-standard location won't be caught; only wired up
+	// for cert-based providers (openvpn/ikev2) today, always false otherwise.
+	ServiceActive bool `json:"service_active"`
+	ConfigExists  bool `json:"config_exists"`
 }
 
 // Installer drives the on-host installer script over SSH.
@@ -117,6 +125,17 @@ func (i *Installer) Forward(ctx context.Context, action, cidr string) error {
 		return fmt.Errorf("invalid cidr %q", cidr)
 	}
 	_, err := i.ssh.Run(ctx, "sudo "+InstallerPath+" forward "+action+" "+cidr)
+	return err
+}
+
+// EnsureIPForward turns on net.ipv4.ip_forward on the host if it isn't
+// already (idempotent). Called whenever mesh/egress routing is turned on --
+// setup-host.sh's interactive bootstrap only ever offers this once, so a
+// host that later loses the sysctl (reboot without /etc/sysctl.d surviving,
+// or a manual override) would otherwise silently stop routing between
+// sites/egress until someone happened to notice.
+func (i *Installer) EnsureIPForward(ctx context.Context) error {
+	_, err := i.ssh.Run(ctx, "sudo "+InstallerPath+" ensure-ip-forward")
 	return err
 }
 

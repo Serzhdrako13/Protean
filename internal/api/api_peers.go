@@ -177,6 +177,50 @@ func (s *Server) linkPeerToAccessRequest(r *http.Request, requestID int64, provi
 	return ""
 }
 
+type apiPeerImportReq struct {
+	CertPEM string `json:"cert_pem"`
+	KeyPEM  string `json:"key_pem,omitempty"`
+}
+
+// POST /api/providers/{provider}/peers/import — adopt an already-issued
+// client certificate (e.g. a client from a VPN server being taken over by
+// the panel) instead of issuing a new one. Only meaningful once the
+// provider's CA is the one that actually signed the cert (see POST
+// .../ca) -- ImportPeer itself enforces that by verifying the chain.
+func (s *Server) apiImportPeer(w http.ResponseWriter, r *http.Request) {
+	providerName := r.PathValue("provider")
+	prov, ok := s.reg.Get(providerName)
+	if !ok {
+		writeErr(w, http.StatusNotFound, msg(r, "unknown provider", "неизвестный провайдер"))
+		return
+	}
+	importer, ok := prov.(vpn.PeerImporter)
+	if !ok {
+		writeErr(w, http.StatusBadRequest, msg(r, "this provider doesn't support importing an existing certificate", "этот провайдер не поддерживает импорт существующего сертификата"))
+		return
+	}
+	var req apiPeerImportReq
+	if err := decodeJSON(r, &req); err != nil {
+		writeErr(w, http.StatusBadRequest, msg(r, "bad request body", "некорректное тело запроса"))
+		return
+	}
+	certPEM := strings.TrimSpace(req.CertPEM)
+	if certPEM == "" {
+		writeErr(w, http.StatusBadRequest, msg(r, "cert_pem is required", "cert_pem обязателен"))
+		return
+	}
+	peer, err := importer.ImportPeer(r.Context(), certPEM, strings.TrimSpace(req.KeyPEM))
+	if err != nil {
+		writeErr(w, http.StatusBadRequest, msgf(r, "import failed: %v", "не удалось импортировать: %v", err))
+		return
+	}
+	s.audit(r.Context(), "peer.import", providerName+"/"+peer.Name)
+	s.invalidateStatus(providerName)
+
+	urlID, _ := encodePeerID(peer.PublicKey)
+	writeOK(w, map[string]string{"url_id": urlID})
+}
+
 type apiPeerUpdateReq struct {
 	Name          string  `json:"name"`
 	ClientAddress string  `json:"client_address"`

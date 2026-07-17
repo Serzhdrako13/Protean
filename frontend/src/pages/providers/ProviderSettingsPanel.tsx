@@ -3,7 +3,7 @@ import { Card, Form, Input, InputNumber, Button, Switch, Space, message, Table, 
 import { SyncOutlined, HistoryOutlined, FileTextOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { useServerConfigQuery, useMeshSettingsQuery, useProviderSettingsMutations } from '@/api/queries/network';
-import { useCAImportMutation } from '@/api/queries/ca';
+import { useCAImportMutation, useCAInfoQuery } from '@/api/queries/ca';
 import { useBackupsQuery, useRestoreBackupMutation, type Backup } from '@/api/queries/backups';
 import { HeaderTip } from '@/components/HeaderTip';
 import { ApiError } from '@/api/http-init';
@@ -303,6 +303,7 @@ function MeshSettingsCard({ provider }: { provider: string }) {
 function CACard({ provider }: { provider: string }) {
   const { t } = useTranslation(['provider-settings', 'common']);
   const [form] = Form.useForm();
+  const { data: caInfo, isLoading } = useCAInfoQuery(provider, true);
   const importCA = useCAImportMutation(provider);
 
   async function onImport() {
@@ -317,16 +318,41 @@ function CACard({ provider }: { provider: string }) {
   }
 
   return (
-    <Card title={t('provider-settings:ca.title')}>
+    <Card title={t('provider-settings:ca.title')} loading={isLoading}>
       <Typography.Paragraph type="secondary">
         {t('provider-settings:ca.description')}
       </Typography.Paragraph>
+      <Typography.Paragraph type="secondary">
+        {t('provider-settings:ca.tlsCryptNote')}
+      </Typography.Paragraph>
+      <div style={{ marginBottom: 16 }}>
+        {!caInfo?.configured ? (
+          <Typography.Text type="secondary">{t('provider-settings:ca.status.notConfigured')}</Typography.Text>
+        ) : (
+          <Space>
+            <Tag color={caInfo.source === 'external' ? 'blue' : 'default'}>
+              {t(`provider-settings:ca.status.${caInfo.source === 'external' ? 'external' : 'internal'}`)}
+            </Tag>
+            {caInfo.created_at && (
+              <Typography.Text type="secondary">
+                {t('provider-settings:ca.status.createdAt', { date: caInfo.created_at })}
+              </Typography.Text>
+            )}
+          </Space>
+        )}
+      </div>
       <Form form={form} layout="vertical">
         <Form.Item name="ca_cert" label={t('provider-settings:ca.caCert')} rules={[{ required: true }]}>
           <Input.TextArea rows={6} placeholder="-----BEGIN CERTIFICATE-----" />
         </Form.Item>
         <Form.Item name="ca_key" label={t('provider-settings:ca.caKey')} rules={[{ required: true }]}>
           <Input.TextArea rows={6} placeholder="-----BEGIN PRIVATE KEY-----" />
+        </Form.Item>
+        <Form.Item
+          name="crl_pem"
+          label={<HeaderTip label={t('provider-settings:ca.crlPem.label')} tip={t('provider-settings:ca.crlPem.tip')} />}
+        >
+          <Input.TextArea rows={4} placeholder="-----BEGIN X509 CRL-----" />
         </Form.Item>
         <Button type="primary" onClick={onImport} loading={importCA.isPending}>{t('provider-settings:ca.import')}</Button>
       </Form>

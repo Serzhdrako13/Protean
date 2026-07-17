@@ -92,7 +92,25 @@ export function ProviderDetailPage() {
   const [manualPeer, setManualPeer] = useState<Peer | null>(null);
   const [linkedRequestId, setLinkedRequestId] = useState<number | null>(null);
   const [form] = Form.useForm();
+  const [importOpen, setImportOpen] = useState(false);
+  const [importForm] = Form.useForm();
   const { query: peerQuery, setQuery: setPeerQuery, filtered: filteredPeers } = useTableSearch(data?.peers, (p) => p.Name);
+
+  // Adopts an already-issued client certificate (e.g. a client from a VPN
+  // server being taken over by the panel) instead of issuing a new one --
+  // only meaningful once the provider's CA is the one that actually signed
+  // it (see CACard's CA-import flow on the Settings tab).
+  async function onImportPeer() {
+    try {
+      const values = await importForm.validateFields();
+      await mut.importPeer.mutateAsync({ cert_pem: values.cert_pem, key_pem: values.key_pem || undefined });
+      setImportOpen(false);
+      importForm.resetFields();
+      message.success(t('provider-detail:modals.importPeer.importedMessage'));
+    } catch (e) {
+      if (e instanceof ApiError) message.error(e.message);
+    }
+  }
 
   function openCreate() {
     setEditing(null);
@@ -390,7 +408,12 @@ export function ProviderDetailPage() {
           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12 }}>
             <TableSearch value={peerQuery} onChange={setPeerQuery} placeholder={t('provider-detail:table.searchPlaceholder')} />
             {data.status.Up && (
-              <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>{t('provider-detail:overview.addClientButton')}</Button>
+              <Space>
+                {data.cert_based && (
+                  <Button onClick={() => setImportOpen(true)}>{t('provider-detail:overview.importPeerButton')}</Button>
+                )}
+                <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>{t('provider-detail:overview.addClientButton')}</Button>
+              </Space>
             )}
           </div>
           <Table
@@ -466,6 +489,27 @@ export function ProviderDetailPage() {
               <Input placeholder={t('provider-detail:modals.form.ownPublicKeyPlaceholder')} />
             </Form.Item>
           )}
+        </Form>
+      </Modal>
+
+      <Modal
+        title={t('provider-detail:modals.importPeer.title')}
+        open={importOpen}
+        onCancel={() => setImportOpen(false)}
+        onOk={onImportPeer}
+        confirmLoading={mut.importPeer.isPending}
+        destroyOnHidden
+      >
+        <Typography.Paragraph type="secondary">
+          {t('provider-detail:modals.importPeer.description')}
+        </Typography.Paragraph>
+        <Form form={importForm} layout="vertical">
+          <Form.Item name="cert_pem" label={t('provider-detail:modals.importPeer.certPem')} rules={[{ required: true }]}>
+            <Input.TextArea rows={6} placeholder="-----BEGIN CERTIFICATE-----" />
+          </Form.Item>
+          <Form.Item name="key_pem" label={t('provider-detail:modals.importPeer.keyPem')} tooltip={t('provider-detail:modals.importPeer.keyPemTooltip')}>
+            <Input.TextArea rows={6} placeholder="-----BEGIN PRIVATE KEY-----" />
+          </Form.Item>
         </Form>
       </Modal>
 

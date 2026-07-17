@@ -48,13 +48,36 @@ Bring up a throwaway Postgres (port 5433, ephemeral tmpfs — fresh each run):
 
 ```sh
 docker compose -f docker-compose.test.yml up -d
-PROTEAN_TEST_DB='postgres://wgpanel:wgpanel@localhost:5433/wgpanel?sslmode=disable' \
+PROTEAN_TEST_DB='postgres://protean:protean@localhost:5433/protean?sslmode=disable' \
   go test -tags dbtest ./internal/store/
 docker compose -f docker-compose.test.yml down -v
 ```
 
 The schema is dropped and re-migrated at the start of each run, so tests are
 repeatable. Tests skip (not fail) when `PROTEAN_TEST_DB` is unset.
+
+## Full integration/E2E lab (real systemd containers, `e2elab` tag)
+
+```sh
+docker build -t protean-e2elab:test test/e2elab
+PROTEAN_E2ELAB=1 go test -tags e2elab ./test/e2elab/... -v -timeout 15m
+```
+
+The one suite that runs the real thing: a real systemd container boots
+OpenVPN + strongSwan (IKEv2) + Xray, the panel's own
+`sshexec.BootstrapHost`/`openvpn`/`ikev2`/`xray`/`vpn.Installer` code
+provisions it over real SSH exactly like a real "Add server" would, and the
+tests assert real outcomes — a revoked cert is actually rejected by a real
+CRL (parsed with `pki.ParseCRL`), `ip_forward` actually flips, a stopped
+host produces a clean error instead of a hang. See `test/e2elab/README.md`
+for what's covered (and what deliberately isn't — WireGuard already has its
+own real, non-mock test above).
+
+Needs Docker with `--privileged` container support; takes a few minutes
+(booting systemd + real daemons). Not part of the fast suite — gated behind
+both the `e2elab` build tag and `PROTEAN_E2ELAB=1`; in CI it only runs as a
+nightly scheduled job or manual `workflow_dispatch`, never on a normal
+push/PR (`.github/workflows/ci.yml`'s `e2e-lab` job).
 
 ## Whole app smoke (container build + boot)
 

@@ -46,7 +46,7 @@ const DefaultSessionTTL = 30 * 24 * time.Hour
 // once at startup so a lookup for a nonexistent username still pays bcrypt's
 // full cost -- otherwise the login endpoint would respond faster for unknown
 // usernames than for wrong passwords, leaking which usernames exist.
-var dummyHash = mustHashPassword("wgpanel-timing-safety-placeholder")
+var dummyHash = mustHashPassword("protean-timing-safety-placeholder")
 
 func mustHashPassword(password string) string {
 	hash, err := HashPassword(password)

@@ -133,6 +133,45 @@ func TestProviderMultiClientAndSubscription(t *testing.T) {
 	}
 }
 
+// TestInstanceSecretsPreservedAcrossReapply covers the generalized
+// ensureInstanceCrypto path (formerly a hardcoded reality-vless-tcp name
+// switch): re-applying the same strategy must keep its generated instance
+// secrets (Reality keypair + short id) unchanged, not regenerate them --
+// regenerating would invalidate every client link already handed out.
+func TestInstanceSecretsPreservedAcrossReapply(t *testing.T) {
+	p, _, _ := testProvider()
+	ctx := context.Background()
+
+	if err := p.Apply(ctx, "reality-vless-tcp", Params{pSNI: "www.microsoft.com", pDest: "www.microsoft.com:443", pPort: "443"}, nil); err != nil {
+		t.Fatalf("first Apply: %v", err)
+	}
+	_, first, _, err := p.instance(ctx)
+	if err != nil {
+		t.Fatalf("instance: %v", err)
+	}
+	priv, pub, sid := first[pRealityPriv], first[pRealityPub], first[pShortID]
+	if priv == "" || pub == "" || sid == "" {
+		t.Fatalf("expected generated instance secrets, got %+v", first)
+	}
+
+	// Re-apply the same strategy with a changed operator param but no
+	// secrets supplied -- the provider must carry the existing ones over.
+	if err := p.Apply(ctx, "reality-vless-tcp", Params{pSNI: "www.microsoft.com", pDest: "www.microsoft.com:443", pPort: "8443"}, nil); err != nil {
+		t.Fatalf("second Apply: %v", err)
+	}
+	_, second, _, err := p.instance(ctx)
+	if err != nil {
+		t.Fatalf("instance (2): %v", err)
+	}
+	if second[pRealityPriv] != priv || second[pRealityPub] != pub || second[pShortID] != sid {
+		t.Errorf("instance secrets changed across re-apply: before=%+v after priv=%q pub=%q sid=%q",
+			map[string]string{"priv": priv, "pub": pub, "sid": sid}, second[pRealityPriv], second[pRealityPub], second[pShortID])
+	}
+	if second[pPort] != "8443" {
+		t.Errorf("port param = %q, want 8443 (should still update on re-apply)", second[pPort])
+	}
+}
+
 func TestProviderSingleClientStrategyRejectsSecond(t *testing.T) {
 	p, _, _ := testProvider()
 	ctx := context.Background()

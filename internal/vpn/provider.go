@@ -181,12 +181,29 @@ type CAImporter interface {
 	ImportCA(ctx context.Context, certPEM, keyPEM string) error
 }
 
+// CRLRebuilder is implemented by cert-based providers that can push a
+// freshly rebuilt CRL to the host on demand -- used right after importing
+// an external CRL (see CAImporter) so an adopted server's revocations take
+// effect immediately instead of waiting for the next full re-provision.
+type CRLRebuilder interface {
+	RebuildCRL(ctx context.Context) error
+}
+
 // CSRSigner is implemented by cert-based providers that can enroll a client
 // from a client-supplied Certificate Signing Request. The client keeps its
 // private key (it never reaches the server); the panel signs the CSR and
 // stores only the issued certificate. Callers type-assert.
 type CSRSigner interface {
 	AddPeerFromCSR(ctx context.Context, csrPEM string, spec PeerSpec) (NewPeerResult, error)
+}
+
+// PeerImporter is implemented by cert-based providers that can adopt an
+// already-issued client certificate (from a VPN server being taken over by
+// the panel) instead of issuing a new one. The cert must verify against the
+// provider's current CA (see CAImporter); keyPEM is optional -- pasting it
+// enables config/QR downloads later, same trade-off as CSRSigner without it.
+type PeerImporter interface {
+	ImportPeer(ctx context.Context, certPEM, keyPEM string) (Peer, error)
 }
 
 // ServerProvisioner is implemented by providers that need an explicit

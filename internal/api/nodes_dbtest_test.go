@@ -5,7 +5,7 @@
 // first:
 //
 //	docker compose -f docker-compose.test.yml up -d
-//	PROTEAN_TEST_DB='postgres://wgpanel:wgpanel@localhost:5433/wgpanel?sslmode=disable' \
+//	PROTEAN_TEST_DB='postgres://protean:protean@localhost:5433/protean?sslmode=disable' \
 //	  go test -tags dbtest ./internal/api/
 package api
 
@@ -41,7 +41,7 @@ func nodesTestDB(t *testing.T) *store.Store {
 	if err != nil {
 		t.Fatalf("connect: %v", err)
 	}
-	if _, err := raw.Exec(ctx, `DROP SCHEMA IF EXISTS wgpanel CASCADE`); err != nil {
+	if _, err := raw.Exec(ctx, `DROP SCHEMA IF EXISTS protean CASCADE`); err != nil {
 		raw.Close()
 		t.Fatalf("drop schema: %v", err)
 	}

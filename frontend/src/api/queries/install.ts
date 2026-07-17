@@ -7,6 +7,13 @@ export interface ProviderInstall {
   managed: boolean;
   installed: boolean;
   installable: boolean;
+  // service_active/config_exists: best-effort signal that the host already
+  // looks provisioned for this provider TYPE (checked against the panel's
+  // own conventional service unit/config path) -- only meaningful for
+  // openvpn/ikev2 today. Used to warn before "Set up" would silently
+  // replace an existing CA/config.
+  service_active: boolean;
+  config_exists: boolean;
 }
 
 export interface InstallStatus {

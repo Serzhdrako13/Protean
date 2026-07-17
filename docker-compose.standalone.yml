@@ -21,17 +21,17 @@ services:
     image: postgres:16-alpine
     restart: unless-stopped
     environment:
-      POSTGRES_USER: wgpanel
+      POSTGRES_USER: protean
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env.standalone}
-      POSTGRES_DB: wgpanel
+      POSTGRES_DB: protean
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U wgpanel -d wgpanel"]
+      test: ["CMD-SHELL", "pg_isready -U protean -d protean"]
       interval: 5s
       timeout: 3s
       retries: 20
-    networks: [wgpanel]
+    networks: [protean]
 
   panel:
     build: .
@@ -47,7 +47,7 @@ services:
       - "80:80"
     environment:
       LISTEN_ADDR: ":8080"
-      DATABASE_URL: postgres://wgpanel:${POSTGRES_PASSWORD}@postgres:5432/wgpanel?sslmode=disable
+      DATABASE_URL: postgres://protean:${POSTGRES_PASSWORD}@postgres:5432/protean?sslmode=disable
       SESSION_SECRET: ${SESSION_SECRET:?set SESSION_SECRET (>=16 chars)}
       SECRET_KEY: ${SECRET_KEY:?set SECRET_KEY (64 hex chars = openssl rand -hex 32)}
       ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}
@@ -80,6 +80,11 @@ services:
       # boot, then edit the files here directly as apps/instructions change;
       # no rebuild/redeploy needed, the panel re-reads on every request.
       - ./vpn-setup-content:/data/vpn-setup
+      # Admin-authored Xray strategy modules (new transport/camouflage combos
+      # as JSON, no code needed) -- auto-seeded with one annotated example on
+      # first boot, then drop/edit *.json files here as DPI-evasion needs
+      # change; no rebuild/restart needed, the panel re-reads on every request.
+      - ./xray-modules:/data/xray-modules
     healthcheck:
       # distroless image: the binary self-probes /healthz over loopback.
       test: ["CMD", "/panel", "-healthcheck"]
@@ -91,10 +96,10 @@ services:
       # so a VPN host that IS this machine can be reached as
       # host.docker.internal from inside the container.
       - "host.docker.internal:host-gateway"
-    networks: [wgpanel]
+    networks: [protean]
 
 volumes:
   pgdata:
 
 networks:
-  wgpanel:
+  protean:

@@ -111,22 +111,26 @@ func (p *Provider) UpdateServerConfig(context.Context, vpn.ServerConfig) error {
 // rebuilds the on-host config and restarts the service. An empty/nil relays
 // means direct egress; a non-empty ordered slice chains hop 0 -> hop 1 -> ...
 func (p *Provider) Apply(ctx context.Context, strategyName string, params Params, relays []RelaySpec) error {
-	if _, ok := Get(strategyName); !ok {
+	strat, ok := Get(strategyName)
+	if !ok {
 		return fmt.Errorf("unknown strategy %q", strategyName)
 	}
 	if params == nil {
 		params = Params{}
 	}
-	// Preserve instance crypto across re-applies of the same strategy.
-	if cur, curParams, _, err := p.instance(ctx); err == nil && cur == strategyName {
-		for _, k := range instanceCryptoKeys {
-			if curParams.get(k, "") != "" && params.get(k, "") == "" {
-				params[k] = curParams[k]
+	if is, ok := strat.(InstanceSecrets); ok {
+		specs := is.InstanceSecrets()
+		// Preserve instance secrets across re-applies of the same strategy.
+		if cur, curParams, _, err := p.instance(ctx); err == nil && cur == strategyName {
+			for _, k := range secretParamKeys(specs) {
+				if curParams.get(k, "") != "" && params.get(k, "") == "" {
+					params[k] = curParams[k]
+				}
 			}
 		}
-	}
-	if err := ensureInstanceCrypto(strategyName, params); err != nil {
-		return err
+		if err := ensureInstanceCrypto(specs, params); err != nil {
+			return err
+		}
 	}
 	if err := p.persistInstance(ctx, strategyName, params, relays); err != nil {
 		return err
@@ -376,29 +380,59 @@ func (p *Provider) listClients(ctx context.Context) ([]Client, error) {
 	return out, nil
 }
 
-// ensureInstanceCrypto fills instance-level secret params (Reality keys + short
-// id). Per-client credentials are generated in AddClient.
-func ensureInstanceCrypto(strategyName string, p Params) error {
-	if strategyName == "reality-vless-tcp" {
-		if p.get(pRealityPriv, "") == "" {
+// ensureInstanceCrypto fills a strategy's declared instance-level secret
+// params (e.g. Reality's keypair + short id) that are still empty. Per-client
+// credentials are generated in AddClient, not here.
+func ensureInstanceCrypto(specs []SecretSpec, p Params) error {
+	for _, s := range specs {
+		if p.get(s.Key, "") != "" {
+			continue
+		}
+		switch s.Kind {
+		case "reality_keypair":
 			kp, err := GenRealityKeypair()
 			if err != nil {
 				return err
 			}
-			p[pRealityPriv] = kp.PrivateKey
-			p[pRealityPub] = kp.PublicKey
-		}
-		if p.get(pShortID, "") == "" {
+			p[s.Key] = kp.PrivateKey
+			p[s.PairKey] = kp.PublicKey
+		case "short_id":
 			sid, err := NewShortID()
 			if err != nil {
 				return err
 			}
-			p[pShortID] = sid
+			p[s.Key] = sid
+		case "uuid":
+			u, err := NewUUID()
+			if err != nil {
+				return err
+			}
+			p[s.Key] = u
+		case "password":
+			pw, err := NewPassword(16)
+			if err != nil {
+				return err
+			}
+			p[s.Key] = pw
+		default:
+			return fmt.Errorf("unknown instance secret kind %q for key %q", s.Kind, s.Key)
 		}
 	}
 	return nil
 }
 
-var instanceCryptoKeys = []string{pRealityPriv, pRealityPub, pShortID}
+// secretParamKeys flattens SecretSpecs to the param keys they fill (Key, and
+// PairKey when set), used to decide which params to carry over unchanged on
+// a re-apply of the same strategy.
+func secretParamKeys(specs []SecretSpec) []string {
+	keys := make([]string, 0, len(specs)*2)
+	for _, s := range specs {
+		keys = append(keys, s.Key)
+		if s.PairKey != "" {
+			keys = append(keys, s.PairKey)
+		}
+	}
+	return keys
+}
 
 func shellQuote(s string) string { return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'" }
