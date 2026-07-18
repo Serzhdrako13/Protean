@@ -63,9 +63,16 @@ network-dependent, unsuitable for a fast CI gate, see MANUAL_TESTS.md),
 the interactive-shell primitive behind the web SSH console
 (`sshexec.Client.StartShell` against a real PTY — everything else about
 that feature is fake-driven unit tests in `internal/console`, see that
-package's own tests), and SSH-failure handling (stopping the container
-mid-operation and confirming a clean
-error, not a hang).
+package's own tests), the firewall feature's core safety mechanism
+against a REAL network connection (`TestE2ELabFirewallRollback`: applies
+a ruleset that deliberately omits any SSH allow rule, proves a genuinely
+NEW connection still works thanks to the host-side guard-insert, then
+proves an unconfirmed change actually gets rolled back after the window
+elapses — this is exactly the "prove a real lockout gets recovered from"
+scenario a real production host could never safely be tested against;
+`TestE2ELabFirewallConfirm` covers the apply→confirm→persisted happy path
+plus confirm's idempotency), and SSH-failure handling (stopping the
+container mid-operation and confirming a clean error, not a hang).
 
 Not covered here (explicit, not silently missing): WireGuard/AmneziaWG —
 already has a real (non-mock) test via
@@ -134,7 +141,7 @@ itself — `ID_LIKE=debian` auto-classifies it into the existing
 `OS_FAMILY="debian"` branch.
 
 All six families pass the full suite
-(OpenVPN/IKEv2/Xray/IPForward/UpdatesCheck/Console/SSHFailureHandling). Getting there surfaced
+(OpenVPN/IKEv2/Xray/IPForward/UpdatesCheck/FirewallRollback/FirewallConfirm/Console/SSHFailureHandling). Getting there surfaced
 fifteen real, previously-undiscovered bugs — fixed in
 `scripts/protean-installer.sh` (kept byte-identical to
 `internal/hostboot/installer.sh`, which is what actually reaches a real

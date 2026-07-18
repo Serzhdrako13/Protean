@@ -80,7 +80,17 @@ type Server struct {
 	// consoleAllowedOrigins additionally authorizes WS upgrade Origins
 	// beyond the request's own Host -- see config.ConsoleAllowedOrigins.
 	consoleAllowedOrigins []string
+
+	// panelPorts are the panel's own reachable ports (web listener + 80/443
+	// for ACME), protected by the firewall feature's baseline whenever the
+	// target server is flagged as the panel host. Empty in tests that don't
+	// wire it.
+	panelPorts []int
 }
+
+// SetPanelPorts wires the panel's own reachable ports for the firewall
+// feature's baseline (see internal/firewall.ComputeBaseline).
+func (s *Server) SetPanelPorts(ports []int) { s.panelPorts = ports }
 
 // SetConsoleAllowedOrigins wires extra WS-upgrade Origins to accept beyond
 // the request's own Host (reverse-proxy deployments under a different
@@ -204,6 +214,11 @@ type ServerManager interface {
 	// returned close func must be called exactly once when the console
 	// session ends.
 	ConsoleClient(ctx context.Context, serverID string) (*sshexec.Client, func(), error)
+	// FreshClient always dials a brand-new connection, never the pool --
+	// used to verify reachability right after a firewall change (see
+	// servers.Manager.FreshClient's doc comment for why reusing the pool
+	// there would prove nothing).
+	FreshClient(ctx context.Context, serverID string) (*sshexec.Client, func(), error)
 }
 
 // SetServerManager wires runtime server (re)build/remove.
@@ -330,6 +345,15 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("GET /api/servers/{id}/traffic", s.requireAuthAPI(s.apiServerTrafficAggregate))
 	mux.HandleFunc("GET /api/servers/{id}/updates", s.requireAuthAPI(s.apiServerUpdatesCheck))
 	mux.HandleFunc("POST /api/servers/{id}/updates/apply", s.requireAuthAPI(s.apiServerUpdatesApply))
+
+	mux.HandleFunc("GET /api/servers/{id}/firewall", s.requireAuthAPI(s.apiFirewallGet))
+	mux.HandleFunc("PUT /api/servers/{id}/firewall/policy", s.requireAuthAPI(s.apiFirewallPolicyPut))
+	mux.HandleFunc("PUT /api/servers/{id}/firewall/rules", s.requireAuthAPI(s.apiFirewallRulesPut))
+	mux.HandleFunc("POST /api/servers/{id}/firewall/dry-run", s.requireAuthAPI(s.apiFirewallDryRun))
+	mux.HandleFunc("POST /api/servers/{id}/firewall/apply", s.requireAuthAPI(s.apiFirewallApply))
+	mux.HandleFunc("POST /api/servers/{id}/firewall/confirm", s.requireAuthAPI(s.apiFirewallConfirm))
+	mux.HandleFunc("POST /api/servers/{id}/firewall/rollback", s.requireAuthAPI(s.apiFirewallRollback))
+	mux.HandleFunc("GET /api/servers/{id}/firewall/status", s.requireAuthAPI(s.apiFirewallStatusGet))
 
 	mux.HandleFunc("GET /api/console/targets", s.requireAuthAPI(s.apiConsoleTargets))
 	mux.HandleFunc("POST /api/console/sessions", s.requireAuthAPI(s.apiConsoleSessionCreate))

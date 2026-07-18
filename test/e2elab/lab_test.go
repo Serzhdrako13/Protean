@@ -668,6 +668,106 @@ func TestE2ELabUpdatesCheck(t *testing.T) {
 	}
 }
 
+// TestE2ELabFirewallRollback proves the firewall feature's core safety
+// mechanism against a REAL network connection, not just a docker-exec
+// shell (which never goes through the container's actual published port
+// and so can't observe a real lockout at all). Applies a ruleset that
+// deliberately omits any SSH allow rule -- simulating the exact class of
+// panel-side rendering bug the host-side guard-insert exists to survive
+// -- then proves a genuinely NEW SSH connection still works (not just
+// that the one already-open stream survived via an ESTABLISHED accept),
+// then lets the rollback window elapse WITHOUT confirming and proves the
+// pre-apply state was actually restored.
+func TestE2ELabFirewallRollback(t *testing.T) {
+	ctx := context.Background()
+	client := newSSHClient(t)
+
+	const window = 30
+	ruleset := "*filter\n:INPUT DROP [0:0]\n:FORWARD ACCEPT [0:0]\n:OUTPUT ACCEPT [0:0]\nCOMMIT\n"
+	cmd := fmt.Sprintf("sudo %s firewall-apply %d 22 \"\" <<'PROTEAN_FW_TEST_EOF'\n%s\nPROTEAN_FW_TEST_EOF",
+		vpn.InstallerPath, window, ruleset)
+	out, err := client.Run(ctx, cmd)
+	if err != nil {
+		t.Fatalf("firewall-apply: %v (out=%q)", err, out)
+	}
+	if !strings.Contains(out, `"applied":true`) {
+		t.Fatalf("firewall-apply did not report applied:true: %s", out)
+	}
+
+	dialFresh := func(t *testing.T) *sshexec.Client {
+		t.Helper()
+		c, err := sshexec.New(sshexec.Config{
+			Host: sshHost, Port: sshPort, User: serviceUser, KeyPEM: testKeyPEM,
+			Timeout: 10 * time.Second, CmdTimeout: 10 * time.Second,
+		})
+		if err != nil {
+			t.Fatalf("dial fresh client: %v", err)
+		}
+		t.Cleanup(func() { c.Close() })
+		return c
+	}
+
+	if _, err := dialFresh(t).Run(ctx, "true"); err != nil {
+		t.Fatalf("guard-insert did not keep SSH alive on a brand-new connection: %v", err)
+	}
+
+	// Don't confirm -- wait out the window and prove the rollback
+	// actually restores the pre-apply state, not just that SSH survived.
+	time.Sleep((window + 5) * time.Second)
+
+	fresh := dialFresh(t)
+	statusOut, err := fresh.Run(ctx, "sudo "+vpn.InstallerPath+" firewall-status")
+	if err != nil {
+		t.Fatalf("firewall-status after the window elapsed: %v", err)
+	}
+	if strings.Contains(statusOut, `"pending":true`) {
+		t.Fatalf("still pending after the rollback window elapsed: %s", statusOut)
+	}
+	if strings.Contains(statusOut, `"confirmed_state_saved":true`) {
+		t.Fatalf("confirmed_state_saved should be false -- nothing was ever confirmed: %s", statusOut)
+	}
+
+	// SSH must still work AFTER the rollback too, on yet another fresh
+	// connection -- proving the restore itself didn't break anything.
+	if _, err := dialFresh(t).Run(ctx, "true"); err != nil {
+		t.Fatalf("SSH broken after the rollback restored the snapshot: %v", err)
+	}
+}
+
+// TestE2ELabFirewallConfirm covers the happy path the rollback test
+// doesn't: apply -> confirm -> persisted. A repeat confirm call must be a
+// harmless no-op, never re-running the confirm logic (see
+// cmd_firewall_confirm's already_confirmed short-circuit).
+func TestE2ELabFirewallConfirm(t *testing.T) {
+	ctx := context.Background()
+	client := newSSHClient(t)
+
+	ruleset := "*filter\n:INPUT ACCEPT [0:0]\n:FORWARD ACCEPT [0:0]\n:OUTPUT ACCEPT [0:0]\nCOMMIT\n"
+	cmd := fmt.Sprintf("sudo %s firewall-apply 60 22 \"\" <<'PROTEAN_FW_TEST_EOF'\n%s\nPROTEAN_FW_TEST_EOF",
+		vpn.InstallerPath, ruleset)
+	if out, err := client.Run(ctx, cmd); err != nil || !strings.Contains(out, `"applied":true`) {
+		t.Fatalf("firewall-apply: %v (out=%q)", err, out)
+	}
+
+	confirmOut, err := client.Run(ctx, "sudo "+vpn.InstallerPath+" firewall-confirm")
+	if err != nil || !strings.Contains(confirmOut, `"confirmed":true`) {
+		t.Fatalf("firewall-confirm: %v (out=%q)", err, confirmOut)
+	}
+
+	statusOut, err := client.Run(ctx, "sudo "+vpn.InstallerPath+" firewall-status")
+	if err != nil {
+		t.Fatalf("firewall-status: %v", err)
+	}
+	if !strings.Contains(statusOut, `"confirmed_state_saved":true`) {
+		t.Fatalf("confirmed_state_saved should be true after confirm: %s", statusOut)
+	}
+
+	confirmAgain, err := client.Run(ctx, "sudo "+vpn.InstallerPath+" firewall-confirm")
+	if err != nil || !strings.Contains(confirmAgain, `"confirmed":true`) {
+		t.Fatalf("second firewall-confirm should be an idempotent no-op: %v (out=%q)", err, confirmAgain)
+	}
+}
+
 // TestE2ELabConsole proves the interactive-shell primitive the web SSH
 // console (internal/console) is built on -- sshexec.Client.StartShell --
 // against a real sshd and a real PTY. Everything else about that feature

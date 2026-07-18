@@ -212,7 +212,21 @@ func (m *Manager) ConsoleClient(ctx context.Context, serverID string) (client *s
 	if pooled != nil {
 		return pooled, func() {}, nil
 	}
+	return m.dialEphemeral(ctx, serverID)
+}
 
+// FreshClient ALWAYS dials a brand-new SSH connection, never reusing the
+// pool -- used specifically to verify reachability right after a firewall
+// change. Reusing an already-open pooled connection there would prove
+// nothing: an existing TCP stream can keep working purely via an
+// ESTABLISHED/RELATED accept even when the new rules would refuse any NEW
+// connection attempt, which is exactly the failure mode this check exists
+// to catch.
+func (m *Manager) FreshClient(ctx context.Context, serverID string) (client *sshexec.Client, closeFn func(), err error) {
+	return m.dialEphemeral(ctx, serverID)
+}
+
+func (m *Manager) dialEphemeral(ctx context.Context, serverID string) (*sshexec.Client, func(), error) {
 	srv, err := m.store.GetServer(ctx, serverID)
 	if err != nil {
 		return nil, nil, err

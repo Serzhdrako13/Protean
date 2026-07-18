@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
 	"strings"
 	"sync"
 	"syscall"
@@ -30,6 +31,21 @@ import (
 	"protean/internal/vpnsetup"
 	"protean/internal/webtls"
 )
+
+// panelPorts returns the panel's own reachable ports for the firewall
+// feature's baseline (see internal/firewall.ComputeBaseline): its own web
+// listener, plus 80/443 unconditionally -- ACME's http-01/tls-alpn-01
+// challenges may need either, and over-protecting is the safe failure
+// mode for a "never lock this out" allow-list.
+func panelPorts(listenAddr string) []int {
+	ports := []int{80, 443}
+	if _, portStr, err := net.SplitHostPort(listenAddr); err == nil {
+		if p, err := strconv.Atoi(portStr); err == nil && p > 0 {
+			ports = append(ports, p)
+		}
+	}
+	return ports
+}
 
 // seedDefaultServer creates a "default" server row from the legacy SSH_* env
 // on first run (no servers yet), so an existing single-server deployment keeps
@@ -197,6 +213,7 @@ func main() {
 		MaxTotal:    cfg.ConsoleMaxTotal,
 	}))
 	srv.SetConsoleAllowedOrigins(cfg.ConsoleAllowedOrigins)
+	srv.SetPanelPorts(panelPorts(cfg.ListenAddr))
 	srv.StartExpiryWorker(ctx, 5*time.Minute)
 	srv.ReconcileState(ctx)        // log DB-vs-host divergences at startup
 	srv.ReapplyMeshForwarding(ctx) // cert-provider FORWARD rules don't survive reboot

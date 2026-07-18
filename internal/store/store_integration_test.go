@@ -1178,3 +1178,89 @@ func TestNodesAndNodePeers(t *testing.T) {
 		t.Fatalf("GetNode after delete: err=%v, want ErrNotFound", err)
 	}
 }
+
+func TestFirewallPolicyAndRules(t *testing.T) {
+	s := testDB(t)
+	ctx := context.Background()
+
+	if err := s.CreateServer(ctx, Server{ID: "fw-srv", Label: "fw", Host: "10.0.0.1", Port: 22, SSHUser: "protean",
+		EncKeyPEM: []byte("sealed"), HostKey: "ssh-ed25519 AAAA"}); err != nil {
+		t.Fatalf("CreateServer: %v", err)
+	}
+
+	// No row yet -- sensible defaults, not an error.
+	p, err := s.GetFirewallPolicy(ctx, "fw-srv")
+	if err != nil {
+		t.Fatalf("GetFirewallPolicy (no row): %v", err)
+	}
+	if p.Enabled || p.DefaultIncoming != "drop" || p.RollbackWindowSecs != 300 {
+		t.Fatalf("default policy = %+v, want disabled/drop/300", p)
+	}
+
+	p.Enabled = true
+	p.DefaultIncoming = "drop"
+	p.RollbackWindowSecs = 120
+	if err := s.UpsertFirewallPolicy(ctx, p); err != nil {
+		t.Fatalf("UpsertFirewallPolicy: %v", err)
+	}
+	got, err := s.GetFirewallPolicy(ctx, "fw-srv")
+	if err != nil || !got.Enabled || got.RollbackWindowSecs != 120 {
+		t.Fatalf("GetFirewallPolicy after upsert = %+v, err=%v", got, err)
+	}
+
+	now := time.Now().UTC().Truncate(time.Second)
+	if err := s.SetLastApplied(ctx, "fw-srv", "*filter\n:INPUT DROP\nCOMMIT\n", now); err != nil {
+		t.Fatalf("SetLastApplied: %v", err)
+	}
+	got, _ = s.GetFirewallPolicy(ctx, "fw-srv")
+	if got.LastAppliedRuleset == "" || got.LastAppliedAt == nil || !got.LastAppliedAt.Equal(now) {
+		t.Fatalf("GetFirewallPolicy after SetLastApplied = %+v", got)
+	}
+	if got.LastConfirmedAt != nil {
+		t.Fatalf("LastConfirmedAt should still be nil before SetLastConfirmed, got %v", got.LastConfirmedAt)
+	}
+	if err := s.SetLastConfirmed(ctx, "fw-srv", now); err != nil {
+		t.Fatalf("SetLastConfirmed: %v", err)
+	}
+	got, _ = s.GetFirewallPolicy(ctx, "fw-srv")
+	if got.LastConfirmedAt == nil || !got.LastConfirmedAt.Equal(now) {
+		t.Fatalf("LastConfirmedAt after SetLastConfirmed = %v", got.LastConfirmedAt)
+	}
+	// last_applied_ruleset must survive a SetLastConfirmed call (it only
+	// touches last_confirmed_at), not get clobbered back to empty.
+	if got.LastAppliedRuleset == "" {
+		t.Error("last_applied_ruleset was wiped by SetLastConfirmed")
+	}
+
+	rules := []FirewallRule{
+		{ServerID: "fw-srv", Ordering: 1, Action: "accept", Proto: "tcp", PortSpec: "443", SourceCIDR: "", Comment: "https", Enabled: true},
+		{ServerID: "fw-srv", Ordering: 2, Action: "drop", Proto: "any", PortSpec: "", SourceCIDR: "203.0.113.0/24", Comment: "block", Enabled: false},
+	}
+	if err := s.ReplaceFirewallRules(ctx, "fw-srv", rules); err != nil {
+		t.Fatalf("ReplaceFirewallRules: %v", err)
+	}
+	list, err := s.ListFirewallRules(ctx, "fw-srv")
+	if err != nil || len(list) != 2 || list[0].PortSpec != "443" || list[1].SourceCIDR != "203.0.113.0/24" {
+		t.Fatalf("ListFirewallRules = %+v, err=%v", list, err)
+	}
+
+	// Replacing again with a smaller set must not leave stale rows behind.
+	if err := s.ReplaceFirewallRules(ctx, "fw-srv", rules[:1]); err != nil {
+		t.Fatalf("ReplaceFirewallRules (shrink): %v", err)
+	}
+	list, err = s.ListFirewallRules(ctx, "fw-srv")
+	if err != nil || len(list) != 1 {
+		t.Fatalf("ListFirewallRules after shrink = %+v, err=%v", list, err)
+	}
+
+	// Deleting the server must cascade both tables (ON DELETE CASCADE).
+	if err := s.DeleteServer(ctx, "fw-srv"); err != nil {
+		t.Fatalf("DeleteServer: %v", err)
+	}
+	if list, _ := s.ListFirewallRules(ctx, "fw-srv"); len(list) != 0 {
+		t.Errorf("firewall_rules not cascaded on server delete: %+v", list)
+	}
+	if p, err := s.GetFirewallPolicy(ctx, "fw-srv"); err != nil || p.Enabled {
+		t.Errorf("firewall_policy not cascaded on server delete: %+v, err=%v", p, err)
+	}
+}

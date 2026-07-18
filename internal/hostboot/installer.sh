@@ -15,6 +15,14 @@
 #   ensure-ip-forward      -> turn on net.ipv4.ip_forward if it isn't already (idempotent)
 #   updates-check          -> print pending OS package updates as JSON (read-only)
 #   updates-apply          -> apply pending OS package updates (streamed to stdout)
+#   firewall-baseline      -> print host listening-port/backend scan as JSON (read-only)
+#   firewall-validate      -> dry-run validate a ruleset (read from stdin), no host changes
+#   firewall-apply <window_secs> <ssh_port> <critical_ports_csv>
+#                          -> apply an INPUT ruleset (read from stdin) with an armed rollback
+#   firewall-confirm       -> persist the pending ruleset, cancel the rollback timer
+#   firewall-rollback      -> restore the pre-apply snapshot (no-op if already confirmed)
+#   firewall-status        -> print pending/confirmed firewall state as JSON (read-only)
+#   firewall-boot-restore  -> restore the last-confirmed ruleset (systemd unit ExecStart)
 #
 # Keep this script dependency-free (POSIX-ish bash) and side-effect-free
 # except for the explicit install actions.
@@ -664,6 +672,297 @@ cmd_updates_apply() {
 	esac
 }
 
+# ------------------------------------------------------------- firewall
+#
+# INPUT-chain management with a real safety net: firewall-apply arms a
+# host-side rollback timer BEFORE swapping in the new ruleset, so a
+# ruleset that severs the very SSH session applying it still gets
+# reverted -- the timer is a transient systemd unit (systemd is already a
+# hard requirement everywhere this script runs, see HAS_SYSTEMD above),
+# fully detached from this SSH session's process group by construction
+# (PID 1 owns it), unlike a backgrounded/disowned shell job. Only
+# firewall-confirm (called by the panel over a FRESH, non-pooled SSH
+# connection -- proving new connections actually still work, not just
+# that the one already-open stream survived via an ESTABLISHED accept)
+# ever persists a change past that window. Comment namespace "protean-fw",
+# disjoint from cmd_forward's "protean-mesh" and wg-quick's own
+# PostUp/PostDown-embedded rules, so none of them collide.
+FW_RUN_DIR="/run/protean-fw"
+FW_ETC_DIR="/etc/protean-fw"
+FW_ROLLBACK_UNIT="protean-fw-rollback"
+
+# fw_conflicting_manager: true if ufw or firewalld is actively running.
+# This feature refuses to fight them rather than trying to co-exist --
+# iptables-save/restore wouldn't see rules those tools manage their own
+# way, and two managers touching the same iptables state is a real path
+# to an inconsistent ruleset. Same stance setup-host.sh's firewall_hints
+# already takes (print hints, never seize raw control).
+fw_conflicting_manager() {
+	command -v systemctl >/dev/null 2>&1 || return 1
+	systemctl is-active --quiet ufw 2>/dev/null && return 0
+	systemctl is-active --quiet firewalld 2>/dev/null && return 0
+	return 1
+}
+
+# fw_pending: true if a previous apply's rollback window is still open
+# (unconfirmed, timer not yet fired). Shared by firewall-apply (refuses a
+# second apply on top of an unconfirmed one -- superseding it would make
+# "roll back" revert to an also-unconfirmed intermediate state instead of
+# the last known-good one, which is worse than just asking the admin to
+# confirm or roll back the pending change first) and firewall-status.
+fw_pending() {
+	[ -f "$FW_RUN_DIR/pending.rules" ] || return 1
+	[ -f "$FW_RUN_DIR/committed" ] && return 1
+	[ "$(systemctl show "${FW_ROLLBACK_UNIT}.timer" -p LoadState --value 2>/dev/null)" = "loaded" ]
+}
+
+# ensure_fw_boot_unit: (re)writes the boot-restore oneshot unit -- created
+# lazily by firewall-confirm the first time a server actually confirms a
+# change, rather than during initial host bootstrap, since this feature is
+# opt-in per server. "$0" is this script's own invocation path -- always
+# the fixed InstallerPath the panel sudo-invokes, never something to
+# hardcode a second time here.
+ensure_fw_boot_unit() {
+	cat > /etc/systemd/system/protean-firewall.service <<EOF
+[Unit]
+Description=Protean firewall boot restore
+DefaultDependencies=no
+After=local-fs.target
+Before=network-pre.target
+Wants=network-pre.target
+
+[Service]
+Type=oneshot
+ExecStart=$0 firewall-boot-restore
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target
+EOF
+	systemctl daemon-reload
+}
+
+# cmd_firewall_baseline: read-only host scan for the panel's baseline
+# computation -- what's actually listening, whether iptables is present,
+# whether a conflicting manager is active. JSON on stdout, always exit 0
+# (status lives in the payload -- sshexec.Client.Run discards stdout on a
+# non-zero exit, so a real error here would otherwise vanish).
+cmd_firewall_baseline() {
+	local conflict=0 has_iptables=0
+	fw_conflicting_manager && conflict=1
+	command -v iptables >/dev/null 2>&1 && has_iptables=1
+	local tcp udp
+	tcp="$(ss -H -tln 2>/dev/null | awk '{print $4}' | sed -E 's/.*://' | sort -un | tr '\n' ',' | sed 's/,$//')"
+	udp="$(ss -H -uln 2>/dev/null | awk '{print $4}' | sed -E 's/.*://' | sort -un | tr '\n' ',' | sed 's/,$//')"
+	printf '{"has_iptables":%s,"conflicting_manager":%s,"listening_tcp":%s,"listening_udp":%s}\n' \
+		"$(json_bool "$has_iptables")" "$(json_bool "$conflict")" "$(json_str "$tcp")" "$(json_str "$udp")"
+}
+
+# cmd_firewall_validate: dry-run only -- validates a ruleset (read from
+# stdin, same heredoc technique as firewall-apply) via
+# `iptables-restore --test`, touching nothing else on the host at all (no
+# snapshot, no armed timer, no swap). Always exits 0; result is in the
+# JSON payload.
+cmd_firewall_validate() {
+	if fw_conflicting_manager; then
+		echo '{"valid":false,"error":"a conflicting firewall manager (ufw/firewalld) is active"}'
+		return 0
+	fi
+	if ! command -v iptables-restore >/dev/null 2>&1; then
+		echo '{"valid":false,"error":"iptables-restore not found"}'
+		return 0
+	fi
+	local tmp test_err
+	tmp="$(mktemp)"
+	cat > "$tmp"
+	if test_err="$(iptables-restore --test < "$tmp" 2>&1)"; then
+		rm -f "$tmp"
+		echo '{"valid":true}'
+	else
+		rm -f "$tmp"
+		echo "{\"valid\":false,\"error\":$(json_str "$test_err")}"
+	fi
+}
+
+# cmd_firewall_apply <window_secs> <ssh_port> <critical_ports_csv>: reads
+# the desired ruleset from stdin (a heredoc on the invoking command line,
+# same technique WriteFile already uses elsewhere -- never a shell-
+# interpreted argv value). critical_ports_csv is "proto:port,proto:port,...".
+cmd_firewall_apply() {
+	local window="$1" ssh_port="$2" critical_csv="$3"
+	if [ "$window" -lt 30 ] || [ "$window" -gt 3600 ]; then
+		echo '{"error":"window out of range (30-3600)"}'
+		return 1
+	fi
+	if fw_conflicting_manager; then
+		echo '{"error":"a conflicting firewall manager (ufw/firewalld) is active; refusing"}'
+		return 1
+	fi
+	if fw_pending; then
+		echo '{"error":"a previous firewall change is still pending confirmation; confirm or roll it back first"}'
+		return 1
+	fi
+	command -v iptables >/dev/null 2>&1 || { echo '{"error":"iptables not found"}'; return 1; }
+
+	mkdir -p "$FW_RUN_DIR" "$FW_ETC_DIR"
+	iptables-save > "$FW_RUN_DIR/snapshot.rules"
+	cat > "$FW_RUN_DIR/pending.rules"
+	rm -f "$FW_RUN_DIR/committed"
+
+	local test_err
+	if ! test_err="$(iptables-restore --test < "$FW_RUN_DIR/pending.rules" 2>&1)"; then
+		echo "{\"error\":\"ruleset failed validation: $(json_str "$test_err")\"}"
+		return 1
+	fi
+
+	# Arm the rollback BEFORE the swap: if the swap itself severs this
+	# session, the timer is already ticking and will restore. Record the
+	# arm time/window ourselves in plain files for firewall-status's
+	# countdown -- confirmed live that systemd (252) pretty-prints
+	# NextElapseUSecMonotonic as a human string ("2w 3d 9h ...") rather
+	# than a raw number for an --on-active timer, and NextElapseUSecRealtime
+	# stays empty for a monotonic timer entirely, so neither is a reliable
+	# machine-parseable source of "seconds remaining" -- our own arithmetic
+	# against a plain timestamp file sidesteps that entirely.
+	date +%s > "$FW_RUN_DIR/armed_at"
+	echo "$window" > "$FW_RUN_DIR/window_secs"
+	if ! systemd-run --collect --unit="$FW_ROLLBACK_UNIT" --on-active="${window}s" \
+			"$0" firewall-rollback >/dev/null 2>&1; then
+		echo '{"error":"failed to arm rollback timer; aborting apply"}'
+		return 1
+	fi
+
+	iptables-restore < "$FW_RUN_DIR/pending.rules"
+
+	# Guard-insert at INPUT position 1 regardless of what the supplied
+	# ruleset says -- a rendering bug on the panel side can never produce
+	# an actual lockout. Inserted in this order so lo/established end up
+	# evaluated first (each -I 1 pushes the previous guard down one slot).
+	if [ -n "$critical_csv" ]; then
+		local old_ifs="$IFS" entry proto port
+		IFS=','
+		for entry in $critical_csv; do
+			proto="${entry%%:*}"
+			port="${entry#*:}"
+			iptables -I INPUT 1 -p "$proto" --dport "$port" -j ACCEPT -m comment --comment protean-fw-guard
+		done
+		IFS="$old_ifs"
+	fi
+	iptables -I INPUT 1 -p tcp --dport "$ssh_port" -j ACCEPT -m comment --comment protean-fw-guard
+	iptables -I INPUT 1 -m state --state ESTABLISHED,RELATED -j ACCEPT -m comment --comment protean-fw-guard
+	iptables -I INPUT 1 -i lo -j ACCEPT -m comment --comment protean-fw-guard
+
+	printf '{"applied":true,"rollback_window_secs":%d}\n' "$window"
+}
+
+# cmd_firewall_confirm: persists the pending change past the rollback
+# window. Race-safe against a timer that already fired: if it's gone and
+# nothing was committed yet, refuse rather than resurrect a ruleset that
+# was already reverted.
+cmd_firewall_confirm() {
+	if [ -f "$FW_RUN_DIR/committed" ]; then
+		echo '{"confirmed":true,"already_confirmed":true}'
+		return 0
+	fi
+	if [ ! -f "$FW_RUN_DIR/pending.rules" ]; then
+		echo '{"error":"no pending firewall change to confirm"}'
+		return 1
+	fi
+	local load_state
+	load_state="$(systemctl show "${FW_ROLLBACK_UNIT}.timer" -p LoadState --value 2>/dev/null)"
+	if [ "$load_state" != "loaded" ]; then
+		echo '{"error":"confirmation window already expired; ruleset was rolled back"}'
+		return 1
+	fi
+	touch "$FW_RUN_DIR/committed"
+	systemctl stop "${FW_ROLLBACK_UNIT}.timer" "${FW_ROLLBACK_UNIT}.service" >/dev/null 2>&1 || true
+	systemctl reset-failed "${FW_ROLLBACK_UNIT}.service" >/dev/null 2>&1 || true
+	# Snapshot the LIVE rules (includes the guard inserts), not the
+	# pending.rules the panel sent -- current.rules must reflect exactly
+	# what's actually active.
+	iptables-save > "$FW_ETC_DIR/current.rules"
+	ensure_fw_boot_unit
+	systemctl enable protean-firewall.service >/dev/null 2>&1
+	echo '{"confirmed":true}'
+}
+
+# cmd_firewall_rollback: restores the pre-apply snapshot, unless
+# firewall-confirm already won the race (committed marker present).
+# Invoked either by the armed timer or directly as a panic button.
+cmd_firewall_rollback() {
+	if [ -f "$FW_RUN_DIR/committed" ]; then
+		echo '{"rolled_back":false,"reason":"already confirmed"}'
+		return 0
+	fi
+	if [ ! -f "$FW_RUN_DIR/snapshot.rules" ]; then
+		echo '{"error":"no snapshot to roll back to"}'
+		return 1
+	fi
+	iptables-restore < "$FW_RUN_DIR/snapshot.rules"
+	# Remove pending.rules so fw_pending()/firewall-confirm correctly see
+	# "nothing pending" afterward -- whether this ran via the armed timer
+	# firing or as a direct panic-button call that bypasses the timer
+	# entirely (confirmed live: without this, a confirm call made right
+	# after a panic-button rollback could still succeed and persist the
+	# already-reverted ruleset). Deliberately does NOT call `systemctl
+	# stop` on the timer/service pair here: when this runs AS the timer-
+	# fired protean-fw-rollback.service itself, stopping its own unit from
+	# within is a genuine race (confirmed live -- the process can be
+	# killed before finishing this cleanup, non-deterministically) and is
+	# unnecessary anyway, since fw_pending() checks pending.rules'
+	# existence FIRST (short-circuiting before ever consulting the
+	# timer's LoadState), and a --collect unit garbage-collects itself
+	# once it exits regardless. The panic-button path leaves a still-
+	# armed, now-redundant timer that will fire once more later and
+	# harmlessly re-restore the same already-restored snapshot.
+	rm -f "$FW_RUN_DIR/pending.rules" "$FW_RUN_DIR/armed_at" "$FW_RUN_DIR/window_secs"
+	echo '{"rolled_back":true}'
+}
+
+# cmd_firewall_status: read-only. Whether a change is pending confirmation
+# and how many seconds remain (from the real systemd timer, not a client-
+# side clock), whether a confirmed ruleset has ever been saved, and the
+# live protean-fw-tagged rules currently active.
+cmd_firewall_status() {
+	local pending=0 remaining=0 confirmed=0
+	if fw_pending; then
+		pending=1
+		# Computed from our own armed_at/window_secs files, not a systemd
+		# timer property -- confirmed live (systemd 252) that --on-active
+		# timers leave NextElapseUSecRealtime empty (it's a monotonic
+		# timer, not realtime) and NextElapseUSecMonotonic gets pretty-
+		# printed as a human string ("2w 3d 9h ...") rather than a raw
+		# number, so neither is reliably machine-parseable across systemd
+		# versions.
+		if [ -f "$FW_RUN_DIR/armed_at" ] && [ -f "$FW_RUN_DIR/window_secs" ]; then
+			local armed_at window_secs now_epoch
+			armed_at="$(cat "$FW_RUN_DIR/armed_at")"
+			window_secs="$(cat "$FW_RUN_DIR/window_secs")"
+			now_epoch="$(date +%s)"
+			remaining=$(( armed_at + window_secs - now_epoch ))
+			[ "$remaining" -lt 0 ] && remaining=0
+		fi
+	fi
+	[ -f "$FW_ETC_DIR/current.rules" ] && confirmed=1
+	local live full
+	live="$(iptables-save 2>/dev/null | grep protean-fw || true)"
+	# The panel's SSH user only has passwordless sudo to this one script,
+	# not to arbitrary root commands like a bare "iptables-save" -- the
+	# dry-run diff needs the FULL current ruleset (not just the
+	# protean-fw-tagged subset) to show what a restore would actually
+	# change, so it rides along in this same read-only verb's payload.
+	full="$(iptables-save 2>/dev/null || true)"
+	printf '{"pending":%s,"remaining_secs":%d,"confirmed_state_saved":%s,"live_protean_rules":%s,"current_ruleset":%s}\n' \
+		"$(json_bool "$pending")" "$remaining" "$(json_bool "$confirmed")" "$(json_str "$live")" "$(json_str "$full")"
+}
+
+# cmd_firewall_boot_restore: ExecStart of protean-firewall.service.
+cmd_firewall_boot_restore() {
+	[ -f "$FW_ETC_DIR/current.rules" ] || return 0
+	command -v iptables-restore >/dev/null 2>&1 || return 0
+	iptables-restore < "$FW_ETC_DIR/current.rules"
+}
+
 # cmd_service <action> <unit>: control a VPN systemd unit to save resources on
 # hosts where a given VPN is not used. Whitelisted actions + unit pattern.
 cmd_service() {
@@ -722,6 +1021,9 @@ VALID_ACTION='^(start|stop|restart|enable|disable)$'
 VALID_CIDR='^[0-9]{1,3}(\.[0-9]{1,3}){3}/[0-9]{1,2}$'
 VALID_FWD='^(add|del)$'
 VALID_LINES='^[0-9]{1,4}$'
+VALID_FW_WINDOW='^[0-9]{2,4}$'
+VALID_PORT='^[0-9]{1,5}$'
+VALID_FW_PORTLIST='^(tcp|udp):[0-9]{1,5}(,(tcp|udp):[0-9]{1,5}){0,31}$'
 
 main() {
 	local verb="${1:-}"
@@ -766,8 +1068,36 @@ main() {
 		updates-apply)
 			cmd_updates_apply
 			;;
+		firewall-baseline)
+			cmd_firewall_baseline
+			;;
+		firewall-validate)
+			cmd_firewall_validate
+			;;
+		firewall-apply)
+			local w="${2:-}" sp="${3:-}" cp="${4:-}"
+			[[ "$w" =~ $VALID_FW_WINDOW ]] || { echo "invalid window" >&2; exit 2; }
+			[[ "$sp" =~ $VALID_PORT ]] || { echo "invalid ssh port" >&2; exit 2; }
+			if [ -n "$cp" ] && [[ ! "$cp" =~ $VALID_FW_PORTLIST ]]; then
+				echo "invalid critical ports" >&2
+				exit 2
+			fi
+			cmd_firewall_apply "$w" "$sp" "$cp"
+			;;
+		firewall-confirm)
+			cmd_firewall_confirm
+			;;
+		firewall-rollback)
+			cmd_firewall_rollback
+			;;
+		firewall-status)
+			cmd_firewall_status
+			;;
+		firewall-boot-restore)
+			cmd_firewall_boot_restore
+			;;
 		*)
-			echo "usage: $0 {detect|install <provider>|status <unit>|service <action> <unit>|forward <add|del> <cidr>|logs <unit> <lines>|ensure-ip-forward|updates-check|updates-apply}" >&2
+			echo "usage: $0 {detect|install <provider>|status <unit>|service <action> <unit>|forward <add|del> <cidr>|logs <unit> <lines>|ensure-ip-forward|updates-check|updates-apply|firewall-baseline|firewall-validate|firewall-apply|firewall-confirm|firewall-rollback|firewall-status|firewall-boot-restore}" >&2
 			exit 2
 			;;
 	esac

@@ -4,6 +4,7 @@
   "hideDownProviders": "Hide offline",
   "actions": {
     "openConsole": "Console",
+    "openFirewall": "Firewall",
     "addInstance": "Add instance",
     "installVpn": "Install VPN",
     "checkInstall": "Check and continue",

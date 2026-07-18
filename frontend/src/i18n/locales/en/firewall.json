@@ -1,0 +1,59 @@
+{
+  "title": "Firewall",
+  "confirmed": "Confirmed",
+  "rolledBack": "Rolled back",
+  "policy": {
+    "title": "Policy",
+    "enabled": "Enabled",
+    "defaultIncoming": "Default incoming",
+    "drop": "Drop",
+    "accept": "Accept",
+    "rollbackWindow": "Rollback window",
+    "seconds": "sec"
+  },
+  "baseline": {
+    "title": "Always allowed (protected)",
+    "description": "Computed fresh every time — SSH, every VPN instance's listening port, and the panel's own ports if this is the panel host. These can never be blocked, regardless of your rules below."
+  },
+  "table": {
+    "proto": "Proto",
+    "port": "Port",
+    "label": "What"
+  },
+  "rules": {
+    "title": "Custom rules",
+    "add": "Add rule",
+    "accept": "Accept",
+    "drop": "Drop",
+    "reject": "Reject",
+    "any": "Any",
+    "portSpecPlaceholder": "Port (443, 8000:8100, 80,443)",
+    "sourceCidrPlaceholder": "Source CIDR (empty = anywhere)",
+    "commentPlaceholder": "Comment"
+  },
+  "actions": {
+    "dryRun": "Preview (dry-run)",
+    "apply": "Apply",
+    "confirm": "Confirm",
+    "rollbackNow": "Roll back now",
+    "rollbackConfirmTitle": "Roll back immediately? This restores the pre-apply ruleset right away."
+  },
+  "dryRun": {
+    "title": "Dry-run preview",
+    "valid": "Valid",
+    "invalid": "Invalid",
+    "added": "Added",
+    "removed": "Removed",
+    "none": "(none)",
+    "note": "Nothing has changed on the server yet — this only previews and validates."
+  },
+  "applyConfirm": {
+    "title": "Apply firewall rules?",
+    "description": "This takes effect immediately. If it breaks connectivity (including to the panel itself), it auto-reverts after {{secs}} seconds unless you confirm."
+  },
+  "countdown": {
+    "title": "New rules active — reverts automatically in {{secs}}s unless confirmed",
+    "panelReachableOk": "Panel reconnected: OK",
+    "panelReachableFailed": "Panel LOST SSH access — will auto-revert"
+  }
+}

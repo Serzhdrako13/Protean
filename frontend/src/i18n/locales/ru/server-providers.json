@@ -4,6 +4,7 @@
   "hideDownProviders": "Скрыть отключённые",
   "actions": {
     "openConsole": "Консоль",
+    "openFirewall": "Файрвол",
     "addInstance": "Добавить провайдер",
     "installVpn": "Установить VPN",
     "checkInstall": "Проверить и продолжить",

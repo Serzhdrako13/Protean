@@ -106,3 +106,25 @@ through a UI or using real infra Claude doesn't have credentials for.
   update on a Debian/RHEL-family host specifically (the two families with
   real reboot-required detection; Arch/openSUSE are documented as
   always-false, not a bug to chase).
+- [ ] **Firewall, real browser end-to-end** — the safety-critical shell
+  mechanism itself (armed rollback before swap, host-side guard-insert,
+  race-safe confirm/rollback, boot-restore) was verified live per family
+  (apt/dnf/pacman/zypper, three real bugs found and fixed — see this
+  session's notes: timer-property parsing, missing re-apply-while-pending
+  refusal, a rollback→confirm race) and the core lockout/recovery
+  scenario is covered by a live e2elab test over a REAL SSH connection
+  (`TestE2ELabFirewallRollback`/`TestE2ELabFirewallConfirm`) — but nobody
+  drove the actual `/servers/{id}/firewall` page from a real browser.
+  Check: the baseline table shows the right locked ports for a server
+  with real VPN instances configured (including Xray's port, which needs
+  a live `Current()` call, and a panel-host-flagged server showing its
+  own web port too), the dry-run diff modal renders something sensible,
+  clicking Apply on a server reachable from the browser shows the
+  countdown banner and "panel reconnected: OK", clicking Confirm clears
+  it, and — the one thing that's dangerous to test against a real
+  production host but should be tried at least once against a disposable
+  droplet/VM outside the e2elab harness — applying a rule that's actually
+  wrong and confirming the countdown really does auto-revert and the
+  panel really does recover on its own. Also worth checking: a host
+  already running ufw/firewalld correctly refuses ("a conflicting
+  firewall manager is active") rather than fighting it.
