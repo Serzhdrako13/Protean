@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math/big"
 	"net"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -202,11 +203,15 @@ func (p *Provider) Status(ctx context.Context) (vpn.ServerStatus, error) {
 }
 
 func (p *Provider) serviceActive(ctx context.Context) (bool, error) {
-	out, err := p.opts.SSH.Run(ctx, "systemctl is-active "+shellQuote(p.opts.ServiceName))
-	if err != nil {
-		// is-active exits non-zero when inactive; that's not a real error.
-		return strings.TrimSpace(out) == "active", nil
-	}
+	// "show -p ActiveState --value", not "is-active": ServiceName can
+	// itself be a manually-created alias (e.g. openSUSE's openvpn package
+	// ships openvpn@.service, not openvpn-server@.service -- see
+	// ensure_openvpn_alias in protean-installer.sh), and is-active on an
+	// aliased unit name has been confirmed live to misreport "inactive" on
+	// systemd 232 (Astra Linux CE 2.12) after any daemon-reload, even while
+	// the real unit is genuinely running. show's ActiveState always
+	// resolves correctly and always exits 0, so no error path to handle.
+	out, _ := p.opts.SSH.Run(ctx, "systemctl show "+shellQuote(p.opts.ServiceName)+" -p ActiveState --value")
 	return strings.TrimSpace(out) == "active", nil
 }
 
@@ -503,6 +508,50 @@ func (p *Provider) UpdateServerConfig(ctx context.Context, cfg vpn.ServerConfig)
 // cert/key, tls-crypt key and config file are written to the host, the ccd
 // directory is created, and the service is enabled and (re)started. Idempotent
 // -- existing CA/tls-crypt are reused.
+// detectsLegacyOpenVPN reports whether the installed openvpn binary
+// predates 2.5, when "data-ciphers"/"data-ciphers-fallback" were
+// introduced -- confirmed live that OpenVPN 2.4.x rejects those directives
+// outright ("Unrecognized option ... data-ciphers") and refuses to start
+// at all. Not distro-specific: any still-deployed 2.4.x host would hit
+// this (confirmed live on Astra Linux CE 2.12, whose own repo only
+// carries 2.4.7, but the same version could show up on an old
+// Debian/Ubuntu LTS too). Defaults to false (modern syntax) if detection
+// fails for any reason -- correct for every distro this panel actually
+// targets; only a genuinely old install needs the fallback.
+func detectsLegacyOpenVPN(ctx context.Context, ssh SSH) bool {
+	// Absolute path, not "openvpn" bare: a plain (non-sudo) SSH exec
+	// session's PATH doesn't include /usr/sbin (confirmed live:
+	// "/usr/local/bin:/usr/bin:/bin:/usr/games"), where the binary
+	// actually lives on every distro this panel targets -- same class of
+	// PATH gap as the earlier ip_forward/sysctl fix elsewhere in this
+	// codebase. "; true" forces the shell's own exit code to 0: OpenVPN's
+	// own "--version" genuinely exits 1 even on success (confirmed live,
+	// 2.4.7), and sshexec.Client.Run discards stdout entirely whenever the
+	// remote command's exit code is non-zero -- without this the version
+	// banner is unrecoverable, not just harder to parse.
+	out, err := ssh.Run(ctx, "/usr/sbin/openvpn --version; true")
+	if err != nil {
+		return false
+	}
+	fields := strings.Fields(out)
+	for i, f := range fields {
+		if f != "OpenVPN" || i+1 >= len(fields) {
+			continue
+		}
+		parts := strings.SplitN(fields[i+1], ".", 3)
+		if len(parts) < 2 {
+			return false
+		}
+		major, errMajor := strconv.Atoi(parts[0])
+		minor, errMinor := strconv.Atoi(parts[1])
+		if errMajor != nil || errMinor != nil {
+			return false
+		}
+		return major < 2 || (major == 2 && minor < 5)
+	}
+	return false
+}
+
 func (p *Provider) EnsureServer(ctx context.Context, pushRoutes []string, redirectGateway bool) error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
@@ -564,6 +613,7 @@ func (p *Provider) EnsureServer(ctx context.Context, pushRoutes []string, redire
 		ClientConfigDir: p.opts.CCDDir, StatusPath: p.opts.StatusPath,
 		CRLPath:    p.crlPath(),
 		PushRoutes: pushRoutes, RedirectGateway: redirectGateway,
+		LegacyCipher: detectsLegacyOpenVPN(ctx, p.opts.SSH),
 	}
 	if err := p.opts.SSH.WriteFile(ctx, p.opts.ConfPath, conf.Render()); err != nil {
 		return fmt.Errorf("write server conf: %w", err)

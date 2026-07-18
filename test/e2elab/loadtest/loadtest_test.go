@@ -438,12 +438,16 @@ func newSSHClient(t *testing.T) *sshexec.Client {
 	return c
 }
 
+// Uses "show -p ActiveState --value", not "is-active": see the identical
+// helper in test/e2elab/lab_test.go for why (aliased unit names like
+// "ipsec" can misreport via is-active on old systemd after a
+// daemon-reload; show always resolves correctly).
 func assertActive(t *testing.T, ctx context.Context, client *sshexec.Client, unit string) {
 	t.Helper()
 	var out string
 	var err error
 	for attempt := 0; attempt < 5; attempt++ {
-		out, err = client.Run(ctx, "systemctl is-active "+unit)
+		out, err = client.Run(ctx, "systemctl show "+unit+" -p ActiveState --value")
 		if err == nil && strings.TrimSpace(out) == "active" {
 			return
 		}

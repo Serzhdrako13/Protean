@@ -175,9 +175,12 @@ jobs:
           - { family: pacman, image: "archlinux:latest", tag: arch }
           # apt-rpm hybrid, Timeweb only.
           - { family: altlinux, image: "alt:p10", tag: altlinux-p10 }
-          # Astra Linux 2.12 (Timeweb only) has no official Docker base
-          # image -- not covered by this automated harness yet, see
-          # test/e2elab/README.md.
+          # Astra Linux 2.12, Timeweb only. No official Docker base image --
+          # astra.Dockerfile builds its own rootfs via debootstrap, so
+          # BASE_IMAGE is unused by that template (still set, since the
+          # step below wires it through unconditionally); see
+          # test/e2elab/README.md for how.
+          - { family: astra, image: "unused", tag: astra-2.12 }
     continue-on-error: ${{ matrix.best_effort == true }}
     steps:
       - uses: actions/checkout@v4

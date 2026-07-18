@@ -119,10 +119,22 @@ json_bool() { if [ "$1" -eq 1 ] 2>/dev/null || [ "$1" = "true" ]; then printf 't
 provider_service_active() {
 	command -v systemctl >/dev/null 2>&1 || return 1
 	case "$1" in
-		openvpn) systemctl is-active --quiet "openvpn-server@server" ;;
-		ikev2)   systemctl is-active --quiet ipsec ;;
+		openvpn) unit_active "openvpn-server@server" ;;
+		ikev2)   unit_active ipsec ;;
 		*)       return 1 ;;
 	esac
+}
+
+# unit_active <unit>: true if active, quiet -- same exit-code convention as
+# `systemctl is-active --quiet`, but via `show -p ActiveState` instead.
+# Confirmed live that is-active on a manually-aliased unit name (ipsec ->
+# strongswan, openvpn-server@server -> openvpn@server on openSUSE, any
+# Alias= target) can misreport "inactive" on systemd 232 (Astra Linux CE
+# 2.12's bundled version) after any daemon-reload, even while the unit is
+# genuinely running -- show's own ActiveState always resolves correctly
+# regardless, on every systemd version tested.
+unit_active() {
+	[ "$(systemctl show "$1" -p ActiveState --value 2>/dev/null)" = "active" ]
 }
 
 provider_config_exists() {
@@ -500,7 +512,7 @@ cmd_install() {
 cmd_status() {
 	local unit="$1"
 	if ! command -v systemctl >/dev/null 2>&1; then echo "unknown"; return 0; fi
-	if systemctl is-active --quiet "$unit"; then echo "active"; else echo "inactive"; fi
+	if unit_active "$unit"; then echo "active"; else echo "inactive"; fi
 }
 
 # cmd_logs <unit> <lines>: last N lines of a unit's journal, so an admin can
@@ -566,8 +578,11 @@ cmd_service() {
 			# systemd refuses to `enable` it directly ("Refusing to
 			# operate on alias name or linked unit file") -- resolve
 			# to the real target and enable THAT instead. start/stop/
-			# restart/is-active against the alias name work fine as-is,
-			# only enable needs this.
+			# restart against the alias name work fine as-is, only
+			# enable needs this. (is-active against the alias name does
+			# NOT reliably work as-is on old systemd -- see unit_active,
+			# used by cmd_status/provider_service_active instead of
+			# is-active directly.)
 			local base="${unit%%@*}" instance="" tmpl real
 			case "$unit" in
 				*@*) instance="${unit#*@}" ;;

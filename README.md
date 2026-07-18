@@ -331,10 +331,9 @@ every version below run in CI (nightly + on demand):
 | zypper | openSUSE Leap 15.6, 16 |
 | pacman | Arch Linux |
 | apt-rpm hybrid | ALT Linux (Timeweb-only) |
+| debian (via debootstrap) | Astra Linux CE 2.12 (Timeweb-only) |
 
-Astra Linux (Timeweb-only) has no official Docker image and isn't
-covered yet — see `test/e2elab/README.md` for what that would take. Full
-methodology, per-distro findings, and the load-test harness are also in
+Full methodology, per-distro findings, and the load-test harness are in
 `test/e2elab/README.md`.
 
 **Sizing**: the OS doesn't affect how much CPU/RAM you need — only

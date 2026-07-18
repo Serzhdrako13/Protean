@@ -35,6 +35,14 @@ type ServerParams struct {
 	StatusPath      string
 	CRLPath         string // crl-verify path; clients on this CRL are refused
 	Cipher          string
+	// LegacyCipher: true emits the older single "cipher <name>" directive
+	// instead of "data-ciphers"/"data-ciphers-fallback" (introduced in
+	// OpenVPN 2.5) -- needed for any still-deployed OpenVPN 2.4.x host
+	// (confirmed live: Astra Linux CE 2.12's own repo only carries
+	// 2.4.7, which rejects "data-ciphers" outright as an unrecognized
+	// option and refuses to start at all). Set by the caller after
+	// detecting the installed server's actual version, not guessed here.
+	LegacyCipher bool
 }
 
 // Defaults fills unset fields with sensible values.
@@ -82,8 +90,12 @@ func (p ServerParams) Render() string {
 	if p.CRLPath != "" {
 		w("crl-verify %s", p.CRLPath)
 	}
-	w("data-ciphers %s", p.Cipher)
-	w("data-ciphers-fallback %s", p.Cipher)
+	if p.LegacyCipher {
+		w("cipher %s", p.Cipher)
+	} else {
+		w("data-ciphers %s", p.Cipher)
+		w("data-ciphers-fallback %s", p.Cipher)
+	}
 	if p.ClientConfigDir != "" {
 		w("client-config-dir %s", p.ClientConfigDir)
 	}

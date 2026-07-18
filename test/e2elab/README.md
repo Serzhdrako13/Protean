@@ -86,6 +86,7 @@ parallel list that could silently drift from it.
 | zypper | `dockerfiles/zypper.Dockerfile` | openSUSE Leap 15.6 |
 | pacman | `dockerfiles/pacman.Dockerfile` | Arch Linux |
 | apt-rpm hybrid | `dockerfiles/altlinux.Dockerfile` | ALT Linux |
+| debian (via `debootstrap`) | `dockerfiles/astra.Dockerfile` | Astra Linux CE 2.12 |
 
 The CI `e2e-lab` job (nightly + manual only) runs the same suite across
 every Hetzner/Timeweb catalog image researched for this pass — one
@@ -98,28 +99,34 @@ representative per family isn't the CI bar, every version is:
 | zypper | `opensuse/leap:15.6`, `opensuse/leap:16` |
 | pacman | `archlinux:latest` |
 | apt-rpm hybrid | `alt:p10` |
+| debian (via `debootstrap`) | Astra Linux CE 2.12 (custom rootfs, see below — no official Docker image) |
 
 \*18.04/20.04 are EOL upstream / deprecated by Hetzner — run best-effort
 (`continue-on-error` in CI) for existing-fleet coverage, not as a target
 for new deployments.
 
-**Astra Linux 2.12** (Timeweb-only) has no official Docker image, and
-isn't covered by this automated harness yet — reported here rather than
-silently dropped. Researched, not just assumed impossible: Astra Common Edition's own
-package repository is public, no registration needed
-(`https://dl.astralinux.ru/astra/frozen/2.12_x86-64/2.12.46/repository/`,
-a plain apt repo — Astra CE is Debian-based), and a community image
-(`nikolai2038/astralinux`, built via `debootstrap` against that same
-repo, stale ~2 years but a real reference) already proves the approach
-works. A `debootstrap`-based multi-stage Dockerfile (builder stage
-bootstraps a rootfs from that repo, final stage is `FROM scratch` +
-`COPY --from=builder`) is the concrete next step whenever this gets
-picked up — genuinely higher-risk/unknown than any family above, since
-none of it has been tried hands-on yet.
+**Astra Linux 2.12** (Timeweb-only) has no official Docker image —
+`dockerfiles/astra.Dockerfile` builds one via `debootstrap` straight from
+Astra Common Edition's own public package repository (no registration
+needed,
+`https://dl.astralinux.ru/astra/frozen/2.12_x86-64/2.12.46/repository/`, a
+plain apt repo — Astra CE is Debian-based), the same technique the
+community reference image `nikolai2038/astralinux` uses: a builder stage
+bootstraps a rootfs from that repo (aliasing the unrecognized `orel` suite
+name to `debootstrap`'s `bookworm` script, `--no-check-gpg` since the repo
+is signed by Astra's own key rather than Debian's), then a final
+`FROM scratch` + `COPY --from=builder` stage continues with normal package
+installs via the rootfs's own now-configured apt (plain `http://`, since a
+minbase debootstrap has no `apt-transport-https` method driver yet).
+`--no-check-gpg`/unauthenticated apt are acceptable only because this
+produces a throwaway CI/test-only image verifying install logic, not a
+production trust boundary. `detect_os` needed zero changes for Astra
+itself — `ID_LIKE=debian` auto-classifies it into the existing
+`OS_FAMILY="debian"` branch.
 
-All five families pass the full suite
+All six families pass the full suite
 (OpenVPN/IKEv2/Xray/IPForward/SSHFailureHandling). Getting there surfaced
-thirteen real, previously-undiscovered bugs — fixed in
+fifteen real, previously-undiscovered bugs — fixed in
 `scripts/protean-installer.sh` (kept byte-identical to
 `internal/hostboot/installer.sh`, which is what actually reaches a real
 host — see that file's header) unless noted otherwise:
@@ -246,6 +253,34 @@ host — see that file's header) unless noted otherwise:
     `internal/vpn/ikev2/provider.go`'s `writeConnAndLoad`, specifically
     for the "connecting to ... failed" class of error (a real
     config/credential error still fails immediately, no retry wasted).
+14. **Astra CE 2.12's OpenVPN (2.4.7) predates `data-ciphers`/
+    `data-ciphers-fallback`** (introduced in OpenVPN 2.5) — the panel
+    always emitted those directives unconditionally, so the server
+    refused to start at all ("Unrecognized option ... data-ciphers") on
+    any still-deployed 2.4.x host, not Astra-specific. Fixed with a
+    `LegacyCipher` field on `ServerParams`/`Render()`
+    (`internal/vpn/openvpn/serverconf.go`) and version detection
+    (`detectsLegacyOpenVPN` in `internal/vpn/openvpn/provider.go`) that
+    falls back to the older single `cipher <name>` directive for
+    anything below 2.5.
+15. **`systemctl is-active` misreports an aliased unit name on old
+    systemd.** Astra CE 2.12 bundles systemd 232: `is-active ipsec`
+    (the portable strongSwan alias) reports "inactive" (exit 3)
+    persistently after any `daemon-reload`, even while the real
+    `strongswan.service` is genuinely running and even `systemctl show
+    ipsec`/`systemctl status ipsec` resolve and display it correctly —
+    isolated to `is-active` specifically, not general alias resolution,
+    and not a timing race a retry clears. The same risk applies to any
+    aliased unit (`openvpn-server@server` on openSUSE, where it aliases
+    `openvpn@server`), so this isn't Astra-only in principle, just where
+    it was actually hit. Fixed by querying `systemctl show <unit> -p
+    ActiveState --value` instead everywhere a unit's status is checked
+    (`unit_active()` in `protean-installer.sh`'s `cmd_status`/
+    `provider_service_active`, `ikev2.Provider.Status`,
+    `openvpn.Provider.serviceActive`, and both e2e/load-test
+    `assertActive` helpers) — `show` always resolves correctly regardless
+    of systemd version and always exits 0, sidestepping
+    `sshexec.Client.Run`'s stdout-discard-on-nonzero-exit behavior too.
 
 Two additional container-environment-only fixes (test harness, not the
 product — wouldn't affect a real host):

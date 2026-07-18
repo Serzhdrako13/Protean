@@ -217,12 +217,22 @@ func newSSHClient(t *testing.T) *sshexec.Client {
 // convergence either, so this is a legitimate robustness fix, not masking
 // a product bug -- rebuild()/EnsureServer already issue the
 // enable+restart for real; this only tolerates the read-back racing it.
+//
+// Uses `systemctl show -p ActiveState --value`, not `is-active`: confirmed
+// live that `is-active` on an aliased unit name (ipsec -> strongswan,
+// openvpn -> openvpn-server@server, any Alias= target) can misreport
+// "inactive" (exit 3) on systemd 232 (Astra Linux CE 2.12's bundled
+// version) persistently after any `daemon-reload` -- not a timing race
+// this retry loop would ever clear, since `show`'s own ActiveState always
+// resolves correctly on the exact same unit at the exact same moment.
+// `show` also always exits 0 (even for an unknown unit), sidestepping
+// sshexec.Client.Run's stdout-discard-on-nonzero-exit behavior entirely.
 func assertActive(t *testing.T, ctx context.Context, client *sshexec.Client, unit string) {
 	t.Helper()
 	var out string
 	var err error
 	for attempt := 0; attempt < 5; attempt++ {
-		out, err = client.Run(ctx, "systemctl is-active "+unit)
+		out, err = client.Run(ctx, "systemctl show "+unit+" -p ActiveState --value")
 		if err == nil && strings.TrimSpace(out) == "active" {
 			return
 		}

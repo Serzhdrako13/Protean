@@ -320,11 +320,10 @@ docker compose -f docker-compose.standalone.yml --env-file .env.standalone up -d
 | zypper | openSUSE Leap 15.6, 16 |
 | pacman | Arch Linux |
 | гибрид apt поверх rpm | ALT Linux (только у Timeweb) |
+| debian (через debootstrap) | Astra Linux CE 2.12 (только у Timeweb) |
 
-Astra Linux (только у Timeweb) пока не покрыт — нет официального
-Docker-образа; что для этого потребуется — в `test/e2elab/README.md`.
-Там же полная методология, находки по каждому дистрибутиву и
-инфраструктура нагрузочного теста.
+Полная методология, находки по каждому дистрибутиву и инфраструктура
+нагрузочного теста — в `test/e2elab/README.md`.
 
 **Требования к железу**: ОС не влияет на объём CPU/RAM — только на то,
 заведётся ли Protean на ней вообще (вопрос совместимости выше).

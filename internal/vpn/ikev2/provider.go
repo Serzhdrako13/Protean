@@ -151,7 +151,14 @@ func (p *Provider) RebuildCRL(ctx context.Context) error {
 
 func (p *Provider) Status(ctx context.Context) (vpn.ServerStatus, error) {
 	st := vpn.ServerStatus{Provider: p.opts.Instance}
-	out, _ := p.opts.SSH.Run(ctx, "systemctl is-active "+shellQuote(p.opts.ServiceName))
+	// "show -p ActiveState --value", not "is-active": confirmed live that
+	// is-active on an aliased unit name (ipsec -> strongswan) can misreport
+	// "inactive" on systemd 232 (Astra Linux CE 2.12) after any
+	// daemon-reload, even while the real unit is genuinely running and
+	// show's own ActiveState resolves correctly regardless. show also
+	// always exits 0, avoiding SSH.Run's stdout-discard-on-nonzero-exit
+	// behavior that made "out" unreliable here before.
+	out, _ := p.opts.SSH.Run(ctx, "systemctl show "+shellQuote(p.opts.ServiceName)+" -p ActiveState --value")
 	st.Up = strings.TrimSpace(out) == "active"
 	if !st.Up {
 		return st, nil

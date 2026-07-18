@@ -8,11 +8,11 @@ import (
 // BundleParams is everything needed to build a client .ovpn with inlined
 // credentials -- a single file the user imports.
 type BundleParams struct {
-	RemoteHost    string
-	RemotePort    int
-	Proto         string // udp | tcp
-	Dev           string // tun
-	Cipher        string
+	RemoteHost string
+	RemotePort int
+	Proto      string // udp | tcp
+	Dev        string // tun
+	Cipher     string
 	// TunMTU/Mssfix mirror ServerParams' fields of the same name -- the
 	// client side needs matching values, tun-mtu isn't something the server
 	// can push. 0 = leave unset.
