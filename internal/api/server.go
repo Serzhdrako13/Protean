@@ -328,10 +328,13 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("PUT /api/servers/{id}/instances/{name}/description", s.requireAuthAPI(s.apiServerInstancesUpdateDescription))
 	mux.HandleFunc("DELETE /api/servers/{id}/instances/{name}", s.requireAuthAPI(s.apiServerInstancesDelete))
 	mux.HandleFunc("GET /api/servers/{id}/traffic", s.requireAuthAPI(s.apiServerTrafficAggregate))
+	mux.HandleFunc("GET /api/servers/{id}/updates", s.requireAuthAPI(s.apiServerUpdatesCheck))
+	mux.HandleFunc("POST /api/servers/{id}/updates/apply", s.requireAuthAPI(s.apiServerUpdatesApply))
 
 	mux.HandleFunc("GET /api/console/targets", s.requireAuthAPI(s.apiConsoleTargets))
 	mux.HandleFunc("POST /api/console/sessions", s.requireAuthAPI(s.apiConsoleSessionCreate))
-	mux.HandleFunc("GET /api/console/ws", s.apiConsoleWS) // ticket-authenticated, not cookie/CSRF -- see apiConsoleWS
+	mux.HandleFunc("GET /api/console/ws", s.apiConsoleWS) // ticket-authenticated, not cookie/CSRF -- see serveConsoleBridge
+	mux.HandleFunc("GET /api/console/updates-ws", s.apiConsoleUpdatesWS)
 	mux.HandleFunc("GET /api/console/panel-host", s.requireAuthAPI(s.apiConsolePanelHostGet))
 	mux.HandleFunc("PUT /api/console/panel-host", s.requireAuthAPI(s.apiConsolePanelHostSet))
 

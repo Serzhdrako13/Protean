@@ -55,11 +55,16 @@ containers), then tears it down — even on failure (`docker rm -f` runs via
 Covered: OpenVPN and IKEv2 full lifecycle (`EnsureServer` → `AddPeer` →
 `RemovePeer` → real CRL check), Xray (`Apply` → client add/remove → real
 generated `config.json` inspected on the host), `ip_forward` re-check
-(`vpn.Installer.EnsureIPForward`), the interactive-shell primitive behind
-the web SSH console (`sshexec.Client.StartShell` against a real PTY —
-everything else about that feature is fake-driven unit tests in
-`internal/console`, see that package's own tests), and SSH-failure
-handling (stopping the container mid-operation and confirming a clean
+(`vpn.Installer.EnsureIPForward`), OS-updates check
+(`vpn.Installer.CheckUpdates` against a real host's real
+`apt`/`dnf`/`pacman`/`zypper` output — deliberately read-only/fast;
+`updates-apply` isn't run here, a real package upgrade is slow and
+network-dependent, unsuitable for a fast CI gate, see MANUAL_TESTS.md),
+the interactive-shell primitive behind the web SSH console
+(`sshexec.Client.StartShell` against a real PTY — everything else about
+that feature is fake-driven unit tests in `internal/console`, see that
+package's own tests), and SSH-failure handling (stopping the container
+mid-operation and confirming a clean
 error, not a hang).
 
 Not covered here (explicit, not silently missing): WireGuard/AmneziaWG —
@@ -129,7 +134,7 @@ itself — `ID_LIKE=debian` auto-classifies it into the existing
 `OS_FAMILY="debian"` branch.
 
 All six families pass the full suite
-(OpenVPN/IKEv2/Xray/IPForward/Console/SSHFailureHandling). Getting there surfaced
+(OpenVPN/IKEv2/Xray/IPForward/UpdatesCheck/Console/SSHFailureHandling). Getting there surfaced
 fifteen real, previously-undiscovered bugs — fixed in
 `scripts/protean-installer.sh` (kept byte-identical to
 `internal/hostboot/installer.sh`, which is what actually reaches a real

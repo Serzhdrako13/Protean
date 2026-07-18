@@ -89,3 +89,20 @@ through a UI or using real infra Claude doesn't have credentials for.
   behind a reverse proxy: `CONSOLE_ALLOWED_ORIGINS` actually needed there
   (the WS upgrade 403s without it if the proxy's public origin differs
   from what the panel container sees as its own Host).
+- [ ] **OS updates, real browser end-to-end + a genuinely stale host** —
+  `updates-check`'s shell logic was hand-verified live against real
+  apt/dnf/pacman/zypper containers (dnf found and applied 99 real pending
+  updates, pacman 20; see this session's notes), and
+  `vpn.Installer.CheckUpdates`'s Go/JSON parsing is covered by a live
+  e2elab test (`TestE2ELabUpdatesCheck`) — but `updates-apply`'s STREAMING
+  path (the browser-facing modal, `UpdatesApplyModal.tsx`) was never
+  driven from a real browser, only the underlying `StartCommand`/bridge
+  primitive (shared with the console feature). Check: open a server page
+  with real pending updates, click "Apply updates", confirm live output
+  actually streams into the modal (not just appears all at once at the
+  end), a clean exit shows "Done", an aborted mid-run (the "Abort"
+  Popconfirm) actually leaves the remote package manager in a sane state
+  to retry, and the reboot-required badge appears after a kernel/glibc
+  update on a Debian/RHEL-family host specifically (the two families with
+  real reboot-required detection; Arch/openSUSE are documented as
+  always-false, not a bug to chase).

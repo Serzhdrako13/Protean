@@ -91,5 +91,24 @@
     "wgPortTooltip": "The port this interface will listen on. Empty = WireGuard picks a random port itself. Must be free on this server.",
     "mtu": "MTU",
     "mssfix": "MSS fix"
+  },
+  "updates": {
+    "title": "OS updates",
+    "count_one": "{{count}} update available",
+    "count_other": "{{count}} updates available",
+    "rebootRequired": "Reboot required",
+    "showOutput": "Show details",
+    "hideOutput": "Hide details",
+    "recheck": "Check again",
+    "apply": "Apply updates",
+    "applyTitle": "Applying OS updates",
+    "starting": "Starting…",
+    "running": "Running…",
+    "done": "Done",
+    "failed": "Failed",
+    "exitedWithCode": "Exited with code {{code}}",
+    "abort": "Abort",
+    "abortConfirmTitle": "Abort the running update?",
+    "abortConfirmDescription": "The package manager is mid-transaction. Aborting now can leave packages partially upgraded -- only do this if it's genuinely stuck."
   }
 }

@@ -643,6 +643,31 @@ func TestE2ELabIPForward(t *testing.T) {
 	}
 }
 
+// TestE2ELabUpdatesCheck proves the Go/JSON side of installer.sh's
+// "updates-check" verb against a real host -- the shell logic itself
+// (per-family commands, JSON escaping) was hand-verified live against
+// apt/dnf/pacman/zypper containers when it was written; this closes the
+// remaining gap, that vpn.Installer.CheckUpdates actually parses what the
+// real script emits. Deliberately read-only/fast -- "updates-apply" isn't
+// exercised here (a real package upgrade is slow and network-dependent,
+// unsuitable for a fast CI gate; see MANUAL_TESTS.md).
+func TestE2ELabUpdatesCheck(t *testing.T) {
+	ctx := context.Background()
+	client := newSSHClient(t)
+	inst := vpn.NewInstaller(client)
+
+	info, err := inst.CheckUpdates(ctx)
+	if err != nil {
+		t.Fatalf("CheckUpdates: %v", err)
+	}
+	if info.Count < 0 {
+		t.Errorf("Count = %d, want >= 0", info.Count)
+	}
+	if info.Count > 0 && info.Output == "" {
+		t.Errorf("Count = %d but Output is empty", info.Count)
+	}
+}
+
 // TestE2ELabConsole proves the interactive-shell primitive the web SSH
 // console (internal/console) is built on -- sshexec.Client.StartShell --
 // against a real sshd and a real PTY. Everything else about that feature

@@ -12,6 +12,7 @@ import (
 	"protean/internal/console"
 	"protean/internal/sshexec"
 	"protean/internal/store"
+	"protean/internal/vpn"
 )
 
 // apiConsoleTarget describes one console-able target for the picker. Target
@@ -193,13 +194,22 @@ func queryUint16(r *http.Request, key string, fallback uint16) uint16 {
 	return uint16(n)
 }
 
-// GET /api/console/ws -- the WebSocket upgrade. Deliberately NOT wrapped in
-// requireAuthAPI: it's authenticated by a single-use ticket (minted via
-// POST /api/console/sessions, which IS behind requireAuthAPI's cookie+CSRF
-// check) instead of the session cookie directly, plus an Origin check at
-// upgrade (websocket.Accept's OriginPatterns, extended by
-// CONSOLE_ALLOWED_ORIGINS for reverse-proxy deployments).
-func (s *Server) apiConsoleWS(w http.ResponseWriter, r *http.Request) {
+// serveConsoleBridge is the shared body behind every ticket-authenticated
+// WS upgrade this feature offers: consume the ticket, enforce concurrency,
+// resolve a client for the target, start whatever session `start` asks for
+// (an interactive shell for the console, a single streamed command for
+// OS-updates apply -- see StartShell/StartCommand's shared *sshexec.Session
+// shape), bridge it to the socket, then release/audit on the way out.
+// Deliberately NOT wrapped in requireAuthAPI: it's authenticated by a
+// single-use ticket (minted via an authenticated+CSRF-checked REST call)
+// instead of the session cookie directly, plus an Origin check at upgrade
+// (websocket.Accept's OriginPatterns, extended by CONSOLE_ALLOWED_ORIGINS
+// for reverse-proxy deployments) -- a WS handshake isn't covered by the
+// browser's CORS/preflight protections a cookie-based fetch gets.
+func (s *Server) serveConsoleBridge(
+	w http.ResponseWriter, r *http.Request, auditAction string,
+	start func(ctx context.Context, client *sshexec.Client, rows, cols uint16) (*sshexec.Session, error),
+) {
 	if s.console == nil || s.mgr == nil {
 		http.Error(w, "console not configured", http.StatusServiceUnavailable)
 		return
@@ -229,11 +239,11 @@ func (s *Server) apiConsoleWS(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "cannot reach target: "+err.Error(), http.StatusBadGateway)
 		return
 	}
-	sess, err := client.StartShell(r.Context(), rows, cols, "")
+	sess, err := start(r.Context(), client, rows, cols)
 	if err != nil {
 		closeClient()
 		release()
-		http.Error(w, "cannot start shell: "+err.Error(), http.StatusBadGateway)
+		http.Error(w, "cannot start session: "+err.Error(), http.StatusBadGateway)
 		return
 	}
 	shell := &consoleShell{Session: sess, closeClient: closeClient}
@@ -249,7 +259,24 @@ func (s *Server) apiConsoleWS(w http.ResponseWriter, r *http.Request) {
 	bridge := console.NewBridge(wsAdapter{conn}, shell, s.console.IdleTimeout(), s.console.MaxSession())
 	_ = bridge.Run(r.Context())
 	release()
-	s.audit(r.Context(), "console.close", serverID)
+	s.audit(r.Context(), auditAction, serverID)
+}
+
+// GET /api/console/ws -- the interactive shell.
+func (s *Server) apiConsoleWS(w http.ResponseWriter, r *http.Request) {
+	s.serveConsoleBridge(w, r, "console.close", func(ctx context.Context, client *sshexec.Client, rows, cols uint16) (*sshexec.Session, error) {
+		return client.StartShell(ctx, rows, cols, "")
+	})
+}
+
+// GET /api/console/updates-ws -- streams a single `updates-apply` run
+// instead of an interactive shell, over the identical bridge/ticket
+// machinery (see sshexec.Client.StartCommand's doc comment: this is
+// exactly the reuse it was added for).
+func (s *Server) apiConsoleUpdatesWS(w http.ResponseWriter, r *http.Request) {
+	s.serveConsoleBridge(w, r, "updates.apply.done", func(ctx context.Context, client *sshexec.Client, rows, cols uint16) (*sshexec.Session, error) {
+		return client.StartCommand(ctx, "sudo "+vpn.InstallerPath+" updates-apply", rows, cols)
+	})
 }
 
 type apiPanelHostResp struct {

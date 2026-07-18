@@ -151,6 +151,36 @@ func (i *Installer) ServiceStatus(ctx context.Context, unit string) (string, err
 	return strings.TrimSpace(out), nil
 }
 
+// UpdatesInfo summarizes a host's pending OS package updates (installer.sh's
+// "updates-check" verb). Output is deliberately raw per-family listing text,
+// not a structured per-package list -- apt/dnf/pacman/zypper each format
+// this completely differently, and the raw text is still genuinely useful
+// to an admin without needing four distinct parsers.
+type UpdatesInfo struct {
+	Count          int    `json:"count"`
+	RebootRequired bool   `json:"reboot_required"`
+	Output         string `json:"output"`
+	Error          string `json:"error"`
+}
+
+// CheckUpdates queries pending OS package updates on the host. Read-only
+// except for a package-index refresh (apt-get update / pacman -Sy / zypper
+// refresh), matching each package manager's own idiom for "check".
+func (i *Installer) CheckUpdates(ctx context.Context) (UpdatesInfo, error) {
+	out, err := i.ssh.Run(ctx, "sudo "+InstallerPath+" updates-check")
+	if err != nil {
+		return UpdatesInfo{}, fmt.Errorf("updates-check: %w", err)
+	}
+	var info UpdatesInfo
+	if err := json.Unmarshal([]byte(out), &info); err != nil {
+		return UpdatesInfo{}, fmt.Errorf("parse updates-check output: %w", err)
+	}
+	if info.Error != "" {
+		return info, fmt.Errorf("installer updates-check error: %s", info.Error)
+	}
+	return info, nil
+}
+
 // ServiceLogs returns the last `lines` lines of a unit's journal, so an
 // admin can check what happened without opening an SSH session. lines is
 // clamped to a sane range -- this only ever backs an admin-facing "View

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Table, Tag, Button, Space, Modal, Form, Input, InputNumber, Select, Popconfirm, message, Typography, Switch } from 'antd';
+import { Table, Tag, Button, Space, Modal, Form, Input, InputNumber, Select, Popconfirm, message, Typography, Switch, Card } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { ArrowLeftOutlined, DownloadOutlined, PlusOutlined, DeleteOutlined, EditOutlined, CodeOutlined } from '@ant-design/icons';
 import { Link, useNavigate, useParams } from 'react-router-dom';
@@ -18,6 +18,8 @@ import { TableSearch } from '@/components/TableSearch';
 import { useTableSearch } from '@/hooks/useTableSearch';
 import { useHideDownProviders } from '@/hooks/useHideDownProviders';
 import { textSorter } from '@/utils/tableSort';
+import { useUpdatesCheckQuery } from '@/api/queries/updates';
+import { UpdatesApplyModal } from './UpdatesApplyModal';
 
 function formatBytes(n: number): string {
   const units = ['B', 'KB', 'MB', 'GB', 'TB'];
@@ -160,6 +162,10 @@ export function ServerProvidersPage() {
   const { query, setQuery, filtered } = useTableSearch(rows, (r) => `${r.friendly_label || ''} ${splitKey(r.key).local}`);
   const [hideDown, setHideDown] = useHideDownProviders();
   const visibleRows = hideDown ? (filtered ?? []).filter((r) => r.status.Up) : (filtered ?? []);
+
+  const updatesCheck = useUpdatesCheckQuery(id, !!id);
+  const [updatesOutputOpen, setUpdatesOutputOpen] = useState(false);
+  const [updatesApplyOpen, setUpdatesApplyOpen] = useState(false);
 
   const [addOpen, setAddOpen] = useState(false);
   const [form] = Form.useForm();
@@ -423,6 +429,44 @@ export function ServerProvidersPage() {
       >
         {t('title')} — <code>{id}</code>
       </PageTitleBar>
+
+      <Card size="small" style={{ marginBottom: 12 }} loading={updatesCheck.isLoading}>
+        <Space wrap align="center">
+          <Typography.Text strong>{t('updates.title')}</Typography.Text>
+          {updatesCheck.data && (
+            <>
+              <Tag color={updatesCheck.data.count > 0 ? 'gold' : 'default'}>
+                {t('updates.count', { count: updatesCheck.data.count })}
+              </Tag>
+              {updatesCheck.data.reboot_required && <Tag color="red">{t('updates.rebootRequired')}</Tag>}
+              {updatesCheck.data.output && (
+                <Button size="small" type="link" onClick={() => setUpdatesOutputOpen((v) => !v)}>
+                  {updatesOutputOpen ? t('updates.hideOutput') : t('updates.showOutput')}
+                </Button>
+              )}
+            </>
+          )}
+          <Button size="small" onClick={() => updatesCheck.refetch()} loading={updatesCheck.isFetching}>
+            {t('updates.recheck')}
+          </Button>
+          <Button
+            size="small"
+            type="primary"
+            disabled={!updatesCheck.data || updatesCheck.data.count === 0}
+            onClick={() => setUpdatesApplyOpen(true)}
+          >
+            {t('updates.apply')}
+          </Button>
+        </Space>
+        {updatesOutputOpen && updatesCheck.data?.output && (
+          <Typography.Paragraph
+            style={{ marginTop: 8, marginBottom: 0, whiteSpace: 'pre-wrap', fontFamily: 'monospace', fontSize: 12, maxHeight: 240, overflow: 'auto' }}
+          >
+            {updatesCheck.data.output}
+          </Typography.Paragraph>
+        )}
+      </Card>
+
       <div style={{ marginBottom: 12, display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
         <TableSearch value={query} onChange={setQuery} placeholder={t('searchPlaceholder')} />
         <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
@@ -431,6 +475,12 @@ export function ServerProvidersPage() {
         </span>
       </div>
       <Table rowKey="key" columns={columns} dataSource={visibleRows} loading={isLoading} pagination={{ pageSize: 20, showSizeChanger: true }} />
+
+      <UpdatesApplyModal
+        open={updatesApplyOpen}
+        serverId={id}
+        onClose={() => { setUpdatesApplyOpen(false); void updatesCheck.refetch(); }}
+      />
 
       <Modal
         title={addStep === 'type' ? t('modals.add.checkTitle') : t('modals.add.title')}

@@ -13,6 +13,8 @@
 #   install <provider>     -> install a VPN backend (wireguard|amneziawg|openvpn|ikev2)
 #   status  <unit>         -> print "active"/"inactive"/"unknown" for a systemd unit
 #   ensure-ip-forward      -> turn on net.ipv4.ip_forward if it isn't already (idempotent)
+#   updates-check          -> print pending OS package updates as JSON (read-only)
+#   updates-apply          -> apply pending OS package updates (streamed to stdout)
 #
 # Keep this script dependency-free (POSIX-ish bash) and side-effect-free
 # except for the explicit install actions.
@@ -108,6 +110,21 @@ provider_installable() {
 # --------------------------------------------------------------------- detect
 
 json_bool() { if [ "$1" -eq 1 ] 2>/dev/null || [ "$1" = "true" ]; then printf 'true'; else printf 'false'; fi; }
+
+# json_str <text>: JSON-quotes text for embedding as a string value (quotes
+# included in the output). Good enough for printable command output --
+# not a general-purpose JSON escaper (control characters other than
+# newline/tab aren't handled), which is all this script's own callers
+# ever feed it.
+json_str() {
+	local s="$1"
+	s="${s//\\/\\\\}"
+	s="${s//\"/\\\"}"
+	s="${s//$'\n'/\\n}"
+	s="${s//$'\t'/\\t}"
+	s="${s//$'\r'/}"
+	printf '"%s"' "$s"
+}
 
 # provider_service_active/provider_config_exists: best-effort check for
 # whether this host ALREADY looks provisioned by the panel's own conventional
@@ -561,6 +578,92 @@ cmd_ensure_ip_forward() {
 	echo "enabled"
 }
 
+# cmd_updates_check: read-only report of pending OS package updates, as
+# JSON: {"count":N,"reboot_required":bool,"output":"<raw per-family listing>"}.
+# "output" is deliberately raw per-family text, not a structured per-package
+# {name,old,new} list -- apt/dnf/pacman/zypper each format this completely
+# differently, and the raw listing is still genuinely useful to an admin
+# without needing five distinct parsers. reboot_required is only detected
+# via the two well-established, documented signals (Debian's
+# /var/run/reboot-required, RHEL's `needs-restarting -r`) -- left false on
+# Arch/openSUSE rather than guessing at an unverified heuristic.
+cmd_updates_check() {
+	detect_os || { echo '{"error":"cannot detect OS"}'; return 1; }
+	if [ -z "$PKG_MANAGER" ]; then
+		echo '{"error":"no known package manager"}'
+		return 1
+	fi
+	local count=0 output="" reboot=0
+	case "$PKG_MANAGER" in
+		apt|apt-rpm)
+			apt-get update -qq >/dev/null 2>&1 || true
+			output="$(apt list --upgradable 2>/dev/null | grep -v '^Listing' || true)"
+			[ -e /var/run/reboot-required ] && reboot=1
+			;;
+		dnf|yum)
+			local rc=0
+			output="$("$PKG_MANAGER" check-update -q 2>/dev/null)" || rc=$?
+			# check-update's own convention: exit 100 means updates ARE
+			# available (not a failure); anything else non-zero is real.
+			if [ "$rc" -ne 0 ] && [ "$rc" -ne 100 ]; then
+				echo "{\"error\":\"$PKG_MANAGER check-update failed (exit $rc)\"}"
+				return 1
+			fi
+			if command -v needs-restarting >/dev/null 2>&1; then
+				needs-restarting -r >/dev/null 2>&1 || reboot=1
+			fi
+			;;
+		pacman)
+			# Refreshes the local package db for an accurate -Qu -- a real
+			# (tolerated) side effect of an otherwise read-only check, same
+			# trade-off pacman itself expects (`-Sy` alone, no `-u`, is its
+			# own documented "just sync" idiom).
+			pacman -Sy --noconfirm >/dev/null 2>&1 || true
+			output="$(pacman -Qu 2>/dev/null || true)"
+			;;
+		zypper)
+			zypper --non-interactive refresh -q >/dev/null 2>&1 || true
+			output="$(zypper --non-interactive list-updates 2>/dev/null | grep '^v ' || true)"
+			;;
+		*)
+			echo "{\"error\":\"updates-check not supported for $PKG_MANAGER\"}"
+			return 1
+			;;
+	esac
+	count="$(printf '%s\n' "$output" | grep -c . || true)"
+	printf '{"count":%d,"reboot_required":%s,"output":%s}\n' \
+		"$count" "$(json_bool "$reboot")" "$(json_str "$output")"
+}
+
+# cmd_updates_apply: actually apply pending OS package updates. Output
+# streams to stdout/stderr as the package manager produces it -- the caller
+# (internal/console's bridge, over a real PTY) is what makes this show up
+# live in the panel's UI rather than only after the whole thing finishes.
+cmd_updates_apply() {
+	detect_os || { echo "cannot detect OS" >&2; return 1; }
+	case "$PKG_MANAGER" in
+		apt|apt-rpm)
+			export DEBIAN_FRONTEND=noninteractive
+			apt-get update -y && apt-get upgrade -y
+			;;
+		dnf) dnf upgrade -y ;;
+		yum) yum upgrade -y ;;
+		pacman) pacman -Syu --noconfirm ;;
+		zypper)
+			zypper --non-interactive update -y
+			local rc=$?
+			# 102/103 (ZYPPER_EXIT_INF_REBOOT_NEEDED / ..._RESTART_NEEDED)
+			# are zypper's own documented "succeeded, but..." codes, not
+			# failures -- same idiom as the 107 tolerance in pkg_install.
+			[ "$rc" -eq 0 ] || [ "$rc" -eq 102 ] || [ "$rc" -eq 103 ]
+			;;
+		*)
+			echo "unsupported package manager: $PKG_MANAGER" >&2
+			return 1
+			;;
+	esac
+}
+
 # cmd_service <action> <unit>: control a VPN systemd unit to save resources on
 # hosts where a given VPN is not used. Whitelisted actions + unit pattern.
 cmd_service() {
@@ -657,8 +760,14 @@ main() {
 		ensure-ip-forward)
 			cmd_ensure_ip_forward
 			;;
+		updates-check)
+			cmd_updates_check
+			;;
+		updates-apply)
+			cmd_updates_apply
+			;;
 		*)
-			echo "usage: $0 {detect|install <provider>|status <unit>|service <action> <unit>|forward <add|del> <cidr>|logs <unit> <lines>|ensure-ip-forward}" >&2
+			echo "usage: $0 {detect|install <provider>|status <unit>|service <action> <unit>|forward <add|del> <cidr>|logs <unit> <lines>|ensure-ip-forward|updates-check|updates-apply}" >&2
 			exit 2
 			;;
 	esac
