@@ -61,3 +61,15 @@ through a UI or using real infra Claude doesn't have credentials for.
   strategy (`e2e-ws-camouflage`) from that live test — harmless (a real
   strategy just needs re-applying once the config.json permission is
   fixed), but worth knowing it's there.
+- [ ] **SECRET_KEY rotation against a real deployment** (`panel -rotate-key-old
+  ... -rotate-key-new ...`) — fully covered by automated tests (`internal/keyrotate`,
+  `-tags dbtest`: happy path across all 15 sealed columns, empty/NULL columns
+  left untouched, wrong-old-key abort, dry-run, `-rotate-key-detect`) and a
+  live CLI smoke test against a real throwaway Postgres this session
+  (dry-run → real rotation → detect confirmed old key stops working, new key
+  works). What's NOT verified: running it against an actual
+  docker-compose/systemd-managed production-shaped deployment (stop the real
+  panel container, run rotation, update `.env`'s `SECRET_KEY`, restart,
+  confirm the whole app — not just raw DB rows — still reads every secret:
+  peer configs download, server SSH connections work, CA/CRL, notify
+  channels, LDAP/OIDC login).

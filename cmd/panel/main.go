@@ -21,6 +21,7 @@ import (
 	"protean/internal/api"
 	"protean/internal/auth"
 	"protean/internal/config"
+	"protean/internal/keyrotate"
 	"protean/internal/servers"
 	"protean/internal/store"
 	"protean/internal/vpn"
@@ -84,9 +85,21 @@ func fatal(msg string, args ...any) {
 
 func main() {
 	healthcheck := flag.Bool("healthcheck", false, "probe the running server's /healthz and exit (for container healthchecks)")
+	rotateOldKey := flag.String("rotate-key-old", "", "re-encrypt every stored secret: 64-char hex SECRET_KEY currently in use")
+	rotateNewKey := flag.String("rotate-key-new", "", "re-encrypt every stored secret: 64-char hex SECRET_KEY to rotate to")
+	rotateDryRun := flag.Bool("rotate-key-dry-run", false, "with -rotate-key-old/-new: report what would change, then roll back instead of committing")
+	rotateDetect := flag.String("rotate-key-detect", "", "read-only: report whether this 64-char hex key can open the database's sealed secrets, then exit")
 	flag.Parse()
 	if *healthcheck {
 		runHealthcheck()
+		return
+	}
+	if *rotateDetect != "" {
+		runRotateKeyDetect(*rotateDetect)
+		return
+	}
+	if *rotateOldKey != "" || *rotateNewKey != "" {
+		runRotateKey(*rotateOldKey, *rotateNewKey, *rotateDryRun)
 		return
 	}
 
@@ -332,4 +345,100 @@ func probe(client *http.Client, url string) bool {
 	}
 	defer resp.Body.Close()
 	return resp.StatusCode == http.StatusOK
+}
+
+// openStoreForRotation opens the store directly off DATABASE_URL (not
+// config.Load, which also demands SESSION_SECRET/SECRET_KEY/etc. that a
+// key-rotation run has no use for) and takes the same singleton advisory
+// lock the running panel holds for its whole lifetime -- so this refuses
+// outright if the real panel is up, rather than racing its writes. See
+// internal/keyrotate's package doc for why that exclusivity matters.
+func openStoreForRotation(ctx context.Context) *store.Store {
+	dbURL := os.Getenv("DATABASE_URL")
+	if dbURL == "" {
+		fatal("rotate-key: DATABASE_URL is not set")
+	}
+	st, err := store.Open(ctx, dbURL)
+	if err != nil {
+		fatal("rotate-key: open database", "err", err)
+	}
+	if err := st.AcquireSingletonLock(ctx); err != nil {
+		fatal("rotate-key: another instance holds the database lock -- stop the running panel first", "err", err)
+	}
+	if err := store.Migrate(ctx, st); err != nil {
+		fatal("rotate-key: migrate", "err", err)
+	}
+	return st
+}
+
+func runRotateKeyDetect(keyHex string) {
+	setupLogging()
+	ctx := context.Background()
+	st := openStoreForRotation(ctx)
+	defer st.Close()
+
+	enc, err := auth.NewEncryptor(keyHex)
+	if err != nil {
+		fatal("rotate-key-detect: invalid key", "err", err)
+	}
+	result, err := keyrotate.Detect(ctx, st.Pool(), enc)
+	if err != nil {
+		fatal("rotate-key-detect", "err", err)
+	}
+	if len(result) == 0 {
+		fmt.Println("no populated sealed secrets found to check against")
+		return
+	}
+	opens, total := 0, 0
+	for col, ok := range result {
+		total++
+		mark := "NO"
+		if ok {
+			opens++
+			mark = "yes"
+		}
+		fmt.Printf("%-40s opens with this key: %s\n", col, mark)
+	}
+	if opens == total {
+		fmt.Println("this key opens every checked column -- it is the database's current key")
+	} else if opens == 0 {
+		fmt.Println("this key opens NONE of the checked columns -- it is not the database's current key")
+	} else {
+		fmt.Println("MIXED: this key opens some columns but not others -- the database is not in a consistent single-key state")
+		os.Exit(1)
+	}
+}
+
+func runRotateKey(oldKeyHex, newKeyHex string, dryRun bool) {
+	setupLogging()
+	if oldKeyHex == "" || newKeyHex == "" {
+		fatal("rotate-key: both -rotate-key-old and -rotate-key-new are required")
+	}
+	oldEnc, err := auth.NewEncryptor(oldKeyHex)
+	if err != nil {
+		fatal("rotate-key: invalid -rotate-key-old", "err", err)
+	}
+	newEnc, err := auth.NewEncryptor(newKeyHex)
+	if err != nil {
+		fatal("rotate-key: invalid -rotate-key-new", "err", err)
+	}
+
+	ctx := context.Background()
+	st := openStoreForRotation(ctx)
+	defer st.Close()
+
+	report, err := keyrotate.Rotate(ctx, st.Pool(), oldEnc, newEnc, dryRun)
+	if err != nil {
+		fatal("rotate-key: rotation aborted, database unchanged (transaction rolled back)", "err", err)
+	}
+
+	for _, c := range report.Columns {
+		fmt.Printf("%s.%-24s rewritten=%-4d skipped_empty=%-3d skipped_null=%d\n",
+			c.Table, c.Column, c.Rewritten, c.SkippedEmpty, c.SkippedNull)
+	}
+	if dryRun {
+		fmt.Printf("\nDRY RUN: %d secrets would be rewritten; database unchanged (transaction rolled back).\n", report.TotalRewritten())
+		return
+	}
+	fmt.Printf("\nrotation complete: %d secrets rewritten and verified. Update SECRET_KEY in your deployment to the new key before starting the panel again.\n", report.TotalRewritten())
 }

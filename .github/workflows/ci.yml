@@ -88,6 +88,17 @@ jobs:
         env:
           PROTEAN_TEST_DB: postgres://protean:protean@localhost:5432/protean?sslmode=disable
         run: go test -tags dbtest ./internal/store/
+      - name: Key rotation integration tests (real Postgres)
+        # Separate step, not appended to the same `go test` invocation above:
+        # both packages' dbtest suites DROP SCHEMA + re-migrate against the
+        # same DB at the start of every test -- run together in one command,
+        # Go's cross-package test parallelism races them against each other
+        # (confirmed live). Sequential steps against the same service avoids
+        # that; each step's own tests still run with the package's normal
+        # (safe) internal parallelism.
+        env:
+          PROTEAN_TEST_DB: postgres://protean:protean@localhost:5432/protean?sslmode=disable
+        run: go test -tags dbtest ./internal/keyrotate/
 
   docker-smoke:
     runs-on: ubuntu-latest

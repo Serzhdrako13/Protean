@@ -30,6 +30,14 @@ func Open(ctx context.Context, databaseURL string) (*Store, error) {
 	return &Store{pool: pool}, nil
 }
 
+// Pool exposes the underlying connection pool for callers that need raw
+// transaction access this package doesn't otherwise wrap (e.g.
+// internal/keyrotate, which re-encrypts every sealed column across many
+// tables inside one transaction spanning several packages' worth of
+// schema -- adding 15 one-off Store methods for a single admin-only tool
+// isn't worth it).
+func (s *Store) Pool() *pgxpool.Pool { return s.pool }
+
 func (s *Store) Close() {
 	if s.lockConn != nil {
 		// Releasing the connection drops the session-level advisory lock.
