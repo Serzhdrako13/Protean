@@ -73,3 +73,19 @@ through a UI or using real infra Claude doesn't have credentials for.
   confirm the whole app — not just raw DB rows — still reads every secret:
   peer configs download, server SSH connections work, CA/CRL, notify
   channels, LDAP/OIDC login).
+- [ ] **Web SSH console, real browser end-to-end** — the interactive-shell
+  primitive it's built on (`sshexec.Client.StartShell`) is verified live
+  against a real PTY (`test/e2elab`'s `TestE2ELabConsole`), and the
+  ticketing/bridge/lifecycle logic has fast fake-driven unit tests
+  (`internal/console`), but nothing in this session opened an actual
+  browser and drove the real `/console` page end-to-end. Check: connect
+  to a VPN-node target and to a flagged panel-host target, type a real
+  command and see real output, resize the browser window and confirm the
+  remote PTY actually resizes (`stty size` before/after), disconnect and
+  reconnect (fresh shell, not stale output), idle-timeout banner after
+  `CONSOLE_IDLE_TIMEOUT_SECONDS` (set it low for the test), and the panel-
+  host picker modal (flag an existing server, clear it, confirm the
+  console page's target list updates). Also worth a check specifically
+  behind a reverse proxy: `CONSOLE_ALLOWED_ORIGINS` actually needed there
+  (the WS upgrade 403s without it if the proxy's public origin differs
+  from what the panel container sees as its own Host).

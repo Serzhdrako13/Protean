@@ -21,6 +21,7 @@ import (
 	"protean/internal/api"
 	"protean/internal/auth"
 	"protean/internal/config"
+	"protean/internal/console"
 	"protean/internal/keyrotate"
 	"protean/internal/servers"
 	"protean/internal/store"
@@ -189,6 +190,13 @@ func main() {
 	srv.SetServerManager(mgr)
 	srv.SetTrustProxy(cfg.TrustProxy)
 	srv.SetCookieInsecure(cfg.CookieInsecure)
+	srv.SetConsoleHub(console.NewHub(console.Config{
+		IdleTimeout: cfg.ConsoleIdleTimeout,
+		MaxSession:  cfg.ConsoleMaxSession,
+		MaxPerUser:  cfg.ConsoleMaxPerUser,
+		MaxTotal:    cfg.ConsoleMaxTotal,
+	}))
+	srv.SetConsoleAllowedOrigins(cfg.ConsoleAllowedOrigins)
 	srv.StartExpiryWorker(ctx, 5*time.Minute)
 	srv.ReconcileState(ctx)        // log DB-vs-host divergences at startup
 	srv.ReapplyMeshForwarding(ctx) // cert-provider FORWARD rules don't survive reboot

@@ -1,0 +1,25 @@
+{
+  "title": "SSH Console",
+  "picker": {
+    "placeholder": "Choose a target",
+    "empty": "No consolable targets yet. Add a server, or configure the panel host below.",
+    "panelHostTag": "Panel host"
+  },
+  "actions": {
+    "connect": "Connect",
+    "disconnect": "Disconnect",
+    "reconnect": "Reconnect"
+  },
+  "status": {
+    "connecting": "Connecting…",
+    "connected": "Connected",
+    "disconnected": "Disconnected",
+    "remoteExited": "Remote shell exited (code {{code}})"
+  },
+  "panelHost": {
+    "configure": "Panel host",
+    "title": "Panel host",
+    "description": "Which server (if any) is the machine the panel itself runs on. If it's already registered as a VPN node, just pick it here — no need to enter its SSH credentials twice.",
+    "placeholder": "None configured"
+  }
+}

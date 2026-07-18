@@ -3,6 +3,7 @@
   "searchPlaceholder": "Поиск по названию или интерфейсу",
   "hideDownProviders": "Скрыть отключённые",
   "actions": {
+    "openConsole": "Консоль",
     "addInstance": "Добавить провайдер",
     "installVpn": "Установить VPN",
     "checkInstall": "Проверить и продолжить",

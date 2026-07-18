@@ -13,6 +13,7 @@ const ServerProvidersPage = lazy(() => import('@/pages/providers/ServerProviders
 const ProviderDetailPage = lazy(() => import('@/pages/providers/ProviderDetailPage').then((m) => ({ default: m.ProviderDetailPage })));
 const InstallPage = lazy(() => import('@/pages/install/InstallPage').then((m) => ({ default: m.InstallPage })));
 const NodesPage = lazy(() => import('@/pages/nodes/NodesPage').then((m) => ({ default: m.NodesPage })));
+const ConsolePage = lazy(() => import('@/pages/console/ConsolePage').then((m) => ({ default: m.ConsolePage })));
 const SubnetsPage = lazy(() => import('@/pages/subnets/SubnetsPage').then((m) => ({ default: m.SubnetsPage })));
 const NotificationsPage = lazy(() => import('@/pages/notifications/NotificationsPage').then((m) => ({ default: m.NotificationsPage })));
 const AuditPage = lazy(() => import('@/pages/audit/AuditPage').then((m) => ({ default: m.AuditPage })));
@@ -44,6 +45,7 @@ export const router = createBrowserRouter([
       { path: '/install', element: <InstallPage /> },
       { path: '/nodes', element: <NodesPage /> },
       { path: '/subnets', element: <SubnetsPage /> },
+      { path: '/console', element: <ConsolePage /> },
       { path: '/notifications', element: <NotificationsPage /> },
       { path: '/audit', element: <AuditPage /> },
       { path: '/users', element: <UsersPage /> },

@@ -442,6 +442,72 @@ func TestServersCRUD(t *testing.T) {
 	}
 }
 
+func TestPanelHost(t *testing.T) {
+	s := testDB(t)
+	ctx := context.Background()
+
+	if _, err := s.GetPanelHost(ctx); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("GetPanelHost on empty DB: err=%v, want ErrNotFound", err)
+	}
+
+	mk := func(id string) Server {
+		return Server{ID: id, Label: id, Host: "10.0.0.1", Port: 22, SSHUser: "protean",
+			EncKeyPEM: []byte("sealed"), HostKey: "ssh-ed25519 AAAA"}
+	}
+	if err := s.CreateServer(ctx, mk("srv-a")); err != nil {
+		t.Fatalf("CreateServer srv-a: %v", err)
+	}
+	if err := s.CreateServer(ctx, mk("srv-b")); err != nil {
+		t.Fatalf("CreateServer srv-b: %v", err)
+	}
+
+	if err := s.SetPanelHost(ctx, "srv-a"); err != nil {
+		t.Fatalf("SetPanelHost srv-a: %v", err)
+	}
+	got, err := s.GetPanelHost(ctx)
+	if err != nil || got.ID != "srv-a" {
+		t.Fatalf("GetPanelHost = %+v, err=%v, want srv-a", got, err)
+	}
+	if srv, _ := s.GetServer(ctx, "srv-a"); !srv.PanelHost {
+		t.Error("srv-a.PanelHost should be true after SetPanelHost")
+	}
+
+	// Re-flagging a different row must move the flag, not duplicate it --
+	// the partial unique index (0039_panel_host.sql) enforces at most one
+	// at the DB level; SetPanelHost's own transaction clears the old row
+	// first so this never trips it.
+	if err := s.SetPanelHost(ctx, "srv-b"); err != nil {
+		t.Fatalf("SetPanelHost srv-b: %v", err)
+	}
+	got, err = s.GetPanelHost(ctx)
+	if err != nil || got.ID != "srv-b" {
+		t.Fatalf("GetPanelHost after re-flag = %+v, err=%v, want srv-b", got, err)
+	}
+	if srv, _ := s.GetServer(ctx, "srv-a"); srv.PanelHost {
+		t.Error("srv-a.PanelHost should be false after re-flagging srv-b")
+	}
+
+	if err := s.SetPanelHost(ctx, "does-not-exist"); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("SetPanelHost on unknown id: err=%v, want ErrNotFound", err)
+	}
+	// A failed SetPanelHost must not have cleared the existing flag (the
+	// whole call runs in one transaction).
+	if got, err := s.GetPanelHost(ctx); err != nil || got.ID != "srv-b" {
+		t.Fatalf("panel host changed after a failed SetPanelHost: %+v, err=%v", got, err)
+	}
+
+	if err := s.ClearPanelHost(ctx); err != nil {
+		t.Fatalf("ClearPanelHost: %v", err)
+	}
+	if _, err := s.GetPanelHost(ctx); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("GetPanelHost after clear: err=%v, want ErrNotFound", err)
+	}
+	// Clearing with nothing set is a no-op, not an error.
+	if err := s.ClearPanelHost(ctx); err != nil {
+		t.Fatalf("ClearPanelHost on already-clear state: %v", err)
+	}
+}
+
 func TestSingletonLock(t *testing.T) {
 	url := os.Getenv("PROTEAN_TEST_DB")
 	if url == "" {

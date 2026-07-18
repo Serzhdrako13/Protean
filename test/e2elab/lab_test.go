@@ -643,6 +643,77 @@ func TestE2ELabIPForward(t *testing.T) {
 	}
 }
 
+// TestE2ELabConsole proves the interactive-shell primitive the web SSH
+// console (internal/console) is built on -- sshexec.Client.StartShell --
+// against a real sshd and a real PTY. Everything else about that feature
+// (ticketing, WS framing, idle/max-duration lifecycle) is fast, fake-
+// driven unit testing in internal/console/*_test.go; only real PTY
+// allocation and WindowChange genuinely need a live host, so this is the
+// one thing worth a lab test here.
+func TestE2ELabConsole(t *testing.T) {
+	ctx := context.Background()
+	client := newSSHClient(t)
+
+	sess, err := client.StartShell(ctx, 24, 80, "")
+	if err != nil {
+		t.Fatalf("StartShell: %v", err)
+	}
+	defer sess.Close()
+
+	const marker = "PROTEAN_CONSOLE_OK"
+	if _, err := sess.Stdin().Write([]byte("echo " + marker + "\n")); err != nil {
+		t.Fatalf("write stdin: %v", err)
+	}
+
+	// Read until the marker shows up in the PTY output (real terminal
+	// echo + the command's own output, not a mocked round-trip) or time out.
+	found := make(chan struct{})
+	readErr := make(chan error, 1)
+	go func() {
+		buf := make([]byte, 4096)
+		var acc strings.Builder
+		for {
+			n, rerr := sess.Stdout().Read(buf)
+			if n > 0 {
+				acc.Write(buf[:n])
+				if strings.Contains(acc.String(), marker) {
+					close(found)
+					return
+				}
+			}
+			if rerr != nil {
+				readErr <- rerr
+				return
+			}
+		}
+	}()
+	select {
+	case <-found:
+	case rerr := <-readErr:
+		t.Fatalf("reading shell output: %v", rerr)
+	case <-time.After(10 * time.Second):
+		t.Fatal("timed out waiting for the echoed marker")
+	}
+
+	if err := sess.Resize(40, 100); err != nil {
+		t.Fatalf("Resize: %v", err)
+	}
+
+	if _, err := sess.Stdin().Write([]byte("exit\n")); err != nil {
+		t.Fatalf("write exit: %v", err)
+	}
+	waitErr := make(chan error, 1)
+	go func() { waitErr <- sess.Wait() }()
+	select {
+	case err := <-waitErr:
+		if err != nil {
+			t.Errorf("Wait after a clean `exit`: %v", err)
+		}
+	case <-time.After(10 * time.Second):
+		t.Fatal("timed out waiting for the remote shell to exit")
+	}
+}
+
 // TestE2ELabSSHFailureHandling runs last -- the container is expendable
 // afterward. Confirms the panel degrades gracefully (a clean error, not a
 // hang or a panic) when a managed host vanishes mid-operation.

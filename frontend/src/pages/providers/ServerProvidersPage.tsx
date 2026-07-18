@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Table, Tag, Button, Space, Modal, Form, Input, InputNumber, Select, Popconfirm, message, Typography, Switch } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
-import { ArrowLeftOutlined, DownloadOutlined, PlusOutlined, DeleteOutlined, EditOutlined } from '@ant-design/icons';
+import { ArrowLeftOutlined, DownloadOutlined, PlusOutlined, DeleteOutlined, EditOutlined, CodeOutlined } from '@ant-design/icons';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useQueryClient } from '@tanstack/react-query';
@@ -407,13 +407,18 @@ export function ServerProvidersPage() {
       <PageTitleBar
         prefix={<Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/servers')} title={t('tooltips.backToServers')} />}
         extra={
-          <Button
-            icon={<PlusOutlined />}
-            onClick={() => { form.resetFields(); setAddStep('type'); setPendingKey(''); setSettingsError(''); setAddOpen(true); }}
-            title={t('tooltips.addInstance')}
-          >
-            {t('actions.addInstance')}
-          </Button>
+          <Space>
+            <Button icon={<CodeOutlined />} onClick={() => navigate(`/console?target=server:${encodeURIComponent(id ?? '')}`)}>
+              {t('actions.openConsole')}
+            </Button>
+            <Button
+              icon={<PlusOutlined />}
+              onClick={() => { form.resetFields(); setAddStep('type'); setPendingKey(''); setSettingsError(''); setAddOpen(true); }}
+              title={t('tooltips.addInstance')}
+            >
+              {t('actions.addInstance')}
+            </Button>
+          </Space>
         }
       >
         {t('title')} — <code>{id}</code>

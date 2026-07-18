@@ -112,6 +112,20 @@ type Config struct {
 	// by convention, so a new DPI-evasion countermeasure can be dropped in
 	// without a rebuild or restart (see internal/vpn/xray/filemodule.go).
 	XrayModulesDir string
+
+	// Console* tune the web SSH console (internal/console): how long an
+	// idle session stays open, the hard cap on any session's total
+	// duration, and how many concurrent sessions one admin (or the panel
+	// overall) may hold at once.
+	ConsoleIdleTimeout time.Duration
+	ConsoleMaxSession  time.Duration
+	ConsoleMaxPerUser  int
+	ConsoleMaxTotal    int
+	// ConsoleAllowedOrigins additionally authorizes WS upgrade Origins
+	// beyond the request's own Host (always allowed) -- needed when a
+	// reverse proxy fronts the panel under a different browser-facing
+	// origin than the Host header the panel process itself sees.
+	ConsoleAllowedOrigins []string
 }
 
 func Load() (Config, error) {
@@ -242,6 +256,26 @@ func Load() (Config, error) {
 	if c.SSHHostKey == "" && c.SSHKnownHostsPath == "" {
 		slog.Warn("SSH host key not pinned (SSH_HOST_KEY / SSH_KNOWN_HOSTS empty); trusting on first use -- pin it for production")
 	}
+
+	consoleIdleSec, err := strconv.Atoi(getEnv("CONSOLE_IDLE_TIMEOUT_SECONDS", "900"))
+	if err != nil {
+		return c, fmt.Errorf("CONSOLE_IDLE_TIMEOUT_SECONDS: %w", err)
+	}
+	c.ConsoleIdleTimeout = time.Duration(consoleIdleSec) * time.Second
+	consoleMaxSec, err := strconv.Atoi(getEnv("CONSOLE_MAX_SESSION_SECONDS", "28800"))
+	if err != nil {
+		return c, fmt.Errorf("CONSOLE_MAX_SESSION_SECONDS: %w", err)
+	}
+	c.ConsoleMaxSession = time.Duration(consoleMaxSec) * time.Second
+	c.ConsoleMaxPerUser, err = strconv.Atoi(getEnv("CONSOLE_MAX_PER_USER", "5"))
+	if err != nil {
+		return c, fmt.Errorf("CONSOLE_MAX_PER_USER: %w", err)
+	}
+	c.ConsoleMaxTotal, err = strconv.Atoi(getEnv("CONSOLE_MAX_TOTAL", "20"))
+	if err != nil {
+		return c, fmt.Errorf("CONSOLE_MAX_TOTAL: %w", err)
+	}
+	c.ConsoleAllowedOrigins = splitCSV(getEnv("CONSOLE_ALLOWED_ORIGINS", ""))
 
 	return c, nil
 }

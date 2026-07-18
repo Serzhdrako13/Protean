@@ -78,6 +78,7 @@ export interface ServerRow {
   public_host: string;
   host_key_set: boolean;
   enabled: boolean;
+  panel_host: boolean;
 }
 
 export interface ProviderSummary {

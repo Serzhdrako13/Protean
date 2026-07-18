@@ -6,6 +6,7 @@ import {
   CloudServerOutlined,
   ClusterOutlined,
   PartitionOutlined,
+  CodeOutlined,
   BellOutlined,
   FileTextOutlined,
   HistoryOutlined,
@@ -77,6 +78,7 @@ export function AppSidebar() {
     { key: '/servers', icon: <CloudServerOutlined />, label: t('nav.servers') },
     { key: '/nodes', icon: <ClusterOutlined />, label: t('nav.nodes') },
     { key: '/subnets', icon: <PartitionOutlined />, label: t('nav.subnets') },
+    { key: '/console', icon: <CodeOutlined />, label: t('nav.console') },
     {
       key: 'group-users', icon: <TeamOutlined />, label: t('nav.groups.users'),
       children: [

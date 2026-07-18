@@ -192,6 +192,46 @@ func (m *Manager) Hosts() map[string]*sshexec.Client {
 	return out
 }
 
+// ConsoleClient returns an SSH client suitable for opening an interactive
+// console to serverID, for the web SSH console feature. It prefers the
+// already-live pooled connection (enabled VPN nodes) -- the "free" path,
+// reusing the exact same warm, host-key-pinned client every other provider
+// call uses. If there's no pooled client (a panel-host-only row that
+// carries no VPN instances, or a disabled row that's still flagged as the
+// panel host), it dials a fresh, ephemeral one instead.
+//
+// The returned close func is the caller's responsibility to invoke exactly
+// once when the console session ends: for the pooled path it's a no-op
+// (Manager still owns that client's lifecycle); for the ephemeral path it
+// closes the connection this call opened, so a console session never
+// leaks a connection the pool doesn't know about.
+func (m *Manager) ConsoleClient(ctx context.Context, serverID string) (client *sshexec.Client, closeFn func(), err error) {
+	m.mu.Lock()
+	pooled := m.clients[serverID]
+	m.mu.Unlock()
+	if pooled != nil {
+		return pooled, func() {}, nil
+	}
+
+	srv, err := m.store.GetServer(ctx, serverID)
+	if err != nil {
+		return nil, nil, err
+	}
+	keyPEM, err := m.enc.Open(srv.EncKeyPEM)
+	if err != nil {
+		return nil, nil, fmt.Errorf("decrypt ssh key: %w", err)
+	}
+	ssh, err := sshexec.New(sshexec.Config{
+		Host: srv.Host, Port: srv.Port, User: srv.SSHUser,
+		KeyPEM: []byte(keyPEM), HostKey: srv.HostKey,
+		Timeout: m.tmpl.SSHTimeout, CmdTimeout: m.tmpl.SSHCmdTimeout,
+	})
+	if err != nil {
+		return nil, nil, err
+	}
+	return ssh, func() { _ = ssh.Close() }, nil
+}
+
 // seedInstancesFromTemplate persists the legacy env-var Template as this
 // server's initial `server_instances` rows — runs once, only when the
 // server has zero rows (fresh server, or a pre-migration deployment seeing
@@ -243,7 +283,13 @@ func (m *Manager) buildProviders(ctx context.Context, srv store.Server, ssh *ssh
 	if err != nil {
 		return nil, nil, err
 	}
-	if len(instances) == 0 {
+	// A panel-host row with no instances yet is a pure management target
+	// (console access to the box the panel itself runs on), not a VPN node
+	// -- it must not silently grow WireGuard/IKEv2/Xray instances from the
+	// legacy Template just because it has zero rows. If the operator later
+	// adds instances explicitly (the per-server instance UI), this stops
+	// being zero-length and providers build normally.
+	if len(instances) == 0 && !srv.PanelHost {
 		if err := m.seedInstancesFromTemplate(ctx, srv.ID); err != nil {
 			return nil, nil, err
 		}

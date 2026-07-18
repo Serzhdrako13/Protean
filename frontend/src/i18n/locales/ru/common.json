@@ -57,6 +57,7 @@
     "servers": "Узлы VPN",
     "nodes": "Клиенты",
     "subnets": "Подсети",
+    "console": "SSH-консоль",
     "notifications": "Уведомления",
     "audit": "Аудит",
     "connectionHistory": "Подключения",

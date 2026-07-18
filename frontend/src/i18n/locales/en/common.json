@@ -57,6 +57,7 @@
     "servers": "VPN nodes",
     "nodes": "Network clients",
     "subnets": "Subnets",
+    "console": "SSH Console",
     "notifications": "Notifications",
     "audit": "Audit",
     "connectionHistory": "Connection History",

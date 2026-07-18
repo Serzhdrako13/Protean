@@ -3,6 +3,7 @@
   "searchPlaceholder": "Search by name or interface",
   "hideDownProviders": "Hide offline",
   "actions": {
+    "openConsole": "Console",
     "addInstance": "Add instance",
     "installVpn": "Install VPN",
     "checkInstall": "Check and continue",

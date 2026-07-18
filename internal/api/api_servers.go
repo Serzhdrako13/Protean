@@ -22,6 +22,7 @@ type apiServer struct {
 	PublicHost string `json:"public_host"`
 	HostKeySet bool   `json:"host_key_set"`
 	Enabled    bool   `json:"enabled"`
+	PanelHost  bool   `json:"panel_host"`
 }
 
 // GET /api/servers
@@ -36,7 +37,7 @@ func (s *Server) apiServersList(w http.ResponseWriter, r *http.Request) {
 		out = append(out, apiServer{
 			ID: srv.ID, Label: srv.Label, Host: srv.Host, Port: srv.Port,
 			SSHUser: srv.SSHUser, PublicHost: srv.PublicHost, HostKeySet: srv.HostKey != "",
-			Enabled: srv.Enabled,
+			Enabled: srv.Enabled, PanelHost: srv.PanelHost,
 		})
 	}
 	writeOK(w, out)

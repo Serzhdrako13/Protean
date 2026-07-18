@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"protean/internal/auth"
+	"protean/internal/console"
 	"protean/internal/sshexec"
 	"protean/internal/store"
 	"protean/internal/vpn"
@@ -72,7 +73,19 @@ type Server struct {
 	// (see internal/vpnsetup) -- empty in tests that don't wire it, in
 	// which case apiVPNSetupContent falls back to the embedded defaults.
 	vpnSetupDir string
+
+	// console backs the web SSH console's ticketing/concurrency limits
+	// (internal/console). Optional: nil in tests that don't wire it.
+	console *console.Hub
+	// consoleAllowedOrigins additionally authorizes WS upgrade Origins
+	// beyond the request's own Host -- see config.ConsoleAllowedOrigins.
+	consoleAllowedOrigins []string
 }
+
+// SetConsoleAllowedOrigins wires extra WS-upgrade Origins to accept beyond
+// the request's own Host (reverse-proxy deployments under a different
+// browser-facing origin).
+func (s *Server) SetConsoleAllowedOrigins(origins []string) { s.consoleAllowedOrigins = origins }
 
 // SetTLSManager wires the panel's own web-TLS certificate manager (see
 // internal/webtls) -- required for the /api/tls* settings/status endpoints.
@@ -185,10 +198,20 @@ func (s *Server) SetInstallerFunc(fn func(serverID string) (*vpn.Installer, bool
 type ServerManager interface {
 	Rebuild(ctx context.Context, serverID string) error
 	Remove(serverID string)
+	// ConsoleClient resolves a live SSH client for the web SSH console,
+	// preferring an already-pooled connection and falling back to an
+	// ephemeral one (see servers.Manager.ConsoleClient's doc comment). The
+	// returned close func must be called exactly once when the console
+	// session ends.
+	ConsoleClient(ctx context.Context, serverID string) (*sshexec.Client, func(), error)
 }
 
 // SetServerManager wires runtime server (re)build/remove.
 func (s *Server) SetServerManager(m ServerManager) { s.mgr = m }
+
+// SetConsoleHub wires the web SSH console's session/ticket bookkeeping
+// (internal/console). Optional: the /api/console/* handlers 503 if unset.
+func (s *Server) SetConsoleHub(h *console.Hub) { s.console = h }
 
 // serverOf returns the server id encoded in a provider instance key
 // "server:instance"; empty if unscoped.
@@ -305,6 +328,12 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("PUT /api/servers/{id}/instances/{name}/description", s.requireAuthAPI(s.apiServerInstancesUpdateDescription))
 	mux.HandleFunc("DELETE /api/servers/{id}/instances/{name}", s.requireAuthAPI(s.apiServerInstancesDelete))
 	mux.HandleFunc("GET /api/servers/{id}/traffic", s.requireAuthAPI(s.apiServerTrafficAggregate))
+
+	mux.HandleFunc("GET /api/console/targets", s.requireAuthAPI(s.apiConsoleTargets))
+	mux.HandleFunc("POST /api/console/sessions", s.requireAuthAPI(s.apiConsoleSessionCreate))
+	mux.HandleFunc("GET /api/console/ws", s.apiConsoleWS) // ticket-authenticated, not cookie/CSRF -- see apiConsoleWS
+	mux.HandleFunc("GET /api/console/panel-host", s.requireAuthAPI(s.apiConsolePanelHostGet))
+	mux.HandleFunc("PUT /api/console/panel-host", s.requireAuthAPI(s.apiConsolePanelHostSet))
 
 	mux.HandleFunc("GET /api/install", s.requireAuthAPI(s.apiInstallStatus))
 	mux.HandleFunc("POST /api/install/{provider}", s.requireAuthAPI(s.apiInstallProvider))
