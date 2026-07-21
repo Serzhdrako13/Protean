@@ -50,5 +50,30 @@
     "confirmStart": "Запустить {{label}}?",
     "stopped": "Провайдер остановлен",
     "started": "Провайдер запущен"
+  },
+  "tabs": {
+    "overview": "Обзор",
+    "clients": "Клиенты"
+  },
+  "clientsCard": {
+    "title": "Клиенты",
+    "expanded": "Развёрнуто",
+    "collapsed": "Свёрнуто",
+    "empty": "Пока нет подключённых клиентов",
+    "categoryLabels": {
+      "site": "Сайт",
+      "client": "Клиент"
+    },
+    "columns": {
+      "name": "Имя",
+      "address": "Адрес",
+      "providers": "Провайдеры",
+      "provider": "Провайдер",
+      "server": "Узел VPN",
+      "type": "Тип",
+      "category": "Категория",
+      "traffic": "Rx / Tx",
+      "status": "Статус"
+    }
   }
 }

@@ -103,6 +103,7 @@ export interface Client {
   type: string;
   peer_id: string;
   name: string;
+  address?: string;
   category?: string;
   online: boolean;
   last_handshake?: string;

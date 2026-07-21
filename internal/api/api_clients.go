@@ -2,6 +2,7 @@ package api
 
 import (
 	"net/http"
+	"strings"
 	"time"
 
 	"protean/internal/store"
@@ -21,6 +22,10 @@ type apiClientRow struct {
 	Type          string `json:"type"`
 	PeerID        string `json:"peer_id"`
 	Name          string `json:"name"`
+	// Address: the peer's AllowedIPs, comma-joined -- usually one tunnel
+	// address, occasionally more (a site/subnet peer advertising extra
+	// CIDRs alongside its own address).
+	Address       string `json:"address,omitempty"`
 	Category      string `json:"category,omitempty"`
 	Online        bool   `json:"online"`
 	LastHandshake string `json:"last_handshake,omitempty"`
@@ -79,7 +84,7 @@ func (s *Server) apiClientsList(w http.ResponseWriter, r *http.Request) {
 			row := apiClientRow{
 				Provider: name, ProviderLabel: s.providerLabel(name, labels),
 				ServerID: serverPart(name), Type: prov.Type(),
-				PeerID: urlID, Name: p.Name, Category: cats[p.PublicKey],
+				PeerID: urlID, Name: p.Name, Address: strings.Join(p.AllowedIPs, ", "), Category: cats[p.PublicKey],
 				Online: p.Online, RxBytes: p.RxBytes, TxBytes: p.TxBytes,
 				OwnerKind: "none",
 			}

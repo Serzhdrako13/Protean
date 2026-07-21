@@ -1,18 +1,19 @@
-import { useRef, useState, type ReactNode } from 'react';
-import { Card, Row, Col, Tag, Empty, Button, Skeleton, Progress, Badge, Tooltip, Radio, Switch, Popconfirm, message } from 'antd';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { Card, Row, Col, Tag, Empty, Button, Skeleton, Progress, Badge, Tooltip, Radio, Switch, Space, Popconfirm, message, Tabs, Table } from 'antd';
 import { ArrowDownOutlined, ArrowUpOutlined, PlusOutlined, QuestionCircleOutlined } from '@ant-design/icons';
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQueryClient, useQueries } from '@tanstack/react-query';
 import { PageShell } from '@/layouts/PageShell';
 import { PageTitleBar } from '@/components/PageTitleBar';
 import { useDashboardQuery } from '@/api/queries/dashboard';
 import { useAggregateTrafficQuery, useServerTrafficQuery } from '@/api/queries/providers';
 import { useProviderSettingsMutations } from '@/api/queries/network';
-import type { Home, HomeServer, TrafficPoint } from '@/types/api';
+import { useClientsQuery, type Client } from '@/api/queries/nodes';
+import type { Home, HomeServer, TrafficPoint, XrayView } from '@/types/api';
 import { Sparkline } from '@/components/viz/Sparkline';
 import { PollIntervalSelect, POLL_INTERVALS } from '@/components/viz/PollIntervalSelect';
-import { ApiError } from '@/api/http-init';
+import { ApiError, HttpUtil } from '@/api/http-init';
 import { useHideDownProviders } from '@/hooks/useHideDownProviders';
 
 const RANGES = ['1h', '6h', '24h', '3d'] as const;
@@ -366,16 +367,378 @@ function AggregateTrafficCard({ pollMs }: { pollMs: number }) {
   );
 }
 
-export function IndexPage() {
+// The shield+monogram pictograms turned out illegible at table-row size --
+// a colored text abbreviation reads instantly instead. Color per type is
+// each project's own real brand color (checked, not guessed): WireGuard
+// #88171A is literally the RGB value from wireguard.com's own trademark
+// policy page; OpenVPN #AF231D and strongSwan/IKEv2 #646B52 are Simple
+// Icons' recorded brand hex for those projects; AmneziaWG #1F69FF is
+// en.amnezia.org's own site accent (by far the most frequent hex on the
+// page). Xray has no brand color anywhere -- yellow per explicit request.
+const PROVIDER_TYPE_ABBR: Record<string, string> = {
+  wireguard: 'wg',
+  amneziawg: 'awg',
+  openvpn: 'ovpn',
+  ikev2: 'ikev',
+  xray: 'xray',
+};
+const PROVIDER_TYPE_COLOR: Record<string, string> = {
+  wireguard: '#88171A',
+  amneziawg: '#1F69FF',
+  openvpn: '#AF231D',
+  ikev2: '#646B52',
+  xray: 'var(--ant-color-warning)',
+};
+const PROVIDER_TYPE_LABEL: Record<string, string> = {
+  wireguard: 'WireGuard',
+  amneziawg: 'AmneziaWG',
+  openvpn: 'OpenVPN',
+  ikev2: 'IKEv2',
+  xray: 'Xray',
+};
+
+function ProviderTypeIcon({ type }: { type: string }) {
+  const abbr = PROVIDER_TYPE_ABBR[type];
+  if (!abbr) return null;
+  return (
+    <Tooltip title={PROVIDER_TYPE_LABEL[type] ?? type}>
+      <span style={{ color: PROVIDER_TYPE_COLOR[type], fontWeight: 700, fontSize: 12 }}>{abbr}</span>
+    </Tooltip>
+  );
+}
+
+// Groups the flat /api/clients rows (one row per raw VPN connection) by
+// real owner (a Node/User, or the peer itself if unowned) into one row per
+// real client -- same grouping "Клиенты" → "Все клиенты" leaves flat on
+// purpose (that page's job is the per-connection detail); the dashboard's
+// job is "who's connected, at a glance," so one row per real device/person
+// is the right shape here instead.
+interface ClientGroup {
+  key: string;
+  name: string;
+  addresses: string[];
+  online: boolean;
+  connections: Client[];
+  rxTotal: number;
+  txTotal: number;
+  // Xray clients merged in by name -- see mergeXrayEntries. Never comes
+  // from groupClients itself: Xray is structurally absent from
+  // /api/clients (its client model isn't peer-key-addressable the same
+  // way as the other four protocols), so this is populated separately.
+  xrayEntries: XrayEntry[];
+}
+
+interface XrayEntry {
+  providerLabel: string;
+  link: string;
+}
+
+function groupClients(clients: Client[]): ClientGroup[] {
+  const groups = new Map<string, ClientGroup>();
+  for (const c of clients) {
+    // An unowned peer (no Node/User formally attached) is still the SAME
+    // real client across every provider it connects through -- grouping by
+    // provider+peer_id here (instead of by name) was a real bug: it split
+    // one real device's WireGuard/OpenVPN/IKEv2/AmneziaWG connections into
+    // as many separate rows as it has providers, each showing a dropdown
+    // with exactly one connection, which defeated the entire point of this
+    // view. The peer's own name is the only signal available for "same
+    // device" once there's no formal owner -- an admin naming multiple
+    // peers identically (e.g. "dev-node" on every provider, as done here)
+    // is exactly that signal.
+    const key = c.owner_kind !== 'none' ? `${c.owner_kind}:${c.owner_name}` : `peer:${c.name}`;
+    let g = groups.get(key);
+    if (!g) {
+      g = {
+        key,
+        name: c.owner_kind !== 'none' ? (c.owner_name ?? c.name) : c.name,
+        addresses: [],
+        online: false,
+        connections: [],
+        rxTotal: 0,
+        txTotal: 0,
+        xrayEntries: [],
+      };
+      groups.set(key, g);
+    }
+    g.connections.push(c);
+    if (c.address && !g.addresses.includes(c.address)) g.addresses.push(c.address);
+    if (c.online) g.online = true;
+    g.rxTotal += c.rx_bytes;
+    g.txTotal += c.tx_bytes;
+  }
+  return Array.from(groups.values());
+}
+
+// Merges each Xray provider's clients (name + subscription link only --
+// there's no online/traffic data for them anywhere in the backend) into
+// the client groups by matching name, same as an admin naming a WireGuard
+// and an OpenVPN peer identically to mean "the same device". An Xray
+// client whose name matches no other group still gets its own row --
+// otherwise it would just vanish, which is the exact complaint this whole
+// merge exists to fix ("xray в компактном виде не отмечен вообще").
+function mergeXrayEntries(groups: ClientGroup[], xrayByName: Map<string, XrayEntry[]>): ClientGroup[] {
+  const byName = new Map(groups.map((g) => [g.name, g]));
+  for (const [name, entries] of xrayByName) {
+    let g = byName.get(name);
+    if (!g) {
+      g = { key: `xray-only:${name}`, name, addresses: [], online: false, connections: [], rxTotal: 0, txTotal: 0, xrayEntries: [] };
+      groups.push(g);
+      byName.set(name, g);
+    }
+    g.xrayEntries = entries;
+  }
+  return groups;
+}
+
+// One badge per distinct protocol type present, with a ×N count when a
+// client has more than one connection of the same type -- answers "how
+// many/which kind of connections does this client have" at a glance,
+// without needing to expand.
+function providerTypeCounts(connections: Client[]): { type: string; count: number }[] {
+  const counts = new Map<string, number>();
+  for (const c of connections) counts.set(c.type, (counts.get(c.type) ?? 0) + 1);
+  return Array.from(counts.entries()).map(([type, count]) => ({ type, count }));
+}
+
+// A connection row is either a real /api/clients connection (with real
+// status/traffic) or an Xray entry (name + subscription link only -- no
+// online/traffic data for it exists anywhere in the backend, so those
+// columns are honestly "—" rather than a fabricated guess).
+type ConnectionRow = { kind: 'client'; c: Client } | ({ kind: 'xray' } & XrayEntry);
+
+// Per-connection detail table shown beneath a client row in expanded mode --
+// same columns/style as NodesPage's NodeAccessPanel (provider/server/type/
+// category/address/status/traffic). Always available (any client can
+// expand, even with a single connection) so the address -- deliberately
+// dropped from the collapsed row, since it can't be represented by one
+// value once a client has more than one provider -- has exactly one place
+// it always lives, uniformly, instead of sometimes being on the collapsed
+// row and sometimes not.
+function ClientConnectionsTable({ connections, xrayEntries }: { connections: Client[]; xrayEntries: XrayEntry[] }) {
   const { t } = useTranslation(['dashboard', 'common']);
-  // One shared interval for the whole page (tiles + server list + chart) —
-  // previously the tiles polled a hardcoded 5s regardless of this control,
-  // so picking a slower chart interval didn't actually reduce backend load.
-  const [pollMs, setPollMs] = useState(60_000);
-  const { data, isLoading } = useDashboardQuery(pollMs);
-  // Density applies to the whole page at once (overview block + every
-  // server card) -- persisted like the other small per-browser UI prefs
-  // (sidebar collapse, theme, language).
+  const rows: ConnectionRow[] = [
+    ...connections.map((c): ConnectionRow => ({ kind: 'client', c })),
+    ...xrayEntries.map((x): ConnectionRow => ({ kind: 'xray', ...x })),
+  ];
+  return (
+    <Table
+      size="small"
+      rowKey={(r) => (r.kind === 'client' ? `${r.c.provider}-${r.c.peer_id}` : `xray-${r.providerLabel}`)}
+      pagination={false}
+      dataSource={rows}
+      columns={[
+        {
+          title: t('dashboard:clientsCard.columns.provider'),
+          key: 'provider_label',
+          render: (_: unknown, r: ConnectionRow) => (
+            <Space size={6}>
+              <ProviderTypeIcon type={r.kind === 'client' ? r.c.type : 'xray'} />
+              {r.kind === 'client' ? r.c.provider_label : r.providerLabel}
+            </Space>
+          ),
+        },
+        {
+          title: t('dashboard:clientsCard.columns.server'),
+          key: 'server_id',
+          render: (_: unknown, r: ConnectionRow) => (r.kind === 'client' ? <code>{r.c.server_id}</code> : '—'),
+        },
+        {
+          title: t('dashboard:clientsCard.columns.type'),
+          key: 'type',
+          render: (_: unknown, r: ConnectionRow) => (r.kind === 'client' ? r.c.type : 'xray'),
+        },
+        {
+          title: t('dashboard:clientsCard.columns.category'),
+          key: 'category',
+          render: (_: unknown, r: ConnectionRow) =>
+            r.kind === 'client' && r.c.category ? t(`dashboard:clientsCard.categoryLabels.${r.c.category}`) : '—',
+        },
+        {
+          title: t('dashboard:clientsCard.columns.address'),
+          key: 'address',
+          render: (_: unknown, r: ConnectionRow) => (r.kind === 'client' && r.c.address ? <code>{r.c.address}</code> : '—'),
+        },
+        {
+          title: t('dashboard:clientsCard.columns.status'),
+          key: 'status',
+          render: (_: unknown, r: ConnectionRow) => {
+            if (r.kind !== 'client') return '—';
+            return r.c.online ? <Tag color="success">{t('common:status.online')}</Tag> : <Tag color="error">{t('common:status.offline')}</Tag>;
+          },
+        },
+        {
+          title: t('dashboard:clientsCard.columns.traffic'),
+          key: 'traffic',
+          render: (_: unknown, r: ConnectionRow) =>
+            r.kind === 'client' ? (
+              <span>
+                <Tag color="blue">↓{formatBytes(r.c.rx_bytes)}</Tag>
+                <Tag color="purple">↑{formatBytes(r.c.tx_bytes)}</Tag>
+              </span>
+            ) : (
+              '—'
+            ),
+        },
+      ]}
+    />
+  );
+}
+
+// Xray clients are structurally absent from GET /api/clients (their model
+// isn't peer-key-addressable the same way as the other four protocols --
+// see api_clients.go), and unlike every other protocol an Xray client has
+// no online/traffic data anywhere in the backend at all (XrayClient is
+// just {name, link}). Rather than a separate floating status row (tried
+// first, but it sat above the table attached to no client -- exactly the
+// wrong shape), each Xray provider's clients are fetched here and merged
+// into the same per-client rows as every other protocol by name (see
+// mergeXrayEntries) -- whether the Xray SERVICE itself is up/down is
+// already visible on the Обзор tab's server cards at all times, so this
+// tab's job stays "which client has which connections."
+function useXrayClientsByName(home: Home | undefined): Map<string, XrayEntry[]> {
+  const xrayProviders = home?.servers.flatMap((srv) => srv.providers.filter((p) => p.type === 'xray')) ?? [];
+  const results = useQueries({
+    queries: xrayProviders.map((p) => ({
+      queryKey: ['xray', p.key, ''],
+      queryFn: () => HttpUtil.get<XrayView>(`/api/providers/${encodeURIComponent(p.key)}/xray`),
+    })),
+  });
+  const byName = new Map<string, XrayEntry[]>();
+  results.forEach((r, i) => {
+    const p = xrayProviders[i];
+    for (const c of r.data?.clients ?? []) {
+      const list = byName.get(c.name) ?? [];
+      list.push({ providerLabel: p.label, link: c.link });
+      byName.set(c.name, list);
+    }
+  });
+  return byName;
+}
+
+// Compact "who's connected right now" list -- an AntD Table (size="small"),
+// same widget every other entity list in this app uses. The switch is a
+// bulk expand-all/collapse-all action; independently, every row also gets
+// its own standard AntD expand arrow so one specific client can be
+// expanded or collapsed on its own without touching the rest -- the two
+// controls are orthogonal, not the same state.
+function ClientsCard({ data: home }: { data: Home | undefined }) {
+  const { t } = useTranslation(['dashboard', 'common']);
+  const { data, isLoading } = useClientsQuery();
+  const [expanded, setExpanded] = useState(
+    () => localStorage.getItem('protean-dashboard-clients-expanded') === 'true',
+  );
+  const xrayByName = useXrayClientsByName(home);
+  const groups = mergeXrayEntries(groupClients(data ?? []), xrayByName);
+  const [expandedKeys, setExpandedKeys] = useState<string[]>([]);
+
+  // Re-apply the bulk preference whenever the client list (re)loads --
+  // covers both first load and any later refetch, not just the toggle click.
+  useEffect(() => {
+    setExpandedKeys(expanded ? groups.map((g) => g.key) : []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data]);
+
+  function onExpandedChange(v: boolean) {
+    setExpanded(v);
+    localStorage.setItem('protean-dashboard-clients-expanded', String(v));
+    setExpandedKeys(v ? groups.map((g) => g.key) : []);
+  }
+
+  const columns = [
+    {
+      title: t('dashboard:clientsCard.columns.name'),
+      dataIndex: 'name',
+      key: 'name',
+    },
+    {
+      title: t('dashboard:clientsCard.columns.providers'),
+      key: 'providers',
+      render: (_: unknown, g: ClientGroup) => (
+        <div style={{ display: 'flex', flexWrap: 'nowrap', alignItems: 'center', gap: 12, whiteSpace: 'nowrap' }}>
+          {providerTypeCounts(g.connections).map(({ type, count }) => (
+            <span key={type} style={{ display: 'inline-flex', alignItems: 'center', gap: 3, flexShrink: 0 }}>
+              <ProviderTypeIcon type={type} />
+              {count > 1 && <span style={{ fontSize: 12, color: 'var(--ant-color-text-tertiary)' }}>×{count}</span>}
+            </span>
+          ))}
+          {g.xrayEntries.length > 0 && (
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, flexShrink: 0 }}>
+              <ProviderTypeIcon type="xray" />
+              {g.xrayEntries.length > 1 && <span style={{ fontSize: 12, color: 'var(--ant-color-text-tertiary)' }}>×{g.xrayEntries.length}</span>}
+            </span>
+          )}
+        </div>
+      ),
+    },
+    {
+      title: t('dashboard:clientsCard.columns.traffic'),
+      key: 'traffic',
+      render: (_: unknown, g: ClientGroup) =>
+        g.connections.length === 0 ? (
+          '—'
+        ) : (
+          <span>
+            <Tag color="blue">↓{formatBytes(g.rxTotal)}</Tag>
+            <Tag color="purple">↑{formatBytes(g.txTotal)}</Tag>
+          </span>
+        ),
+    },
+    {
+      title: t('dashboard:clientsCard.columns.status'),
+      key: 'status',
+      render: (_: unknown, g: ClientGroup) => {
+        if (g.connections.length === 0) return '—';
+        return g.online ? <Tag color="success">{t('common:status.online')}</Tag> : <Tag color="error">{t('common:status.offline')}</Tag>;
+      },
+    },
+  ];
+
+  return (
+    <Card
+      title={t('dashboard:clientsCard.title')}
+      style={{ marginTop: 20 }}
+      extra={
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+          <Switch size="small" checked={expanded} onChange={onExpandedChange} />
+          <span style={{ fontSize: 12, color: 'var(--ant-color-text-tertiary)' }}>
+            {expanded ? t('dashboard:clientsCard.expanded') : t('dashboard:clientsCard.collapsed')}
+          </span>
+        </span>
+      }
+    >
+      {isLoading ? (
+        <Skeleton active />
+      ) : groups.length === 0 ? (
+        <Empty description={t('dashboard:clientsCard.empty')} />
+      ) : (
+        <Table
+          size="small"
+          rowKey="key"
+          columns={columns}
+          dataSource={groups}
+          pagination={groups.length > 20 ? { pageSize: 20, showSizeChanger: true } : false}
+          scroll={{ x: true }}
+          expandable={{
+            expandedRowKeys: expandedKeys,
+            onExpandedRowsChange: (keys) => setExpandedKeys(keys as string[]),
+            expandedRowRender: (g: ClientGroup) => <ClientConnectionsTable connections={g.connections} xrayEntries={g.xrayEntries} />,
+          }}
+        />
+      )}
+    </Card>
+  );
+}
+
+// The pre-existing dashboard content (poll controls, gauge tiles, traffic
+// chart, server cards) -- now the "Обзор" tab's content, unchanged except
+// for living in its own component so it can sit inside a Tabs item instead
+// of the page's only content.
+function OverviewTab({ data, pollMs, setPollMs }: { data: Home; pollMs: number; setPollMs: (v: number) => void }) {
+  const { t } = useTranslation(['dashboard']);
+  // Density applies to this tab's content as a whole (overview block +
+  // every server card) -- persisted like the other small per-browser UI
+  // prefs (sidebar collapse, theme, language).
   const [density, setDensity] = useState<'expanded' | 'compact'>(
     () => (localStorage.getItem('protean-dashboard-density') === 'compact' ? 'compact' : 'expanded'),
   );
@@ -397,6 +760,129 @@ export function IndexPage() {
   const [hideDown, setHideDown] = useHideDownProviders();
 
   return (
+    <>
+      <div style={{ marginBottom: 16, display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
+        <Badge
+          status="processing"
+          text={
+            <span style={{ color: 'var(--ant-color-text-tertiary)', fontSize: 12, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+              {t('dashboard:pollBadge', {
+                interval: (() => {
+                  const found = POLL_INTERVALS.find((p) => p.value === pollMs);
+                  return found ? t(`poll-interval:${found.key}`) : t('poll-interval:customSeconds', { s: pollMs / 1000 });
+                })(),
+              })}
+              <Tooltip title={t('dashboard:pollTooltip')}>
+                <QuestionCircleOutlined />
+              </Tooltip>
+            </span>
+          }
+        />
+        <PollIntervalSelect value={pollMs} onChange={setPollMs} />
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+          <Switch size="small" checked={density === 'compact'} onChange={onDensityChange} />
+          <span style={{ fontSize: 12, color: 'var(--ant-color-text-tertiary)' }}>
+            {density === 'compact' ? t('dashboard:density.compact') : t('dashboard:density.expanded')}
+          </span>
+        </span>
+        {density === 'compact' && (
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+            <Switch size="small" checked={narrowServers} onChange={onNarrowServersChange} />
+            <span style={{ fontSize: 12, color: 'var(--ant-color-text-tertiary)' }}>
+              {narrowServers ? t('dashboard:density.tileView') : t('dashboard:density.rowView')}
+            </span>
+          </span>
+        )}
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+          <Switch size="small" checked={hideDown} onChange={setHideDown} />
+          <span style={{ fontSize: 12, color: 'var(--ant-color-text-tertiary)' }}>
+            {t('dashboard:hideDownProviders')}
+          </span>
+        </span>
+      </div>
+      {density === 'expanded' && (
+        <>
+          <Row gutter={[20, 20]} style={{ marginBottom: 20 }}>
+            <Col xs={12} sm={6}>
+              <GaugeTile
+                percent={data.servers_total ? Math.round((data.servers_up / data.servers_total) * 100) : 0}
+                color="var(--ant-color-success)"
+                format={() => `${data.servers_up}/${data.servers_total}`}
+                label={t('dashboard:tiles.serversOnline.label')}
+                tooltip={t('dashboard:tiles.serversOnline.tooltip')}
+              />
+            </Col>
+            <Col xs={12} sm={6}>
+              <GaugeTile
+                percent={data.peers_total ? Math.round((data.peers_online / data.peers_total) * 100) : 0}
+                color="var(--ant-color-primary)"
+                format={() => `${data.peers_online}/${data.peers_total}`}
+                label={t('dashboard:tiles.peersOnline.label')}
+                tooltip={t('dashboard:tiles.peersOnline.tooltip')}
+              />
+            </Col>
+            <Col xs={12} sm={6}>
+              <GaugeTile
+                percent={100}
+                color="var(--ant-color-info)"
+                format={() => (
+                  <span style={{ fontSize: 15 }}><ArrowDownOutlined /> {formatBytes(data.total_rx_bytes)}</span>
+                )}
+                label={t('dashboard:tiles.totalRx.label')}
+                tooltip={t('dashboard:tiles.totalRx.tooltip')}
+              />
+            </Col>
+            <Col xs={12} sm={6}>
+              <GaugeTile
+                percent={100}
+                color="#9575cd"
+                format={() => (
+                  <span style={{ fontSize: 15 }}><ArrowUpOutlined /> {formatBytes(data.total_tx_bytes)}</span>
+                )}
+                label={t('dashboard:tiles.totalTx.label')}
+                tooltip={t('dashboard:tiles.totalTx.tooltip')}
+              />
+            </Col>
+          </Row>
+
+          <AggregateTrafficCard pollMs={pollMs} />
+
+          <Row gutter={[20, 20]}>
+            {data.servers.map((srv) => (
+              <Col key={srv.id} xs={24}>
+                <ServerCard srv={srv} pollMs={pollMs} hideDown={hideDown} />
+              </Col>
+            ))}
+          </Row>
+        </>
+      )}
+      {density === 'compact' && (
+        <>
+          <div style={{ marginBottom: 20 }}>
+            <CompactOverviewCard data={data} pollMs={pollMs} />
+          </div>
+          <Row gutter={[20, 20]}>
+            {data.servers.map((srv) => (
+              <Col key={srv.id} xs={24} md={narrowServers ? 12 : 24}>
+                <CompactServerCard srv={srv} pollMs={pollMs} narrow={narrowServers} hideDown={hideDown} />
+              </Col>
+            ))}
+          </Row>
+        </>
+      )}
+    </>
+  );
+}
+
+export function IndexPage() {
+  const { t } = useTranslation(['dashboard', 'common']);
+  // One shared interval for the whole page (tiles + server list + chart) —
+  // previously the tiles polled a hardcoded 5s regardless of this control,
+  // so picking a slower chart interval didn't actually reduce backend load.
+  const [pollMs, setPollMs] = useState(60_000);
+  const { data, isLoading } = useDashboardQuery(pollMs);
+
+  return (
     <PageShell>
       <PageTitleBar>{t('dashboard:heading')}</PageTitleBar>
       {isLoading && <Skeleton active />}
@@ -410,117 +896,12 @@ export function IndexPage() {
         </Card>
       )}
       {!isLoading && data && data.has_servers && (
-        <>
-          <div style={{ marginBottom: 16, display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
-            <Badge
-              status="processing"
-              text={
-                <span style={{ color: 'var(--ant-color-text-tertiary)', fontSize: 12, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                  {t('dashboard:pollBadge', {
-                    interval: (() => {
-                      const found = POLL_INTERVALS.find((p) => p.value === pollMs);
-                      return found ? t(`poll-interval:${found.key}`) : t('poll-interval:customSeconds', { s: pollMs / 1000 });
-                    })(),
-                  })}
-                  <Tooltip title={t('dashboard:pollTooltip')}>
-                    <QuestionCircleOutlined />
-                  </Tooltip>
-                </span>
-              }
-            />
-            <PollIntervalSelect value={pollMs} onChange={setPollMs} />
-            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-              <Switch size="small" checked={density === 'compact'} onChange={onDensityChange} />
-              <span style={{ fontSize: 12, color: 'var(--ant-color-text-tertiary)' }}>
-                {density === 'compact' ? t('dashboard:density.compact') : t('dashboard:density.expanded')}
-              </span>
-            </span>
-            {density === 'compact' && (
-              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                <Switch size="small" checked={narrowServers} onChange={onNarrowServersChange} />
-                <span style={{ fontSize: 12, color: 'var(--ant-color-text-tertiary)' }}>
-                  {narrowServers ? t('dashboard:density.tileView') : t('dashboard:density.rowView')}
-                </span>
-              </span>
-            )}
-            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-              <Switch size="small" checked={hideDown} onChange={setHideDown} />
-              <span style={{ fontSize: 12, color: 'var(--ant-color-text-tertiary)' }}>
-                {t('dashboard:hideDownProviders')}
-              </span>
-            </span>
-          </div>
-          {density === 'expanded' && (
-            <>
-              <Row gutter={[20, 20]} style={{ marginBottom: 20 }}>
-                <Col xs={12} sm={6}>
-                  <GaugeTile
-                    percent={data.servers_total ? Math.round((data.servers_up / data.servers_total) * 100) : 0}
-                    color="var(--ant-color-success)"
-                    format={() => `${data.servers_up}/${data.servers_total}`}
-                    label={t('dashboard:tiles.serversOnline.label')}
-                    tooltip={t('dashboard:tiles.serversOnline.tooltip')}
-                  />
-                </Col>
-                <Col xs={12} sm={6}>
-                  <GaugeTile
-                    percent={data.peers_total ? Math.round((data.peers_online / data.peers_total) * 100) : 0}
-                    color="var(--ant-color-primary)"
-                    format={() => `${data.peers_online}/${data.peers_total}`}
-                    label={t('dashboard:tiles.peersOnline.label')}
-                    tooltip={t('dashboard:tiles.peersOnline.tooltip')}
-                  />
-                </Col>
-                <Col xs={12} sm={6}>
-                  <GaugeTile
-                    percent={100}
-                    color="var(--ant-color-info)"
-                    format={() => (
-                      <span style={{ fontSize: 15 }}><ArrowDownOutlined /> {formatBytes(data.total_rx_bytes)}</span>
-                    )}
-                    label={t('dashboard:tiles.totalRx.label')}
-                    tooltip={t('dashboard:tiles.totalRx.tooltip')}
-                  />
-                </Col>
-                <Col xs={12} sm={6}>
-                  <GaugeTile
-                    percent={100}
-                    color="#9575cd"
-                    format={() => (
-                      <span style={{ fontSize: 15 }}><ArrowUpOutlined /> {formatBytes(data.total_tx_bytes)}</span>
-                    )}
-                    label={t('dashboard:tiles.totalTx.label')}
-                    tooltip={t('dashboard:tiles.totalTx.tooltip')}
-                  />
-                </Col>
-              </Row>
-
-              <AggregateTrafficCard pollMs={pollMs} />
-
-              <Row gutter={[20, 20]}>
-                {data.servers.map((srv) => (
-                  <Col key={srv.id} xs={24}>
-                    <ServerCard srv={srv} pollMs={pollMs} hideDown={hideDown} />
-                  </Col>
-                ))}
-              </Row>
-            </>
-          )}
-          {density === 'compact' && (
-            <>
-              <div style={{ marginBottom: 20 }}>
-                <CompactOverviewCard data={data} pollMs={pollMs} />
-              </div>
-              <Row gutter={[20, 20]}>
-                {data.servers.map((srv) => (
-                  <Col key={srv.id} xs={24} md={narrowServers ? 12 : 24}>
-                    <CompactServerCard srv={srv} pollMs={pollMs} narrow={narrowServers} hideDown={hideDown} />
-                  </Col>
-                ))}
-              </Row>
-            </>
-          )}
-        </>
+        <Tabs
+          items={[
+            { key: 'overview', label: t('dashboard:tabs.overview'), children: <OverviewTab data={data} pollMs={pollMs} setPollMs={setPollMs} /> },
+            { key: 'clients', label: t('dashboard:tabs.clients'), children: <ClientsCard data={data} /> },
+          ]}
+        />
       )}
     </PageShell>
   );

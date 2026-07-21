@@ -206,6 +206,15 @@ func (p *Provider) ListPeers(ctx context.Context) ([]vpn.Peer, error) {
 		if sa, ok := online[cn]; ok {
 			peer.Online = true
 			peer.Endpoint = sa.Remote
+			// A client with no static allowed-IP configured (the normal
+			// case -- these are road-warriors, addressed from the pool)
+			// still gets a real tunnel address the moment its CHILD_SA
+			// comes up; sa.VIP already carries it (see ParseListSAs) but
+			// was never surfaced here, so an online ikev2 client showed no
+			// address at all.
+			if len(allowed) == 0 && sa.VIP != "" {
+				peer.AllowedIPs = []string{sa.VIP}
+			}
 		}
 		peers = append(peers, peer)
 	}

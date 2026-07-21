@@ -273,12 +273,36 @@ install_amneziawg() {
 			# the project's DEB822 repo instructions (left to the operator if the
 			# PPA path fails).
 			pkg_install software-properties-common ca-certificates || true
-			if add-apt-repository -y ppa:amnezia/ppa 2>/dev/null; then
-				apt-get update -y
-				pkg_install amneziawg amneziawg-tools
-			else
+			if ! add-apt-repository -y ppa:amnezia/ppa 2>/dev/null; then
 				echo "[!] Could not add ppa:amnezia/ppa (expected on non-Ubuntu Debian)." >&2
 				echo "    Add the AmneziaWG DEB822 repo manually, then re-run install." >&2
+				return 1
+			fi
+			# add-apt-repository only WRITES the source file -- it doesn't
+			# check the PPA actually publishes a build for the host's
+			# codename. Amnezia's PPA lags interim/very new Ubuntu releases;
+			# confirmed live on 26.04 "resolute": add-apt-repository reports
+			# success, then `apt-get update` fails with "does not have a
+			# Release file". Pin the just-written entry to Ubuntu 24.04
+			# "noble" instead -- Amnezia's PPA reliably tracks that LTS, and
+			# its packages install fine on newer Ubuntu userspaces too.
+			for f in /etc/apt/sources.list.d/amnezia-ubuntu-ppa-*.sources /etc/apt/sources.list.d/amnezia-ppa*.list; do
+				[ -f "$f" ] && sed -i -E 's/^(Suites:).*/\1 noble/; s/ [a-z]+ main$/ noble main/' "$f"
+			done
+			if apt-get update -y && pkg_install amneziawg amneziawg-tools; then
+				:
+			else
+				# Leaving the source file in place (broken, or now orphaned if
+				# the noble pin also failed) breaks every SUBSEQUENT apt-get
+				# update site-wide, not just this install -- confirmed live: a
+				# failed amneziawg install broke the very next, unrelated
+				# openvpn install with the same "no Release file" error until
+				# this was cleaned up by hand. So on failure, always remove
+				# what was just added before returning.
+				echo "[x] AmneziaWG has no usable package for this distro/release (tried the noble pin) -- ppa:amnezia/ppa likely doesn't support it yet." >&2
+				add-apt-repository -y --remove ppa:amnezia/ppa 2>/dev/null || true
+				rm -f /etc/apt/sources.list.d/amnezia-ubuntu-ppa-*.sources /etc/apt/sources.list.d/amnezia-ppa*.list
+				apt-get update -y >/dev/null 2>&1 || true
 				return 1
 			fi
 			;;

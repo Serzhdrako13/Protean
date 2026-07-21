@@ -50,5 +50,30 @@
     "confirmStart": "Start {{label}}?",
     "stopped": "Provider stopped",
     "started": "Provider started"
+  },
+  "tabs": {
+    "overview": "Overview",
+    "clients": "Clients"
+  },
+  "clientsCard": {
+    "title": "Clients",
+    "expanded": "Expanded",
+    "collapsed": "Collapsed",
+    "empty": "No clients connected yet",
+    "categoryLabels": {
+      "site": "Site",
+      "client": "Client"
+    },
+    "columns": {
+      "name": "Name",
+      "address": "Address",
+      "providers": "Providers",
+      "provider": "Provider",
+      "server": "VPN node",
+      "type": "Type",
+      "category": "Category",
+      "traffic": "Rx / Tx",
+      "status": "Status"
+    }
   }
 }

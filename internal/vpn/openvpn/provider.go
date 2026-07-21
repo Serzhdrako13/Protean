@@ -258,6 +258,15 @@ func (p *Provider) ListPeers(ctx context.Context) ([]vpn.Peer, error) {
 			peer.RxBytes = c.BytesReceived
 			peer.TxBytes = c.BytesSent
 			peer.LastHandshake = c.ConnectedSince
+			// A client with no ccd static address (the common case -- most
+			// clients just get whatever the server pool hands out) still
+			// gets a real tunnel address the moment it connects; the status
+			// file's VirtualAddress column already carries it (parsed above)
+			// but was never surfaced here, so every dynamically-addressed
+			// client showed no address at all despite being online.
+			if len(allowed) == 0 && c.VirtualAddress != "" {
+				peer.AllowedIPs = []string{c.VirtualAddress}
+			}
 		}
 		peers = append(peers, peer)
 	}

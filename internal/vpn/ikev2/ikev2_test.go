@@ -111,6 +111,65 @@ protean: #13, CONNECTING, IKEv2
 	}
 }
 
+// A cert-based client's remote identity always prints as the full "CN=<name>"
+// DN (confirmed live against a real strongSwan server) -- found via live
+// testing that ListPeers compared this raw form against the bare stored CN
+// and never matched, so no ikev2 client ever showed as online.
+func TestParseListSAsStripsCNPrefix(t *testing.T) {
+	const s = `protean: #1, ESTABLISHED, IKEv2, spi ...
+  local  '186.246.3.162' @ 186.246.3.162[4500]
+  remote 'CN=dev-node' @ 95.216.0.139[4500]`
+
+	sas := ParseListSAs(s)
+	if len(sas) != 1 {
+		t.Fatalf("got %d SAs, want 1: %+v", len(sas), sas)
+	}
+	if sas[0].RemoteID != "dev-node" {
+		t.Errorf("RemoteID = %q, want %q (CN= prefix should be stripped)", sas[0].RemoteID, "dev-node")
+	}
+}
+
+// The assigned pool address (only present once the CHILD_SA -- the actual
+// data tunnel, not just the IKE_SA -- is up) is appended to the same
+// "remote" line as " [<vip>]" (confirmed against strongSwan's own
+// list_sas.c: the vici "remote-vips" field is printed as " [%s]" right
+// after the remote host/port). Found via live testing that an online
+// ikev2 client never showed an address because this wasn't parsed at all.
+func TestParseListSAsExtractsVIP(t *testing.T) {
+	const s = `protean: #1, ESTABLISHED, IKEv2, spi ...
+  local  '186.246.3.162' @ 186.246.3.162[4500]
+  remote 'CN=dev-node' @ 95.216.0.139[4500] [10.9.0.5]`
+
+	sas := ParseListSAs(s)
+	if len(sas) != 1 {
+		t.Fatalf("got %d SAs, want 1: %+v", len(sas), sas)
+	}
+	if sas[0].VIP != "10.9.0.5" {
+		t.Errorf("VIP = %q, want %q", sas[0].VIP, "10.9.0.5")
+	}
+	if !strings.HasPrefix(sas[0].Remote, "95.216.0.139") {
+		t.Errorf("Remote = %q (VIP bracket should not leak into it)", sas[0].Remote)
+	}
+}
+
+// No VIP present (CHILD_SA not up, only the IKE_SA) must not be confused
+// with the host[port] bracket that's always there.
+func TestParseListSAsNoVIP(t *testing.T) {
+	const s = `protean: #1, ESTABLISHED, IKEv2, spi ...
+  remote 'CN=dev-node' @ 95.216.0.139[4500]`
+
+	sas := ParseListSAs(s)
+	if len(sas) != 1 {
+		t.Fatalf("got %d SAs, want 1: %+v", len(sas), sas)
+	}
+	if sas[0].VIP != "" {
+		t.Errorf("VIP = %q, want empty", sas[0].VIP)
+	}
+	if sas[0].Remote != "95.216.0.139[4500]" {
+		t.Errorf("Remote = %q, want %q", sas[0].Remote, "95.216.0.139[4500]")
+	}
+}
+
 func TestBuildP12(t *testing.T) {
 	ca, err := pki.NewInternalCA(time.Hour)
 	if err != nil {

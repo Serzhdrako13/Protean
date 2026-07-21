@@ -56,7 +56,12 @@ func (s *Server) apiDashboard(w http.ResponseWriter, r *http.Request) {
 	home := apiHome{HasServers: len(servers) > 0}
 	labels := s.instanceLabels(ctx)
 	for _, srv := range servers {
-		sv := apiHomeServer{ID: srv.ID, Label: srv.Label, Host: srv.Host}
+		// Providers initialized non-nil: a server can now genuinely have
+		// zero provider instances (e.g. added purely for SSH-based
+		// management, or a panel-host row) -- a nil slice serializes as
+		// JSON null, and the frontend calls .reduce/.filter/.length on
+		// srv.providers unconditionally, which throws on null.
+		sv := apiHomeServer{ID: srv.ID, Label: srv.Label, Host: srv.Host, Providers: []apiHomeProvider{}}
 		serverUp := false
 		for _, prov := range s.reg.List() {
 			if serverPart(prov.Name()) != srv.ID {

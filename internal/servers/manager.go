@@ -297,13 +297,22 @@ func (m *Manager) buildProviders(ctx context.Context, srv store.Server, ssh *ssh
 	if err != nil {
 		return nil, nil, err
 	}
-	// A panel-host row with no instances yet is a pure management target
-	// (console access to the box the panel itself runs on), not a VPN node
-	// -- it must not silently grow WireGuard/IKEv2/Xray instances from the
-	// legacy Template just because it has zero rows. If the operator later
-	// adds instances explicitly (the per-server instance UI), this stops
-	// being zero-length and providers build normally.
-	if len(instances) == 0 && !srv.PanelHost {
+	// Auto-seeding from the legacy env-var Template is ONLY correct for
+	// "default" -- the one server seedDefaultServer (cmd/panel/main.go)
+	// creates from SSH_HOST/etc on a pre-multi-server upgrade, where
+	// silently populating wg0/awg0/openvpn/ikev2/xray from those env vars
+	// is exactly what keeps that deployment working transparently. Any
+	// OTHER server (added later via the UI, with any other ID) must start
+	// with ZERO instances -- confirmed live this was a real bug: adding a
+	// server purely for SSH-based management (console/updates/firewall,
+	// or a mesh participant that isn't meant to be a Protean-managed VPN
+	// endpoint at all) silently grew a full 5-provider set from the
+	// Template's defaults, which then made the dashboard count it as an
+	// "online VPN server" even though the admin never asked for that.
+	// The admin adds whichever instances they actually want via the
+	// existing per-server "Add instance" UI -- same as a panel-host row
+	// already only grows instances the operator explicitly adds.
+	if len(instances) == 0 && !srv.PanelHost && srv.ID == "default" {
 		if err := m.seedInstancesFromTemplate(ctx, srv.ID); err != nil {
 			return nil, nil, err
 		}
