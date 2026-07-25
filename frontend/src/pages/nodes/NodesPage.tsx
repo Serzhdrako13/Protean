@@ -20,6 +20,7 @@ import type { MeshIface, MeshPeer } from '@/types/api';
 import { TableSearch } from '@/components/TableSearch';
 import { useTableSearch } from '@/hooks/useTableSearch';
 import { textSorter, numSorter } from '@/utils/tableSort';
+import { NetworkDetectionButton } from './NetworkDetectionModal';
 
 // Clicking anywhere in a node row expands the per-provider access panel --
 // same pattern as UsersPage.tsx -- EXCEPT the interactive controls
@@ -209,7 +210,10 @@ function NodesTable() {
   return (
     <>
       <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
-        <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>{t('createButton')}</Button>
+        <Space>
+          <NetworkDetectionButton />
+          <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>{t('createButton')}</Button>
+        </Space>
       </div>
       <Table
         rowKey="id"

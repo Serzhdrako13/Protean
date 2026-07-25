@@ -4,7 +4,9 @@ import (
 	"context"
 	"errors"
 	"sort"
+	"strings"
 
+	"protean/internal/store"
 	"protean/internal/vpn"
 )
 
@@ -174,4 +176,154 @@ func (s *Server) detectNetworkStructure(ctx context.Context, providerName string
 	})
 
 	return out, tunnelCIDR, nil
+}
+
+// DetectionDecision is one admin-reviewed line item from a
+// detectNetworkStructure preview, as submitted to applyNetworkDetection.
+type DetectionDecision struct {
+	PeerID   string `json:"peer_id"`
+	Action   string `json:"action"` // "create_node" | "skip"
+	NodeName string `json:"node_name,omitempty"`
+	NodeKind string `json:"node_kind,omitempty"` // "router" | "device" | "other"
+	SubnetsToCreate []struct {
+		CIDR  string `json:"cidr"`
+		Label string `json:"label"`
+	} `json:"subnets_to_create,omitempty"`
+	// MeshWith: sibling provider names the admin approved enabling mesh
+	// with (each becomes a symmetric SetProviderSettings on both sides).
+	MeshWith []string `json:"mesh_with,omitempty"`
+}
+
+// DetectionSummary is returned to the admin after applying a batch of
+// decisions -- so "nothing happened" and "6 things happened" are both
+// visibly obvious, not just a bare 200 OK.
+type DetectionSummary struct {
+	NodesCreated     int `json:"nodes_created"`
+	SubnetsCreated   int `json:"subnets_created"`
+	MeshPairsEnabled int `json:"mesh_pairs_enabled"`
+	Skipped          int `json:"skipped"`
+	AlreadyHandled   int `json:"already_handled"`
+}
+
+// applyNetworkDetection commits a reviewed batch of decisions. Never
+// touches the on-host conf file or the live interface -- only the DB,
+// through the same primitives the manual Node/Subnet/Mesh admin actions
+// already use. Idempotent: re-checks GetNodePeerOwnerID (defends a second
+// concurrent apply) and the current Subnets catalog before creating
+// anything, so re-running an apply (or two browser tabs racing) never
+// duplicates a Node or a Subnet.
+func (s *Server) applyNetworkDetection(ctx context.Context, providerName string, decisions []DetectionDecision) (DetectionSummary, error) {
+	var summary DetectionSummary
+
+	existingSubnets, err := s.store.ListAllSubnets(ctx)
+	if err != nil {
+		return summary, err
+	}
+	existingByCIDR := map[string]bool{}
+	for _, sn := range existingSubnets {
+		existingByCIDR[sn.CIDR] = true
+	}
+	meshDone := map[string]bool{} // avoid re-toggling the same pair twice within one apply
+
+	for _, d := range decisions {
+		pubKey, err := decodePeerID(d.PeerID)
+		if err != nil {
+			continue
+		}
+
+		switch d.Action {
+		case "skip":
+			if err := s.store.SetPeerDetectionDismissed(ctx, providerName, d.PeerID); err != nil {
+				return summary, err
+			}
+			summary.Skipped++
+
+		case "create_node":
+			if _, owned, err := s.store.GetNodePeerOwnerID(ctx, providerName, d.PeerID); err == nil && owned {
+				summary.AlreadyHandled++
+				continue
+			}
+			name := strings.TrimSpace(d.NodeName)
+			if name == "" {
+				continue // Node.Name is NOT NULL -- nothing sane to create
+			}
+			kind := d.NodeKind
+			if kind != "router" && kind != "device" && kind != "other" {
+				kind = "router"
+			}
+			node, err := s.store.CreateNode(ctx, store.Node{
+				Name: name, Kind: kind, Role: "network_node",
+				Description: "Автоматически определено при импорте существующей конфигурации",
+			})
+			if err != nil {
+				return summary, err
+			}
+			if err := s.store.SetNodePeer(ctx, providerName, d.PeerID, node.ID); err != nil {
+				return summary, err
+			}
+			// pubKey, not d.PeerID: peer_category is keyed by the raw
+			// public key (see api_peers.go's own SetPeerCategory calls),
+			// unlike node_peer which is keyed by the encoded urlID.
+			if err := s.store.SetPeerCategory(ctx, providerName, pubKey, "site"); err != nil {
+				return summary, err
+			}
+			s.audit(ctx, "node.create", name+" (auto-detected from "+providerName+")")
+			summary.NodesCreated++
+
+			for _, sn := range d.SubnetsToCreate {
+				cidr := strings.TrimSpace(sn.CIDR)
+				if cidr == "" || existingByCIDR[cidr] {
+					continue
+				}
+				if _, err := s.store.CreateSubnet(ctx, cidr, sn.Label); err != nil {
+					return summary, err
+				}
+				existingByCIDR[cidr] = true
+				s.audit(ctx, "subnet.create", cidr)
+				summary.SubnetsCreated++
+			}
+
+			for _, sib := range d.MeshWith {
+				pairKey := meshPairKey(providerName, sib)
+				if meshDone[pairKey] {
+					continue
+				}
+				if err := s.enableMeshPair(ctx, providerName, sib); err != nil {
+					return summary, err
+				}
+				meshDone[pairKey] = true
+				summary.MeshPairsEnabled++
+			}
+		}
+	}
+	return summary, nil
+}
+
+func meshPairKey(a, b string) string {
+	if a > b {
+		a, b = b, a
+	}
+	return a + "|" + b
+}
+
+// enableMeshPair turns MeshEnabled on for BOTH sides of a pair -- mesh is
+// symmetric (meshTunnelCIDRsExcept is queried from both directions), so a
+// one-sided toggle would be meaningless. A no-op for a side that's
+// already enabled.
+func (s *Server) enableMeshPair(ctx context.Context, a, b string) error {
+	for _, name := range []string{a, b} {
+		ps, err := s.store.GetProviderSettings(ctx, name)
+		if err != nil {
+			return err
+		}
+		if ps.MeshEnabled {
+			continue
+		}
+		ps.MeshEnabled = true
+		if err := s.store.SetProviderSettings(ctx, ps); err != nil {
+			return err
+		}
+		s.audit(ctx, "network.update", name+" (mesh enabled, auto-detected)")
+	}
+	return nil
 }

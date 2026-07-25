@@ -407,6 +407,7 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("GET /api/mesh", s.requireAuthAPI(s.apiMeshGet))
 	mux.HandleFunc("POST /api/mesh/providers/{provider}/forwarding", s.requireAuthAPI(s.apiMeshEnableForwarding))
 	mux.HandleFunc("GET /api/providers/{provider}/network-detection", s.requireAuthAPI(s.apiNetworkDetectionPreview))
+	mux.HandleFunc("POST /api/providers/{provider}/network-detection/apply", s.requireAuthAPI(s.apiNetworkDetectionApply))
 
 	mux.HandleFunc("GET /api/clients", s.requireAuthAPI(s.apiClientsList))
 	mux.HandleFunc("GET /api/nodes", s.requireAuthAPI(s.apiNodesList))

@@ -75,5 +75,29 @@
       "site": "Site",
       "client": "Client"
     }
+  },
+  "networkDetection": {
+    "button": "Detect network structure",
+    "title": "Network structure detection",
+    "selectProvider": "Select a provider",
+    "selectProviderHint": "Available for WireGuard/AmneziaWG instances -- the panel parses the AllowedIPs of already-existing peers and suggests which of them are actually routers/servers fronting a subnet, rather than plain clients.",
+    "scanned": "Tunnel network: {{cidr}}. Peers scanned: {{count}}.",
+    "nothingToReview": "Nothing new found -- either every peer is already handled, or these are all plain clients with no subnet behind them.",
+    "unnamed": "(unnamed)",
+    "nodeNamePlaceholder": "Device name",
+    "subnetsLabel": "Subnets to add to the catalog:",
+    "meshLabel": "Already interconnected via mesh with:",
+    "meshWith": "provider \"{{provider}}\"",
+    "columns": {
+      "include": "Include",
+      "peer": "Peer",
+      "details": "Details"
+    },
+    "showHandled": "Show already handled ({{count}})",
+    "alreadyOwned": "already bound to a device",
+    "alreadyDismissed": "manually dismissed",
+    "nothingSelected": "Nothing selected to apply",
+    "apply": "Apply",
+    "applySummary": "Done: {{nodes}} device(s) created, {{subnets}} subnet(s) added, {{mesh}} mesh link(s) enabled. Enabling mesh only records that the interconnection already works via the provider's own configuration -- it does not rewrite any existing peer's AllowedIPs."
   }
 }
