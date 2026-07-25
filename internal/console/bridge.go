@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"sync"
 	"sync/atomic"
 	"time"
 )
@@ -103,16 +104,32 @@ func NewBridge(ws WSConn, shell Shell, idleTimeout, maxDuration time.Duration) *
 func (b *Bridge) Run(ctx context.Context) error {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
-	defer b.shell.Close()
 
+	// Run previously returned as soon as the FIRST of these 3 goroutines
+	// signaled on errCh, leaving the other two still running in the
+	// background (pumpShellToWS/pumpWSToShell aren't guaranteed to notice
+	// ctx cancellation and exit immediately, and watchdog itself needs a
+	// scheduler turn to observe ctx.Done()). Harmless in production, but a
+	// leaked watchdog goroutine reading the shared, test-mutated
+	// watchdogTick var after its own test had already returned raced
+	// against the NEXT test's write to that same var -- confirmed live via
+	// `go test -race`, no ikev2/openvpn/etc involved, purely a test
+	// ordering issue exposed by an ordinary production timing gap. Wait
+	// for all 3 to actually exit before returning, closing both sides
+	// first so their blocking reads unblock (shell.Stdout().Read() isn't
+	// context-aware at all; only Close does it).
+	var wg sync.WaitGroup
+	wg.Add(3)
 	errCh := make(chan error, 3)
-	go b.pumpShellToWS(ctx, errCh)
-	go b.pumpWSToShell(ctx, errCh)
-	go b.watchdog(ctx, errCh)
+	go func() { defer wg.Done(); b.pumpShellToWS(ctx, errCh) }()
+	go func() { defer wg.Done(); b.pumpWSToShell(ctx, errCh) }()
+	go func() { defer wg.Done(); b.watchdog(ctx, errCh) }()
 
 	err := <-errCh
 	cancel()
+	_ = b.shell.Close()
 	_ = b.ws.Close("session ended")
+	wg.Wait()
 	return err
 }
 
