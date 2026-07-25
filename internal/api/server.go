@@ -301,6 +301,7 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("GET /portal/", web.ServePortalHTML)
 
 	// ===== JSON API (SPA) =====
+	mux.HandleFunc("GET /api/version", s.apiVersion)
 	mux.HandleFunc("GET /api/csrf", s.apiCSRF)
 	mux.HandleFunc("POST /api/login", s.apiLogin)
 	mux.HandleFunc("POST /api/login/2fa", s.apiLogin2FA)

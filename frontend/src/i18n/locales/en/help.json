@@ -1,5 +1,6 @@
 {
   "backToHome": "Home",
+  "version": "Panel version: {{version}}",
   "sections": {
     "howItWorks": {
       "title": "How it works",

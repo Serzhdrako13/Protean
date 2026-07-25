@@ -4,12 +4,14 @@ import { ArrowLeftOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { PageShell } from '@/layouts/PageShell';
 import { PageTitleBar } from '@/components/PageTitleBar';
+import { useVersionQuery } from '@/api/queries/version';
 
 const { Title, Paragraph } = Typography;
 
 export function HelpPage() {
   const navigate = useNavigate();
   const { t } = useTranslation(['help', 'common']);
+  const { data: versionData } = useVersionQuery();
   return (
     <PageShell>
       <PageTitleBar
@@ -61,6 +63,11 @@ export function HelpPage() {
             {t('help:sections.license.body')}<br />
             <a href="/license.txt" target="_blank" rel="noreferrer">{t('help:sections.license.viewFull')}</a>
           </Paragraph>
+          {versionData && (
+            <Paragraph type="secondary" style={{ fontSize: 12 }}>
+              {t('help:version', { version: versionData.version })}
+            </Paragraph>
+          )}
         </Typography>
       </Card>
     </PageShell>

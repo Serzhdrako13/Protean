@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"protean/internal/auth"
+	"protean/internal/version"
 	"protean/internal/vpn/clientconfig"
 )
 
@@ -19,6 +20,13 @@ import (
 func (s *Server) apiCSRF(w http.ResponseWriter, r *http.Request) {
 	token := s.ensureCSRFCookie(w, r)
 	writeOK(w, map[string]any{"csrf_token": token, "https": s.isSecure(r)})
+}
+
+// GET /api/version — unauthenticated (same rationale as /healthz: an admin
+// or the Help page needs it before/without a session) release version, for
+// display and for support/bug-report context.
+func (s *Server) apiVersion(w http.ResponseWriter, r *http.Request) {
+	writeOK(w, map[string]any{"version": version.Version})
 }
 
 type apiLoginReq struct {

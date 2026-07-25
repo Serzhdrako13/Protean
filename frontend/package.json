@@ -1,7 +1,7 @@
 {
   "name": "protean-frontend",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.2.0-alpha",
   "type": "module",
   "description": "Protean — React + Ant Design SPA (3x-ui-modeled UI)",
   "scripts": {

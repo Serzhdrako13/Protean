@@ -1,5 +1,6 @@
 {
   "backToHome": "На главную",
+  "version": "Версия панели: {{version}}",
   "sections": {
     "howItWorks": {
       "title": "Как это работает",
