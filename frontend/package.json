@@ -3,7 +3,7 @@
   "private": true,
   "version": "0.2.0-alpha",
   "type": "module",
-  "description": "Protean — React + Ant Design SPA (3x-ui-modeled UI)",
+  "description": "Protean — React + Ant Design SPA",
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",

@@ -54,8 +54,8 @@ promise a stable API/schema between releases.
 
 ## [0.1.0-alpha] - 2026-07-13
 
-Initial alpha release. Highlights: full SPA rewrite (React + Ant Design,
-3x-ui-modeled UI) replacing the legacy server-rendered templates; backend
+Initial alpha release. Highlights: full SPA rewrite (React + Ant Design)
+replacing the legacy server-rendered templates; backend
 + frontend i18n (RU/EN); the panel's own HTTPS (self-signed/ACME/manual/proxy);
 progressive login brute-force protection with IP allow/deny lists; the
 Protean rebrand; self-service portal enrichment (2FA, history, traffic,
