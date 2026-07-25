@@ -444,9 +444,23 @@ function groupClients(clients: Client[]): ClientGroup[] {
     // with exactly one connection, which defeated the entire point of this
     // view. The peer's own name is the only signal available for "same
     // device" once there's no formal owner -- an admin naming multiple
-    // peers identically (e.g. "dev-node" on every provider, as done here)
-    // is exactly that signal.
-    const key = c.owner_kind !== 'none' ? `${c.owner_kind}:${c.owner_name}` : `peer:${c.name}`;
+    // peers identically (e.g. "dev-node" on every provider) is exactly
+    // that signal.
+    //
+    // BUT that signal only exists when the name is non-empty. A peer's
+    // Name here comes only from wg-family's own "# Name:" comment
+    // convention (wgfamily/conf.go) -- a server adopted from a
+    // hand-written wg0.conf predating Protean won't have it, so every
+    // such peer's Name is "". Grouping those by name too collapsed EVERY
+    // unnamed peer -- genuinely different devices -- into one merged row
+    // (found live against a real adopted-WireGuard deployment). Fall back
+    // to the old per-connection key when there's no name to go on; only
+    // group by name when the name actually carries identifying signal.
+    const key = c.owner_kind !== 'none'
+      ? `${c.owner_kind}:${c.owner_name}`
+      : c.name
+        ? `peer:${c.name}`
+        : `peer:${c.provider}|${c.peer_id}`;
     let g = groups.get(key);
     if (!g) {
       g = {
@@ -826,7 +840,14 @@ function OverviewTab({ data, pollMs, setPollMs }: { data: Home; pollMs: number; 
                 percent={100}
                 color="var(--ant-color-info)"
                 format={() => (
-                  <span style={{ fontSize: 15 }}><ArrowDownOutlined /> {formatBytes(data.total_rx_bytes)}</span>
+                  // 90px ring -> ~60px usable inner width. Worst realistic
+                  // case is a 4-digit-plus-decimal total ("9999.9 TB", 9
+                  // chars) plus the arrow icon plus a space -- about 10.5
+                  // char-widths. At a typical UI sans-serif's ~0.55×em glyph
+                  // width, that only clears a 90px ring below ~10px font
+                  // (10.5 × 0.55 × 15px ≈ 87px, well past the 60px that's
+                  // actually available -- confirmed the reported overflow).
+                  <span style={{ fontSize: 10 }}><ArrowDownOutlined /> {formatBytes(data.total_rx_bytes)}</span>
                 )}
                 label={t('dashboard:tiles.totalRx.label')}
                 tooltip={t('dashboard:tiles.totalRx.tooltip')}
@@ -837,7 +858,7 @@ function OverviewTab({ data, pollMs, setPollMs }: { data: Home; pollMs: number; 
                 percent={100}
                 color="#9575cd"
                 format={() => (
-                  <span style={{ fontSize: 15 }}><ArrowUpOutlined /> {formatBytes(data.total_tx_bytes)}</span>
+                  <span style={{ fontSize: 10 }}><ArrowUpOutlined /> {formatBytes(data.total_tx_bytes)}</span>
                 )}
                 label={t('dashboard:tiles.totalTx.label')}
                 tooltip={t('dashboard:tiles.totalTx.tooltip')}
