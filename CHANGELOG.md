@@ -4,6 +4,17 @@ All notable changes to Protean are documented here. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/); versions before 1.0 don't
 promise a stable API/schema between releases.
 
+## [0.2.1-alpha] - 2026-07-25
+
+### Added
+- An "Адрес"/Address column showing each client's actual VPN-subnet
+  address (`AllowedIPs`) in the two places that lacked it entirely: a
+  provider's own peer table (`ProviderDetailPage`, which only had
+  `Endpoint` -- the external IP:port a client happened to connect from
+  last, useless for telling clients apart behind a shared NAT/ISP) and
+  the "Все клиенты" tab (`NodesPage`'s `AllClientsTab`, which had no
+  address column at all).
+
 ## [0.2.0-alpha] - 2026-07-25
 
 ### Added
