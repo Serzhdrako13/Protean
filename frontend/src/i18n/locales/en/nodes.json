@@ -61,6 +61,7 @@
       "provider": "Provider",
       "server": "VPN node",
       "type": "Type",
+      "address": "Address",
       "category": "Category",
       "status": "Status",
       "traffic": "Rx / Tx"

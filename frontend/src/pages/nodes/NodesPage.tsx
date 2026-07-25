@@ -270,7 +270,7 @@ function AllClientsTab() {
   const { data, isLoading } = useClientsQuery();
   const { query, setQuery, filtered } = useTableSearch(
     data,
-    (c) => `${c.name} ${c.provider_label} ${c.owner_name ?? ''}`,
+    (c) => `${c.name} ${c.provider_label} ${c.owner_name ?? ''} ${c.address ?? ''}`,
   );
 
   const columns: ColumnsType<Client> = [
@@ -294,6 +294,11 @@ function AllClientsTab() {
     { title: t('clients.columns.provider'), dataIndex: 'provider_label', key: 'provider_label', sorter: textSorter((c: Client) => c.provider_label) },
     { title: t('clients.columns.server'), dataIndex: 'server_id', key: 'server_id', render: (v: string) => <code>{v}</code> },
     { title: t('clients.columns.type'), dataIndex: 'type', key: 'type' },
+    {
+      title: t('clients.columns.address'),
+      key: 'address',
+      render: (_: unknown, c: Client) => (c.address ? <code>{c.address}</code> : '—'),
+    },
     {
       title: t('clients.columns.category'),
       key: 'category',

@@ -193,6 +193,11 @@ export function ProviderDetailPage() {
         ),
     },
     {
+      title: <HeaderTip label={t('provider-detail:table.columns.address.label')} tip={t('provider-detail:table.columns.address.tip')} />,
+      key: 'address',
+      render: (_: unknown, p: Peer) => (p.AllowedIPs?.length ? <code>{p.AllowedIPs.join(', ')}</code> : '—'),
+    },
+    {
       title: <HeaderTip label={t('provider-detail:table.columns.endpoint.label')} tip={t('provider-detail:table.columns.endpoint.tip')} />,
       dataIndex: 'Endpoint',
       key: 'endpoint',
