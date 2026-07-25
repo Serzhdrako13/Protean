@@ -51,6 +51,13 @@ promise a stable API/schema between releases.
   regardless of being different real devices.
 - Dashboard: the incoming/outgoing traffic gauge's text could overflow its ring.
 - LDAP TLS verification being disabled now gets its own distinct audit entry.
+- `console.Bridge.Run` returned as soon as the first of its 3 background
+  goroutines finished, leaving the other two still running -- caught as a
+  data race by CI's `go test -race` (this release's own CI, added above,
+  catching a real pre-existing bug the very first time it ran).
+- CI's `docker-smoke` job's teardown step was missing `--env-file
+  .env.standalone`, so it failed on every single run trying to tear down
+  the stack it had just built.
 
 ## [0.1.0-alpha] - 2026-07-13
 
