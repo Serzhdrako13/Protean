@@ -31,7 +31,8 @@
       "status": "Status",
       "address": {
         "label": "Address",
-        "tip": "The client's address in the VPN subnet (assigned server-side) -- use this to identify a client, not Endpoint: several clients can connect from the same external IP (shared NAT/ISP)"
+        "tip": "The client's address in the VPN subnet (assigned server-side) -- use this to identify a client, not Endpoint: several clients can connect from the same external IP (shared NAT/ISP)",
+        "subnets": "subnets"
       },
       "endpoint": {
         "label": "Endpoint",

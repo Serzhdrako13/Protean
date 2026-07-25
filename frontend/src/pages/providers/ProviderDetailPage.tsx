@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
   Card, Table, Tag, Switch, Button, Space, Modal, Form, Input, InputNumber,
-  Popconfirm, message, Descriptions, Radio, Image, Skeleton, Empty, Progress, Row, Col, Tabs, Select, Alert, Typography,
+  Popconfirm, message, Descriptions, Radio, Image, Skeleton, Empty, Progress, Row, Col, Tabs, Select, Alert, Typography, Tooltip,
 } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import {
@@ -23,6 +23,7 @@ import { XrayPage } from '@/pages/xray/XrayPage';
 import { ProviderSettingsPanel } from '@/pages/providers/ProviderSettingsPanel';
 import { ApiError, HttpUtil } from '@/api/http-init';
 import type { Peer } from '@/types/api';
+import { splitAllowedIPs } from '@/utils/address';
 import { useTableSearch } from '@/hooks/useTableSearch';
 import { TableSearch } from '@/components/TableSearch';
 import { textSorter, numSorter, dateSorter } from '@/utils/tableSort';
@@ -195,7 +196,20 @@ export function ProviderDetailPage() {
     {
       title: <HeaderTip label={t('provider-detail:table.columns.address.label')} tip={t('provider-detail:table.columns.address.tip')} />,
       key: 'address',
-      render: (_: unknown, p: Peer) => (p.AllowedIPs?.length ? <code>{p.AllowedIPs.join(', ')}</code> : '—'),
+      render: (_: unknown, p: Peer) => {
+        const { ownAddress, subnets } = splitAllowedIPs(p.AllowedIPs);
+        if (!ownAddress && subnets.length === 0) return '—';
+        return (
+          <span>
+            {ownAddress && <code>{ownAddress}</code>}
+            {subnets.length > 0 && (
+              <Tooltip title={subnets.join(', ')}>
+                <Tag style={{ marginLeft: ownAddress ? 6 : 0 }}>+{subnets.length} {t('provider-detail:table.columns.address.subnets')}</Tag>
+              </Tooltip>
+            )}
+          </span>
+        );
+      },
     },
     {
       title: <HeaderTip label={t('provider-detail:table.columns.endpoint.label')} tip={t('provider-detail:table.columns.endpoint.tip')} />,

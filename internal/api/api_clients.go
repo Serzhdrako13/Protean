@@ -6,7 +6,43 @@ import (
 	"time"
 
 	"protean/internal/store"
+	"protean/internal/vpn"
 )
+
+// clientDisplayAddress returns a peer's own tunnel address only, mask
+// stripped for display (a subnet's mask is meaningful; a single host
+// address's /32 or /128 is just noise) -- never the peer's routed site
+// subnets, see apiClientRow.Address's doc comment. Distinct from the
+// existing peerOwnAddress (handlers_peers.go), which keeps the mask and
+// uses a simpler mask-width-only heuristic because it's used to actually
+// GENERATE a client config's own address, not just display one -- this
+// one is tunnel-CIDR-aware (vpn.ClassifyPeerRoutes) and display-only. If
+// tunnelCIDR can't be determined (interface down / no address yet),
+// falls back to the first AllowedIPs entry rather than showing nothing.
+func clientDisplayAddress(tunnelCIDR string, allowedIPs []string) string {
+	if tunnelCIDR != "" {
+		class := vpn.ClassifyPeerRoutes(tunnelCIDR, allowedIPs)
+		if class.OwnAddress != "" {
+			return stripHostMask(class.OwnAddress)
+		}
+		return ""
+	}
+	if len(allowedIPs) == 0 {
+		return ""
+	}
+	return stripHostMask(strings.TrimSpace(allowedIPs[0]))
+}
+
+// stripHostMask drops a redundant /32 or /128 host mask ("10.10.0.5/32"
+// -> "10.10.0.5"); a wider mask (a real subnet) is left untouched.
+func stripHostMask(cidr string) string {
+	for _, suffix := range []string{"/32", "/128"} {
+		if strings.HasSuffix(cidr, suffix) {
+			return strings.TrimSuffix(cidr, suffix)
+		}
+	}
+	return cidr
+}
 
 // apiClientRow is one real peer anywhere in the system, with its owner
 // resolved across BOTH ownership tables (a portal user via peer_owner, or
@@ -22,9 +58,12 @@ type apiClientRow struct {
 	Type          string `json:"type"`
 	PeerID        string `json:"peer_id"`
 	Name          string `json:"name"`
-	// Address: the peer's AllowedIPs, comma-joined -- usually one tunnel
-	// address, occasionally more (a site/subnet peer advertising extra
-	// CIDRs alongside its own address).
+	// Address: the peer's OWN tunnel address only (mask stripped for
+	// display), never its routed site subnets -- those are a different
+	// thing (see vpn.ClassifyPeerRoutes) and joining them into this same
+	// string was a real, previously-fixed bug: an admin can't tell which
+	// part of a comma-joined string was the client's actual identity
+	// versus a network it merely routes traffic for.
 	Address       string `json:"address,omitempty"`
 	Category      string `json:"category,omitempty"`
 	Online        bool   `json:"online"`
@@ -75,6 +114,7 @@ func (s *Server) apiClientsList(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 		cats, _ := s.store.PeerCategories(ctx, name)
+		tunnelCIDR, _ := s.providerTunnelCIDR(ctx, name)
 		for _, p := range peers {
 			urlID, err := encodePeerID(p.PublicKey)
 			if err != nil {
@@ -84,7 +124,7 @@ func (s *Server) apiClientsList(w http.ResponseWriter, r *http.Request) {
 			row := apiClientRow{
 				Provider: name, ProviderLabel: s.providerLabel(name, labels),
 				ServerID: serverPart(name), Type: prov.Type(),
-				PeerID: urlID, Name: p.Name, Address: strings.Join(p.AllowedIPs, ", "), Category: cats[p.PublicKey],
+				PeerID: urlID, Name: p.Name, Address: clientDisplayAddress(tunnelCIDR, p.AllowedIPs), Category: cats[p.PublicKey],
 				Online: p.Online, RxBytes: p.RxBytes, TxBytes: p.TxBytes,
 				OwnerKind: "none",
 			}
