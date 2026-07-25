@@ -123,12 +123,17 @@ jobs:
             sleep 2
           done
           echo "panel never became healthy" >&2
-          docker compose -f docker-compose.standalone.yml logs
+          docker compose -f docker-compose.standalone.yml --env-file .env.standalone logs
           exit 1
 
       - name: Tear down
+        # --env-file was missing here (present on the "up" step above) --
+        # docker-compose.standalone.yml interpolates ${SECRET_KEY} etc, so
+        # without it this step failed outright on "SECRET_KEY is missing a
+        # value" before ever tearing anything down. 100% reproducible, not
+        # a flake -- confirmed against a real failed run's logs.
         if: always()
-        run: docker compose -f docker-compose.standalone.yml down -v
+        run: docker compose -f docker-compose.standalone.yml --env-file .env.standalone down -v
 
   e2e-lab:
     # Real systemd container, real OpenVPN/IKEv2/Xray daemons, real SSH
