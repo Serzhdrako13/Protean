@@ -4,6 +4,18 @@ All notable changes to Protean are documented here. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/); versions before 1.0 don't
 promise a stable API/schema between releases.
 
+## [0.2.4-alpha] - 2026-07-26
+
+### Fixed
+- Network structure detection: a peer that already became equipment
+  (a Node) before a second mesh-capable provider existed on the same
+  server had no way to pick up the newly-relevant mesh pairing or
+  subnet afterward -- applying was gated entirely on the peer not
+  already being owned. Subnet/mesh application is now decoupled from
+  node creation: an already-owned peer can keep gaining subnets/mesh
+  through the same review flow, surfaced in the "already handled"
+  section instead of requiring a manual reconfiguration.
+
 ## [0.2.3-alpha] - 2026-07-26
 
 ### Fixed

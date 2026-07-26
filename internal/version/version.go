@@ -4,4 +4,4 @@
 // constant kept in sync manually at release time.
 package version
 
-const Version = "0.2.3-alpha"
+const Version = "0.2.4-alpha"
