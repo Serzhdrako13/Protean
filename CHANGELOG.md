@@ -4,6 +4,21 @@ All notable changes to Protean are documented here. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/); versions before 1.0 don't
 promise a stable API/schema between releases.
 
+## [0.3.1-alpha] - 2026-07-26
+
+### Added
+- Named network groups: a plain, admin-visible name (e.g. "Сеть 1")
+  for a set of provider instances + subnets unified into one routable
+  network, so a bare on/off status doesn't leave it ambiguous which
+  network something belongs to when there are several. Auto-named
+  during network structure detection (first subnet on an instance
+  mints the name, later ones on the same instance reuse it silently);
+  reconciled when two instances become mesh-linked (share/adopt a
+  group, or -- if both already differently grouped -- left untouched
+  with a warning rather than an automatic surprise merge). Manual
+  picker (existing group / no group / type a new name) on the Subnets
+  page and a provider's own mesh settings.
+
 ## [0.3.0-alpha] - 2026-07-26
 
 ### Added
