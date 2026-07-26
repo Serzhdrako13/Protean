@@ -152,4 +152,45 @@ func TestNetworkDetectionEndToEnd(t *testing.T) {
 	if err != nil || len(subnets2) != 1 {
 		t.Fatalf("ListAllSubnets after second apply = %+v (want still exactly 1, no duplicate)", subnets2)
 	}
+
+	// A previously-dismissed anomaly (the unnamed peer) must still be
+	// promotable to a Node once the admin supplies a name -- this is the
+	// exact real-world bug: an unnamed router peer got dismissed by
+	// mistake (a bare "skip" was the only action the old UI offered for
+	// any anomaly row), and there was no way back in. undismiss clears
+	// the decline, and a normal create_node decision then works exactly
+	// like it would have for a named peer.
+	summary3, err := s.applyNetworkDetection(ctx, "srv:wg0", []DetectionDecision{
+		{PeerID: unnamed.PeerID, Action: "undismiss"},
+	})
+	if err != nil {
+		t.Fatalf("undismiss: %v", err)
+	}
+	if summary3.Undismissed != 1 {
+		t.Fatalf("summary3 = %+v, want 1 undismissed", summary3)
+	}
+	stillDismissed, err := st.IsPeerDetectionDismissed(ctx, "srv:wg0", unnamed.PeerID)
+	if err != nil || stillDismissed {
+		t.Fatalf("unnamed peer should no longer be dismissed: dismissed=%v err=%v", stillDismissed, err)
+	}
+
+	summary4, err := s.applyNetworkDetection(ctx, "srv:wg0", []DetectionDecision{
+		{
+			PeerID: unnamed.PeerID, Action: "create_node", NodeName: "shadow-router", NodeKind: "router",
+			SubnetsToCreate: []struct {
+				CIDR  string `json:"cidr"`
+				Label string `json:"label"`
+			}{{CIDR: "172.16.0.0/24", Label: "shadow-router subnet"}},
+		},
+	})
+	if err != nil {
+		t.Fatalf("create_node for the un-dismissed peer: %v", err)
+	}
+	if summary4.NodesCreated != 1 || summary4.SubnetsCreated != 1 {
+		t.Fatalf("summary4 = %+v, want 1 node + 1 subnet created", summary4)
+	}
+	nodes3, err := st.ListNodes(ctx)
+	if err != nil || len(nodes3) != 2 {
+		t.Fatalf("ListNodes after promoting the un-dismissed peer = %+v, want 2 nodes total", nodes3)
+	}
 }

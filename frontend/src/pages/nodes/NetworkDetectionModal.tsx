@@ -10,8 +10,19 @@ import { ApiError } from '@/api/http-init';
 
 const WG_FAMILY_TYPES = new Set(['wireguard', 'amneziawg']);
 
+// A peer with a routed subnet can become equipment (a Node) even if it
+// showed up as "anomaly" -- the most common anomaly reason in practice is
+// simply that the hand-written conf never named the peer, which doesn't
+// stop applyNetworkDetection from creating a Node once the admin types a
+// name here. Only anomalies with NO routed subnet at all (malformed
+// entries, ambiguous own-address candidates) have nothing to create and
+// stay dismiss-only.
+function isPromotable(item: DetectedItem): boolean {
+  return (item.routed_subnets ?? []).length > 0;
+}
+
 interface RowState {
-  included: boolean; // create_node: act on it; anomaly: dismiss it
+  included: boolean; // promotable row (routed subnet found): create it; otherwise: dismiss it
   nodeName: string;
   nodeKind: 'router' | 'device' | 'other';
   subnetChecked: Record<string, boolean>;
@@ -71,13 +82,23 @@ export function NetworkDetectionModal({ open, onClose }: { open: boolean; onClos
   async function onApply() {
     if (!provider) return;
     const decisions: DetectionDecision[] = [];
-    for (const item of createNodeItems) {
+    const missingName: DetectedItem[] = [];
+    for (const item of [...createNodeItems, ...anomalyItems]) {
       const row = rows[item.peer_id];
       if (!row?.included) continue;
+      if (!isPromotable(item)) {
+        decisions.push({ peer_id: item.peer_id, action: 'skip' });
+        continue;
+      }
+      const name = row.nodeName.trim();
+      if (!name) {
+        missingName.push(item);
+        continue;
+      }
       decisions.push({
         peer_id: item.peer_id,
         action: 'create_node',
-        node_name: row.nodeName.trim(),
+        node_name: name,
         node_kind: row.nodeKind,
         subnets_to_create: Object.entries(row.subnetChecked)
           .filter(([, checked]) => checked)
@@ -85,9 +106,13 @@ export function NetworkDetectionModal({ open, onClose }: { open: boolean; onClos
         mesh_with: Object.entries(row.meshChecked).filter(([, checked]) => checked).map(([p]) => p),
       });
     }
-    for (const item of anomalyItems) {
-      const row = rows[item.peer_id];
-      if (row?.included) decisions.push({ peer_id: item.peer_id, action: 'skip' });
+    if (missingName.length > 0) {
+      message.error(
+        t('nodes:networkDetection.missingName', {
+          peers: missingName.map((i) => i.name || i.peer_id).join(', '),
+        }),
+      );
+      return;
     }
     if (decisions.length === 0) {
       message.info(t('nodes:networkDetection.nothingSelected'));
@@ -100,6 +125,15 @@ export function NetworkDetectionModal({ open, onClose }: { open: boolean; onClos
           nodes: summary.nodes_created, subnets: summary.subnets_created, mesh: summary.mesh_pairs_enabled,
         }),
       );
+    } catch (e) {
+      if (e instanceof ApiError) message.error(e.message);
+    }
+  }
+
+  async function onUndismiss(item: DetectedItem) {
+    try {
+      await apply.mutateAsync([{ peer_id: item.peer_id, action: 'undismiss' }]);
+      message.success(t('nodes:networkDetection.undismissed'));
     } catch (e) {
       if (e instanceof ApiError) message.error(e.message);
     }
@@ -170,20 +204,22 @@ export function NetworkDetectionModal({ open, onClose }: { open: boolean; onClos
                     title: t('nodes:networkDetection.columns.details'),
                     key: 'details',
                     render: (_: unknown, item: DetectedItem) => {
-                      if (item.suggested_action === 'anomaly') {
-                        return (
-                          <Space direction="vertical" size={2}>
-                            {(item.anomalies ?? []).map((a, i) => (
-                              <Typography.Text key={i} type="warning" style={{ fontSize: 12 }}>{a}</Typography.Text>
-                            ))}
-                          </Space>
-                        );
+                      const anomalyNotes = (item.anomalies ?? []).length > 0 && (
+                        <Space direction="vertical" size={2}>
+                          {(item.anomalies ?? []).map((a, i) => (
+                            <Typography.Text key={i} type="warning" style={{ fontSize: 12 }}>{a}</Typography.Text>
+                          ))}
+                        </Space>
+                      );
+                      if (item.suggested_action === 'anomaly' && !isPromotable(item)) {
+                        return anomalyNotes;
                       }
                       const row = rows[item.peer_id];
                       if (!row) return null;
                       const subnetCIDRs = Object.keys(row.subnetChecked);
                       return (
                         <Space direction="vertical" size={8} style={{ width: '100%' }}>
+                          {anomalyNotes}
                           <Space>
                             <Input
                               size="small"
@@ -258,8 +294,13 @@ export function NetworkDetectionModal({ open, onClose }: { open: boolean; onClos
                 {showHandled && (
                   <div style={{ marginTop: 8 }}>
                     {handledItems.map((item) => (
-                      <div key={item.peer_id} style={{ fontSize: 12, color: 'var(--ant-color-text-tertiary)', padding: '2px 0' }}>
-                        {item.name || item.peer_id} — {item.already_node_owned ? t('nodes:networkDetection.alreadyOwned') : t('nodes:networkDetection.alreadyDismissed')}
+                      <div key={item.peer_id} style={{ fontSize: 12, color: 'var(--ant-color-text-tertiary)', padding: '2px 0', display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <span>
+                          {item.name || item.peer_id} — {item.already_node_owned ? t('nodes:networkDetection.alreadyOwned') : t('nodes:networkDetection.alreadyDismissed')}
+                        </span>
+                        {!item.already_node_owned && item.already_dismissed && (
+                          <Button size="small" onClick={() => onUndismiss(item)}>{t('nodes:networkDetection.undismiss')}</Button>
+                        )}
                       </div>
                     ))}
                   </div>

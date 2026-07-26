@@ -40,7 +40,7 @@ export function useNetworkDetectionQuery(provider: string | undefined) {
 
 export interface DetectionDecision {
   peer_id: string;
-  action: 'create_node' | 'skip';
+  action: 'create_node' | 'skip' | 'undismiss';
   node_name?: string;
   node_kind?: 'router' | 'device' | 'other';
   subnets_to_create?: { cidr: string; label: string }[];
@@ -53,6 +53,7 @@ export interface DetectionSummary {
   mesh_pairs_enabled: number;
   skipped: number;
   already_handled: number;
+  undismissed: number;
 }
 
 export function useNetworkDetectionApplyMutation(provider: string | undefined) {

@@ -96,7 +96,10 @@
     "showHandled": "Show already handled ({{count}})",
     "alreadyOwned": "already bound to a device",
     "alreadyDismissed": "manually dismissed",
+    "undismiss": "Bring back for review",
+    "undismissed": "Brought back for review -- refresh the list",
     "nothingSelected": "Nothing selected to apply",
+    "missingName": "Enter a name for: {{peers}}",
     "apply": "Apply",
     "applySummary": "Done: {{nodes}} device(s) created, {{subnets}} subnet(s) added, {{mesh}} mesh link(s) enabled. Enabling mesh only records that the interconnection already works via the provider's own configuration -- it does not rewrite any existing peer's AllowedIPs."
   }

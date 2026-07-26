@@ -182,7 +182,7 @@ func (s *Server) detectNetworkStructure(ctx context.Context, providerName string
 // detectNetworkStructure preview, as submitted to applyNetworkDetection.
 type DetectionDecision struct {
 	PeerID   string `json:"peer_id"`
-	Action   string `json:"action"` // "create_node" | "skip"
+	Action   string `json:"action"` // "create_node" | "skip" | "undismiss"
 	NodeName string `json:"node_name,omitempty"`
 	NodeKind string `json:"node_kind,omitempty"` // "router" | "device" | "other"
 	SubnetsToCreate []struct {
@@ -203,6 +203,7 @@ type DetectionSummary struct {
 	MeshPairsEnabled int `json:"mesh_pairs_enabled"`
 	Skipped          int `json:"skipped"`
 	AlreadyHandled   int `json:"already_handled"`
+	Undismissed      int `json:"undismissed"`
 }
 
 // applyNetworkDetection commits a reviewed batch of decisions. Never
@@ -237,6 +238,15 @@ func (s *Server) applyNetworkDetection(ctx context.Context, providerName string,
 				return summary, err
 			}
 			summary.Skipped++
+
+		case "undismiss":
+			// Brings a previously-dismissed peer back into the next
+			// preview -- e.g. it was dismissed by mistake, or the conf
+			// gained a "# Name:" comment since.
+			if err := s.store.ClearPeerDetectionDismissed(ctx, providerName, d.PeerID); err != nil {
+				return summary, err
+			}
+			summary.Undismissed++
 
 		case "create_node":
 			if _, owned, err := s.store.GetNodePeerOwnerID(ctx, providerName, d.PeerID); err == nil && owned {
