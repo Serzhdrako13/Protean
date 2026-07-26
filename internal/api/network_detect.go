@@ -257,7 +257,7 @@ func (s *Server) applyNetworkDetection(ctx context.Context, providerName string,
 			// otherwise every later addition would demand the admin
 			// manually redo mesh/subnet setup outside this flow. Only the
 			// node-creation step itself is skipped for an owned peer.
-			_, owned, err := s.store.GetNodePeerOwnerID(ctx, providerName, d.PeerID)
+			ownerNodeID, owned, err := s.store.GetNodePeerOwnerID(ctx, providerName, d.PeerID)
 			if err != nil {
 				return summary, err
 			}
@@ -291,6 +291,7 @@ func (s *Server) applyNetworkDetection(ctx context.Context, providerName string,
 				}
 				s.audit(ctx, "node.create", name+" (auto-detected from "+providerName+")")
 				summary.NodesCreated++
+				ownerNodeID = node.ID
 			}
 
 			for _, sn := range d.SubnetsToCreate {
@@ -298,7 +299,7 @@ func (s *Server) applyNetworkDetection(ctx context.Context, providerName string,
 				if cidr == "" || existingByCIDR[cidr] {
 					continue
 				}
-				if _, err := s.store.CreateSubnet(ctx, cidr, sn.Label); err != nil {
+				if _, err := s.store.CreateSubnet(ctx, providerName, cidr, sn.Label, &ownerNodeID); err != nil {
 					return summary, err
 				}
 				existingByCIDR[cidr] = true

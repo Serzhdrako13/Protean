@@ -118,6 +118,37 @@ func (s *Server) ReapplyMeshForwarding(ctx context.Context) {
 	})
 }
 
+// ReapplySubnetNAT re-adds the host MASQUERADE rule for every subnet
+// currently in "masquerade" NAT mode -- like Installer.Forward's FORWARD
+// rules, this is a standalone iptables rule outside any wg-quick conf
+// file's PostUp/PostDown, so it does not survive a host reboot on its own.
+// Best-effort, runs in background, mirrors ReapplyMeshForwarding.
+func (s *Server) ReapplySubnetNAT(ctx context.Context) {
+	s.goWorker(func() {
+		subnets, err := s.store.ListAllSubnets(ctx)
+		if err != nil {
+			slog.Error("reapply subnet NAT: list subnets", "err", err)
+			return
+		}
+		for _, sn := range subnets {
+			if ctx.Err() != nil {
+				return
+			}
+			if sn.NATMode != "masquerade" || sn.Provider == "" {
+				continue
+			}
+			inst, ok := s.installerForProvider(sn.Provider)
+			if !ok {
+				slog.Error("reapply subnet NAT: no installer for server", "cidr", sn.CIDR, "provider", sn.Provider)
+				continue
+			}
+			if err := inst.SubnetNAT(ctx, "add", sn.CIDR); err != nil {
+				slog.Error("reapply subnet NAT", "cidr", sn.CIDR, "err", err)
+			}
+		}
+	})
+}
+
 // meshAddressSpace returns every CIDR already in use (all interface tunnels +
 // all catalogued site subnets), for overlap rejection.
 func (s *Server) meshAddressSpace(ctx context.Context) ([]string, error) {

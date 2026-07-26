@@ -128,6 +128,25 @@ func (i *Installer) Forward(ctx context.Context, action, cidr string) error {
 	return err
 }
 
+// SubnetNAT manages a MASQUERADE rule (add|del) for one catalogued site
+// subnet's outbound-to-mesh traffic, excluding the host's own WAN interface
+// (auto-detected on the host) so masquerade mode never also grants that
+// subnet internet egress -- that stays internet_egress's separate job,
+// which only ever NATs an instance's own tunnel CIDR. Subnet-keyed rather
+// than interface-keyed, mirroring Forward: the site subnet lives behind a
+// peer, not behind a wg-quick interface the panel could inject
+// PostUp/PostDown lines into.
+func (i *Installer) SubnetNAT(ctx context.Context, action, cidr string) error {
+	if action != "add" && action != "del" {
+		return fmt.Errorf("invalid subnet-nat action %q", action)
+	}
+	if !validCIDR.MatchString(cidr) {
+		return fmt.Errorf("invalid cidr %q", cidr)
+	}
+	_, err := i.ssh.Run(ctx, "sudo "+InstallerPath+" subnet-nat "+action+" "+cidr)
+	return err
+}
+
 // EnsureIPForward turns on net.ipv4.ip_forward on the host if it isn't
 // already (idempotent). Called whenever mesh/egress routing is turned on --
 // setup-host.sh's interactive bootstrap only ever offers this once, so a

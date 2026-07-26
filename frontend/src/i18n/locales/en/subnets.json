@@ -5,7 +5,9 @@
   "columns": {
     "cidr": "CIDR",
     "cidrTip": "Address range of the site's local network (e.g. 192.168.10.0/24) that should be visible to other mesh participants through this site's VPN gateway",
-    "label": "Label"
+    "label": "Label",
+    "owner": "Equipment",
+    "natMode": "NAT mode"
   },
   "deleteConfirm": "Delete subnet {{cidr}}?",
   "deleteTitle": "Delete subnet",
@@ -16,6 +18,16 @@
     "labelPlaceholder": "Moscow office"
   },
   "messages": {
-    "created": "Subnet added"
+    "created": "Subnet added",
+    "natUpdated": "NAT mode updated"
+  },
+  "natMode": {
+    "passthrough": "Passthrough",
+    "masquerade": "Masquerade",
+    "notCapableTip": "No known route to this subnet (manually added) -- NAT mode unavailable",
+    "toPassthroughTitle": "Turn off NAT for {{cidr}}?",
+    "toPassthroughWarning": "Both routers must have their own manually-configured route back to each other's subnet. Protean cannot configure a router's own device -- this is entirely the operator's responsibility.",
+    "toMasqueradeTitle": "Turn on NAT for {{cidr}}?",
+    "toMasqueradeWarning": "The far router will see this traffic as coming from this server's own address, not the real source subnet -- true source IPs will be hidden from that end. No route back is needed on that router, though."
   }
 }

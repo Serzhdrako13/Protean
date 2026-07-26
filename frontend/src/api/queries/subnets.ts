@@ -21,6 +21,11 @@ export function useSubnetMutations() {
     mutationFn: (id: number) => HttpUtil.delete<null>(`/api/subnets/${id}`),
     onSuccess: invalidate,
   });
+  const updateNAT = useMutation({
+    mutationFn: ({ id, nat_mode }: { id: number; nat_mode: 'passthrough' | 'masquerade' }) =>
+      HttpUtil.put<Subnet>(`/api/subnets/${id}`, { nat_mode }),
+    onSuccess: invalidate,
+  });
 
-  return { create, remove };
+  return { create, remove, updateNAT };
 }

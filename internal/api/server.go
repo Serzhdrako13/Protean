@@ -419,6 +419,7 @@ func (s *Server) Routes() http.Handler {
 
 	mux.HandleFunc("GET /api/subnets", s.requireAuthAPI(s.apiSubnetsList))
 	mux.HandleFunc("POST /api/subnets", s.requireAuthAPI(s.apiSubnetsCreate))
+	mux.HandleFunc("PUT /api/subnets/{id}", s.requireAuthAPI(s.apiSubnetsUpdateNAT))
 	mux.HandleFunc("DELETE /api/subnets/{id}", s.requireAuthAPI(s.apiSubnetsDelete))
 
 	mux.HandleFunc("GET /api/audit", s.requireAuthAPI(s.apiAuditList))

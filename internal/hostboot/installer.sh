@@ -594,6 +594,35 @@ cmd_forward() {
 	esac
 }
 
+# cmd_subnet_nat <add|del> <cidr>: manage a MASQUERADE rule for one site
+# subnet's outbound-to-mesh traffic, excluding this host's own default-route
+# (WAN) interface so it never also grants that subnet unintended internet
+# egress via the server (that stays the separate internet_egress feature's
+# job, which NATs only an instance's own tunnel CIDR). Idempotent.
+cmd_subnet_nat() {
+	local action="$1" cidr="$2"
+	command -v iptables >/dev/null 2>&1 || { echo "no iptables" >&2; return 1; }
+	local wan
+	wan="$(ip route show default 2>/dev/null | awk '{for(i=1;i<=NF;i++) if ($i=="dev") {print $(i+1); exit}}')"
+	local c="protean-subnet-nat"
+	case "$action" in
+		add)
+			if [ -n "$wan" ]; then
+				iptables -t nat -C POSTROUTING -s "$cidr" ! -o "$wan" -j MASQUERADE -m comment --comment "$c" 2>/dev/null || \
+					iptables -t nat -A POSTROUTING -s "$cidr" ! -o "$wan" -j MASQUERADE -m comment --comment "$c"
+			else
+				iptables -t nat -C POSTROUTING -s "$cidr" -j MASQUERADE -m comment --comment "$c" 2>/dev/null || \
+					iptables -t nat -A POSTROUTING -s "$cidr" -j MASQUERADE -m comment --comment "$c"
+			fi
+			;;
+		del)
+			iptables -t nat -D POSTROUTING -s "$cidr" ! -o "$wan" -j MASQUERADE -m comment --comment "$c" 2>/dev/null || true
+			iptables -t nat -D POSTROUTING -s "$cidr" -j MASQUERADE -m comment --comment "$c" 2>/dev/null || true
+			;;
+		*) echo "invalid action" >&2; return 2 ;;
+	esac
+}
+
 # cmd_ensure_ip_forward: turn on net.ipv4.ip_forward if it isn't already, the
 # same sysctl drop-in setup-host.sh's interactive bootstrap uses -- but
 # idempotent and non-interactive, so the panel can re-check/re-apply it any
@@ -1077,6 +1106,12 @@ main() {
 			[[ "$c" =~ $VALID_CIDR ]] || { echo "invalid cidr" >&2; exit 2; }
 			cmd_forward "$a" "$c"
 			;;
+		subnet-nat)
+			local a="${2:-}" c="${3:-}"
+			[[ "$a" =~ $VALID_FWD ]] || { echo "invalid action" >&2; exit 2; }
+			[[ "$c" =~ $VALID_CIDR ]] || { echo "invalid cidr" >&2; exit 2; }
+			cmd_subnet_nat "$a" "$c"
+			;;
 		logs)
 			local u="${2:-}" n="${3:-200}"
 			[[ "$u" =~ $VALID_UNIT ]] || { echo "invalid unit" >&2; exit 2; }
@@ -1121,7 +1156,7 @@ main() {
 			cmd_firewall_boot_restore
 			;;
 		*)
-			echo "usage: $0 {detect|install <provider>|status <unit>|service <action> <unit>|forward <add|del> <cidr>|logs <unit> <lines>|ensure-ip-forward|updates-check|updates-apply|firewall-baseline|firewall-validate|firewall-apply|firewall-confirm|firewall-rollback|firewall-status|firewall-boot-restore}" >&2
+			echo "usage: $0 {detect|install <provider>|status <unit>|service <action> <unit>|forward <add|del> <cidr>|subnet-nat <add|del> <cidr>|logs <unit> <lines>|ensure-ip-forward|updates-check|updates-apply|firewall-baseline|firewall-validate|firewall-apply|firewall-confirm|firewall-rollback|firewall-status|firewall-boot-restore}" >&2
 			exit 2
 			;;
 	esac

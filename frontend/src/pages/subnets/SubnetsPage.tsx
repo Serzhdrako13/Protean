@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Table, Button, Modal, Form, Input, Popconfirm, Space, message } from 'antd';
+import { Table, Button, Modal, Form, Input, Popconfirm, Space, Switch, Tooltip, message } from 'antd';
 import { PlusOutlined, DeleteOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { PageShell } from '@/layouts/PageShell';
@@ -12,7 +12,7 @@ import { PageTitleBar } from '@/components/PageTitleBar';
 export function SubnetsPage() {
   const { t } = useTranslation(['subnets', 'common']);
   const { data, isLoading } = useSubnetsQuery();
-  const { create, remove } = useSubnetMutations();
+  const { create, remove, updateNAT } = useSubnetMutations();
   const [modalOpen, setModalOpen] = useState(false);
   const [form] = Form.useForm();
 
@@ -27,6 +27,16 @@ export function SubnetsPage() {
     }
   }
 
+  async function onToggleNAT(r: Subnet) {
+    const nextMode = r.nat_mode === 'masquerade' ? 'passthrough' : 'masquerade';
+    try {
+      await updateNAT.mutateAsync({ id: r.id, nat_mode: nextMode });
+      message.success(t('messages.natUpdated'));
+    } catch (e) {
+      if (e instanceof ApiError) message.error(e.message);
+    }
+  }
+
   const columns = [
     {
       title: <HeaderTip label={t('columns.cidr')} tip={t('columns.cidrTip')} />,
@@ -35,6 +45,40 @@ export function SubnetsPage() {
       render: (v: string) => <code>{v}</code>,
     },
     { title: t('columns.label'), dataIndex: 'label', key: 'label' },
+    {
+      title: t('columns.owner'),
+      key: 'owner',
+      render: (_: unknown, r: Subnet) => r.owner_node_name || '—',
+    },
+    {
+      title: t('columns.natMode'),
+      key: 'natMode',
+      render: (_: unknown, r: Subnet) => {
+        const toMasquerade = r.nat_mode !== 'masquerade';
+        const sw = (
+          <Switch
+            size="small"
+            checked={r.nat_mode === 'masquerade'}
+            disabled={!r.nat_capable}
+            checkedChildren={t('natMode.masquerade')}
+            unCheckedChildren={t('natMode.passthrough')}
+          />
+        );
+        if (!r.nat_capable) {
+          return <Tooltip title={t('natMode.notCapableTip')}>{sw}</Tooltip>;
+        }
+        return (
+          <Popconfirm
+            title={t(toMasquerade ? 'natMode.toMasqueradeTitle' : 'natMode.toPassthroughTitle', { cidr: r.cidr })}
+            description={t(toMasquerade ? 'natMode.toMasqueradeWarning' : 'natMode.toPassthroughWarning')}
+            onConfirm={() => onToggleNAT(r)}
+            okText={t('common:actions.confirm')}
+          >
+            {sw}
+          </Popconfirm>
+        );
+      },
+    },
     {
       title: '',
       key: 'actions',

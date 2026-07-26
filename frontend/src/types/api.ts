@@ -162,6 +162,11 @@ export interface Subnet {
   id: number;
   cidr: string;
   label: string;
+  provider?: string;
+  owner_node_id?: number | null;
+  owner_node_name?: string;
+  nat_mode: 'passthrough' | 'masquerade';
+  nat_capable: boolean;
 }
 
 export interface AuditEntry {
