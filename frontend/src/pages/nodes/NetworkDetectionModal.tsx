@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { useProvidersQuery } from '@/api/queries/providers';
 import {
   useNetworkDetectionQuery, useNetworkDetectionApplyMutation,
-  type DetectedItem, type DetectionDecision,
+  type DetectedItem, type DetectionDecision, type MeshCandidate,
 } from '@/api/queries/networkDetection';
 import { ApiError } from '@/api/http-init';
 
@@ -52,6 +52,64 @@ function initialRowState(item: DetectedItem): RowState {
     subnetLabel,
     meshChecked,
   };
+}
+
+// Shared by both the main review table (create_node/anomaly rows) and the
+// "already handled" section below (a Node-owned peer picking up a
+// newly-relevant subnet/mesh pairing later) -- same checkboxes, same
+// subnet-vs-mesh separation, so the two paths never drift apart.
+function SubnetMeshCheckboxes({
+  row, onChange, t, meshCandidates,
+}: {
+  row: RowState;
+  onChange: (patch: Partial<RowState>) => void;
+  t: (key: string, opts?: Record<string, unknown>) => string;
+  meshCandidates?: MeshCandidate[];
+}) {
+  const subnetCIDRs = Object.keys(row.subnetChecked);
+  const meshProviders = Object.keys(row.meshChecked);
+  const cidrByProvider = Object.fromEntries((meshCandidates ?? []).map((m) => [m.provider, m.cidr]));
+  if (subnetCIDRs.length === 0 && meshProviders.length === 0) return null;
+  return (
+    <>
+      {subnetCIDRs.length > 0 && (
+        <div>
+          <Typography.Text type="secondary" style={{ fontSize: 12 }}>{t('nodes:networkDetection.subnetsLabel')}</Typography.Text>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginTop: 4 }}>
+            {subnetCIDRs.map((cidr) => (
+              <Checkbox
+                key={cidr}
+                checked={row.subnetChecked[cidr]}
+                onChange={(e) => onChange({ subnetChecked: { ...row.subnetChecked, [cidr]: e.target.checked } })}
+              >
+                <code style={{ fontSize: 12 }}>{cidr}</code>
+              </Checkbox>
+            ))}
+          </div>
+        </div>
+      )}
+      {/* Mesh candidates: a visually SEPARATE section from plain subnets
+          above -- this is exactly the place "subnet" and "mesh" must
+          never blur together. */}
+      {meshProviders.length > 0 && (
+        <div style={{ borderTop: '1px dashed var(--ant-color-border-secondary, rgba(128,128,128,.2))', paddingTop: 4 }}>
+          <Typography.Text type="secondary" style={{ fontSize: 12 }}>{t('nodes:networkDetection.meshLabel')}</Typography.Text>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginTop: 4 }}>
+            {meshProviders.map((p) => (
+              <Checkbox
+                key={p}
+                checked={row.meshChecked[p]}
+                onChange={(e) => onChange({ meshChecked: { ...row.meshChecked, [p]: e.target.checked } })}
+              >
+                {t('nodes:networkDetection.meshWith', { provider: p })}{' '}
+                {cidrByProvider[p] && <code style={{ fontSize: 12 }}>{cidrByProvider[p]}</code>}
+              </Checkbox>
+            ))}
+          </div>
+        </div>
+      )}
+    </>
+  );
 }
 
 export function NetworkDetectionModal({ open, onClose }: { open: boolean; onClose: () => void }) {
@@ -139,6 +197,29 @@ export function NetworkDetectionModal({ open, onClose }: { open: boolean; onClos
     }
   }
 
+  // A peer that's already a Node can still gain a newly-relevant subnet or
+  // mesh pairing later (e.g. a second mesh-capable provider was only added
+  // to this server after the peer first became equipment) -- applying here
+  // never creates a duplicate Node, only adds what's checked.
+  async function onApplyExtra(item: DetectedItem) {
+    const row = rows[item.peer_id];
+    if (!row) return;
+    const subnetsToCreate = Object.entries(row.subnetChecked)
+      .filter(([, checked]) => checked)
+      .map(([cidr]) => ({ cidr, label: row.subnetLabel[cidr] ?? cidr }));
+    const meshWith = Object.entries(row.meshChecked).filter(([, checked]) => checked).map(([p]) => p);
+    if (subnetsToCreate.length === 0 && meshWith.length === 0) {
+      message.info(t('nodes:networkDetection.nothingSelected'));
+      return;
+    }
+    try {
+      await apply.mutateAsync([{ peer_id: item.peer_id, action: 'create_node', subnets_to_create: subnetsToCreate, mesh_with: meshWith }]);
+      message.success(t('nodes:networkDetection.extraApplied'));
+    } catch (e) {
+      if (e instanceof ApiError) message.error(e.message);
+    }
+  }
+
   return (
     <Modal
       title={t('nodes:networkDetection.title')}
@@ -216,7 +297,6 @@ export function NetworkDetectionModal({ open, onClose }: { open: boolean; onClos
                       }
                       const row = rows[item.peer_id];
                       if (!row) return null;
-                      const subnetCIDRs = Object.keys(row.subnetChecked);
                       return (
                         <Space direction="vertical" size={8} style={{ width: '100%' }}>
                           {anomalyNotes}
@@ -240,41 +320,12 @@ export function NetworkDetectionModal({ open, onClose }: { open: boolean; onClos
                               ]}
                             />
                           </Space>
-                          {subnetCIDRs.length > 0 && (
-                            <div>
-                              <Typography.Text type="secondary" style={{ fontSize: 12 }}>{t('nodes:networkDetection.subnetsLabel')}</Typography.Text>
-                              <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginTop: 4 }}>
-                                {subnetCIDRs.map((cidr) => (
-                                  <Checkbox
-                                    key={cidr}
-                                    checked={row.subnetChecked[cidr]}
-                                    onChange={(e) => updateRow(item.peer_id, { subnetChecked: { ...row.subnetChecked, [cidr]: e.target.checked } })}
-                                  >
-                                    <code style={{ fontSize: 12 }}>{cidr}</code>
-                                  </Checkbox>
-                                ))}
-                              </div>
-                            </div>
-                          )}
-                          {/* Mesh candidates: a visually SEPARATE section from
-                              plain subnets above -- this page is exactly the
-                              place "subnet" and "mesh" must not blur together. */}
-                          {(item.mesh_candidates ?? []).length > 0 && (
-                            <div style={{ borderTop: '1px dashed var(--ant-color-border-secondary, rgba(128,128,128,.2))', paddingTop: 4 }}>
-                              <Typography.Text type="secondary" style={{ fontSize: 12 }}>{t('nodes:networkDetection.meshLabel')}</Typography.Text>
-                              <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginTop: 4 }}>
-                                {(item.mesh_candidates ?? []).map((m) => (
-                                  <Checkbox
-                                    key={m.provider}
-                                    checked={row.meshChecked[m.provider] ?? false}
-                                    onChange={(e) => updateRow(item.peer_id, { meshChecked: { ...row.meshChecked, [m.provider]: e.target.checked } })}
-                                  >
-                                    {t('nodes:networkDetection.meshWith', { provider: m.provider })} <code style={{ fontSize: 12 }}>{m.cidr}</code>
-                                  </Checkbox>
-                                ))}
-                              </div>
-                            </div>
-                          )}
+                          <SubnetMeshCheckboxes
+                            row={row}
+                            meshCandidates={item.mesh_candidates}
+                            t={t}
+                            onChange={(patch) => updateRow(item.peer_id, patch)}
+                          />
                         </Space>
                       );
                     },
@@ -292,17 +343,41 @@ export function NetworkDetectionModal({ open, onClose }: { open: boolean; onClos
                   </span>
                 </span>
                 {showHandled && (
-                  <div style={{ marginTop: 8 }}>
-                    {handledItems.map((item) => (
-                      <div key={item.peer_id} style={{ fontSize: 12, color: 'var(--ant-color-text-tertiary)', padding: '2px 0', display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <span>
-                          {item.name || item.peer_id} — {item.already_node_owned ? t('nodes:networkDetection.alreadyOwned') : t('nodes:networkDetection.alreadyDismissed')}
-                        </span>
-                        {!item.already_node_owned && item.already_dismissed && (
-                          <Button size="small" onClick={() => onUndismiss(item)}>{t('nodes:networkDetection.undismiss')}</Button>
-                        )}
-                      </div>
-                    ))}
+                  <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    {handledItems.map((item) => {
+                      const row = rows[item.peer_id];
+                      const hasExtra = item.already_node_owned && row && (
+                        Object.keys(row.subnetChecked).length > 0 || Object.keys(row.meshChecked).length > 0
+                      );
+                      return (
+                        <div key={item.peer_id} style={{ fontSize: 12, color: 'var(--ant-color-text-tertiary)', padding: '2px 0' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                            <span>
+                              {item.name || item.peer_id} — {item.already_node_owned ? t('nodes:networkDetection.alreadyOwned') : t('nodes:networkDetection.alreadyDismissed')}
+                            </span>
+                            {!item.already_node_owned && item.already_dismissed && (
+                              <Button size="small" onClick={() => onUndismiss(item)}>{t('nodes:networkDetection.undismiss')}</Button>
+                            )}
+                          </div>
+                          {hasExtra && row && (
+                            <div style={{ marginTop: 4, marginLeft: 16 }}>
+                              <Typography.Text style={{ fontSize: 12 }}>{t('nodes:networkDetection.extraHint')}</Typography.Text>
+                              <Space direction="vertical" size={4} style={{ width: '100%', marginTop: 4 }}>
+                                <SubnetMeshCheckboxes
+                                  row={row}
+                                  meshCandidates={item.mesh_candidates}
+                                  t={t}
+                                  onChange={(patch) => updateRow(item.peer_id, patch)}
+                                />
+                                <Button size="small" type="primary" onClick={() => onApplyExtra(item)}>
+                                  {t('nodes:networkDetection.applyExtra')}
+                                </Button>
+                              </Space>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
               </div>

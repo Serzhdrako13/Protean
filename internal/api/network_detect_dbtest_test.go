@@ -193,4 +193,35 @@ func TestNetworkDetectionEndToEnd(t *testing.T) {
 	if err != nil || len(nodes3) != 2 {
 		t.Fatalf("ListNodes after promoting the un-dismissed peer = %+v, want 2 nodes total", nodes3)
 	}
+
+	// A peer that's ALREADY a Node (the router, from the first apply) must
+	// still be able to pick up a newly-relevant subnet/mesh pairing in a
+	// later apply -- e.g. an admin adds a second mesh-capable instance to
+	// the same server well after the router was first turned into
+	// equipment. Submitting a create_node decision for an owned peer with
+	// no NodeName must not create a duplicate Node, but must still apply
+	// SubnetsToCreate.
+	summary5, err := s.applyNetworkDetection(ctx, "srv:wg0", []DetectionDecision{
+		{
+			PeerID: router.PeerID, Action: "create_node",
+			SubnetsToCreate: []struct {
+				CIDR  string `json:"cidr"`
+				Label string `json:"label"`
+			}{{CIDR: "10.99.0.0/24", Label: "router1 second subnet"}},
+		},
+	})
+	if err != nil {
+		t.Fatalf("apply extra subnet for an already-owned peer: %v", err)
+	}
+	if summary5.NodesCreated != 0 || summary5.AlreadyHandled != 1 || summary5.SubnetsCreated != 1 {
+		t.Fatalf("summary5 = %+v, want 0 new nodes, 1 already_handled, 1 new subnet", summary5)
+	}
+	nodes4, err := st.ListNodes(ctx)
+	if err != nil || len(nodes4) != 2 {
+		t.Fatalf("ListNodes after extra-subnet apply = %+v, want still 2 (no duplicate)", nodes4)
+	}
+	subnets3, err := st.ListAllSubnets(ctx)
+	if err != nil || len(subnets3) != 3 {
+		t.Fatalf("ListAllSubnets after extra-subnet apply = %+v, want 3 total (router's original + shadow-router's + the new one)", subnets3)
+	}
 }

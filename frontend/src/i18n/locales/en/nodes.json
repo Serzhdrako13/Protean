@@ -100,6 +100,9 @@
     "undismissed": "Brought back for review -- refresh the list",
     "nothingSelected": "Nothing selected to apply",
     "missingName": "Enter a name for: {{peers}}",
+    "extraHint": "A new subnet or mesh neighbor showed up for a device that's already bound -- add it without recreating anything:",
+    "applyExtra": "Apply",
+    "extraApplied": "Added",
     "apply": "Apply",
     "applySummary": "Done: {{nodes}} device(s) created, {{subnets}} subnet(s) added, {{mesh}} mesh link(s) enabled. Enabling mesh only records that the interconnection already works via the provider's own configuration -- it does not rewrite any existing peer's AllowedIPs."
   }

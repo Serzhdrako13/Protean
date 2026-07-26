@@ -249,36 +249,48 @@ func (s *Server) applyNetworkDetection(ctx context.Context, providerName string,
 			summary.Undismissed++
 
 		case "create_node":
-			if _, owned, err := s.store.GetNodePeerOwnerID(ctx, providerName, d.PeerID); err == nil && owned {
-				summary.AlreadyHandled++
-				continue
-			}
-			name := strings.TrimSpace(d.NodeName)
-			if name == "" {
-				continue // Node.Name is NOT NULL -- nothing sane to create
-			}
-			kind := d.NodeKind
-			if kind != "router" && kind != "device" && kind != "other" {
-				kind = "router"
-			}
-			node, err := s.store.CreateNode(ctx, store.Node{
-				Name: name, Kind: kind, Role: "network_node",
-				Description: "Автоматически определено при импорте существующей конфигурации",
-			})
+			// Node creation is gated on not-already-owned, but a peer that
+			// already became a Node in an earlier apply (e.g. before a
+			// sibling mesh-capable instance existed on this server) must
+			// still be able to pick up newly-relevant subnets/mesh here --
+			// otherwise every later addition would demand the admin
+			// manually redo mesh/subnet setup outside this flow. Only the
+			// node-creation step itself is skipped for an owned peer.
+			_, owned, err := s.store.GetNodePeerOwnerID(ctx, providerName, d.PeerID)
 			if err != nil {
 				return summary, err
 			}
-			if err := s.store.SetNodePeer(ctx, providerName, d.PeerID, node.ID); err != nil {
-				return summary, err
+			if owned {
+				summary.AlreadyHandled++
+			} else {
+				name := strings.TrimSpace(d.NodeName)
+				if name == "" {
+					continue // Node.Name is NOT NULL -- nothing sane to create
+				}
+				kind := d.NodeKind
+				if kind != "router" && kind != "device" && kind != "other" {
+					kind = "router"
+				}
+				node, err := s.store.CreateNode(ctx, store.Node{
+					Name: name, Kind: kind, Role: "network_node",
+					Description: "Автоматически определено при импорте существующей конфигурации",
+				})
+				if err != nil {
+					return summary, err
+				}
+				if err := s.store.SetNodePeer(ctx, providerName, d.PeerID, node.ID); err != nil {
+					return summary, err
+				}
+				// pubKey, not d.PeerID: peer_category is keyed by the raw
+				// public key (see api_peers.go's own SetPeerCategory
+				// calls), unlike node_peer which is keyed by the encoded
+				// urlID.
+				if err := s.store.SetPeerCategory(ctx, providerName, pubKey, "site"); err != nil {
+					return summary, err
+				}
+				s.audit(ctx, "node.create", name+" (auto-detected from "+providerName+")")
+				summary.NodesCreated++
 			}
-			// pubKey, not d.PeerID: peer_category is keyed by the raw
-			// public key (see api_peers.go's own SetPeerCategory calls),
-			// unlike node_peer which is keyed by the encoded urlID.
-			if err := s.store.SetPeerCategory(ctx, providerName, pubKey, "site"); err != nil {
-				return summary, err
-			}
-			s.audit(ctx, "node.create", name+" (auto-detected from "+providerName+")")
-			summary.NodesCreated++
 
 			for _, sn := range d.SubnetsToCreate {
 				cidr := strings.TrimSpace(sn.CIDR)
