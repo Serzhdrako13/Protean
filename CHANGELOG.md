@@ -4,6 +4,23 @@ All notable changes to Protean are documented here. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/); versions before 1.0 don't
 promise a stable API/schema between releases.
 
+## [0.2.3-alpha] - 2026-07-26
+
+### Fixed
+- Network structure detection couldn't turn an unnamed peer into
+  equipment: a hand-written conf almost never has `# Name:` comments,
+  so a real router-with-subnet peer classified as "anomaly" rather
+  than "create equipment", and the review modal only offered a dismiss
+  action for anomaly rows -- clicking "include" on one silently
+  dismissed it instead of creating anything. Anomaly rows with a
+  routed subnet now get the same editable name/kind/subnet/mesh form
+  as a detected router, and applying without a name is rejected with a
+  clear error instead of doing nothing. Added an "undismiss" action +
+  button so a peer dismissed by the old broken flow isn't stuck hidden.
+- `scripts/deploy.sh`: `-a` alone wasn't recursing into directory
+  entries read from `--files-from` on this rsync build (dry-run showed
+  "total size is 0" for `internal/`/`cmd/`) -- added an explicit `-r`.
+
 ## [0.2.2-alpha] - 2026-07-26
 
 ### Added
