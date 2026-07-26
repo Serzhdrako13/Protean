@@ -4,6 +4,26 @@ All notable changes to Protean are documented here. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/); versions before 1.0 don't
 promise a stable API/schema between releases.
 
+## [0.2.2-alpha] - 2026-07-26
+
+### Added
+- Network structure detection for an adopted (pre-existing) WireGuard/
+  AmneziaWG config: classifies each peer's `AllowedIPs` against the
+  interface's own tunnel network to tell a plain client apart from a
+  router/server fronting a real site subnet, and surfaces a reviewable
+  "Обнаружить структуру сети" action (Оборудование tab) that -- only on
+  explicit admin approval -- creates the matching Node, catalogues its
+  routed subnet(s), and enables mesh with a sibling instance that
+  already covers the same tunnel network. Never touches the adopted
+  config file or the live interface; fully idempotent on repeat runs.
+- Each VPN client's own address is now shown without its `/32`/`/128`
+  host mask wherever it appears, and is never joined together with its
+  routed site subnets in the same string.
+- `scripts/deploy.sh`/`scripts/rollback.sh`: an explicit allow-list
+  based deploy flow (dry-run by default, config/secrets backup before
+  any apply, restarts only the target service) for pushing code to an
+  already-running host without risking `.env`/secrets/data.
+
 ## [0.2.1-alpha] - 2026-07-25
 
 ### Added
