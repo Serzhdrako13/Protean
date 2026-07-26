@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"errors"
+	"log/slog"
 	"sort"
 	"strings"
 
@@ -331,7 +332,15 @@ func meshPairKey(a, b string) string {
 // enableMeshPair turns MeshEnabled on for BOTH sides of a pair -- mesh is
 // symmetric (meshTunnelCIDRsExcept is queried from both directions), so a
 // one-sided toggle would be meaningless. A no-op for a side that's
-// already enabled.
+// already enabled. Mirrors apiMeshSettingsUpdate's hot-apply (api_network.go)
+// instead of only flipping the DB flag: for a cert-based instance the
+// flag alone changes nothing on the host until it's re-provisioned
+// (route push + FORWARD rules), and any instance needs ip_forward
+// actually on when mesh is turning on, not just assumed from the
+// interactive setup-host.sh bootstrap. Apply failures are logged, not
+// returned -- a host-side hiccup on one side shouldn't abort the rest
+// of the batch or roll back the DB flag that already correctly
+// reflects the admin's decision.
 func (s *Server) enableMeshPair(ctx context.Context, a, b string) error {
 	for _, name := range []string{a, b} {
 		ps, err := s.store.GetProviderSettings(ctx, name)
@@ -346,6 +355,21 @@ func (s *Server) enableMeshPair(ctx context.Context, a, b string) error {
 			return err
 		}
 		s.audit(ctx, "network.update", name+" (mesh enabled, auto-detected)")
+
+		if prov, ok := s.reg.Get(name); ok {
+			if _, certBased := prov.(vpn.ClientConfigProvider); certBased {
+				if err := s.provisionCert(ctx, name); err != nil {
+					slog.Error("provision cert-based mesh sibling failed", "provider", name, "err", err)
+				}
+			}
+		}
+		if inst, ok := s.installerForProvider(name); ok {
+			if err := inst.EnsureIPForward(ctx); err != nil {
+				slog.Error("ensure ip_forward failed", "provider", name, "err", err)
+			} else {
+				s.audit(ctx, "server.ip_forward_enabled", name)
+			}
+		}
 	}
 	return nil
 }
