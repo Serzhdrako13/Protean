@@ -4,6 +4,19 @@ All notable changes to Protean are documented here. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/); versions before 1.0 don't
 promise a stable API/schema between releases.
 
+## [0.3.0-alpha] - 2026-07-26
+
+### Added
+- Per-subnet NAT mode for unifying router-fronted site subnets into one
+  routable network: choose, per catalogued subnet, whether the VPN
+  server masquerades its outbound-to-mesh traffic ("masquerade" -- the
+  far router never needs a route back for the true source) or leaves
+  it untouched ("passthrough", the default -- both routers need their
+  own manual reciprocal route, which is the operator's own
+  responsibility since Protean can never push config to a hand-adopted
+  router's own device). Subnets page now shows which equipment fronts
+  each subnet and a NAT toggle with the tradeoff explained inline.
+
 ## [0.2.5-alpha] - 2026-07-26
 
 ### Fixed
