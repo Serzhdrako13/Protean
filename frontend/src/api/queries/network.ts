@@ -32,6 +32,8 @@ export interface MeshSettings {
   mesh_capable: boolean;
   service_unit?: string;
   service_status?: string;
+  group_id?: number | null;
+  group_name?: string;
 }
 
 export function useMeshSettingsQuery(provider: string, enabled: boolean) {
@@ -51,8 +53,10 @@ export function useProviderSettingsMutations(provider: string) {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['server-config', provider] }),
   });
   const updateMeshSettings = useMutation({
-    mutationFn: (input: { mesh_enabled: boolean; internet_egress: boolean; auto_assign_start?: string; auto_assign_end?: string }) =>
-      HttpUtil.put<MeshSettings>(`${base}/mesh-settings`, input),
+    mutationFn: (input: {
+      mesh_enabled: boolean; internet_egress: boolean; auto_assign_start?: string; auto_assign_end?: string;
+      group_id?: number | null; new_group_name?: string;
+    }) => HttpUtil.put<MeshSettings>(`${base}/mesh-settings`, input),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['mesh-settings', provider] }),
   });
   const serviceAction = useMutation({

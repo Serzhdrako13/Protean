@@ -120,6 +120,21 @@ func (s *Server) instanceLabels(ctx context.Context) map[string]string {
 	return labels
 }
 
+// instanceGroups fetches every instance's assigned network group NAME in
+// one query, for populating apiMeshIface's/apiMeshSettings' GroupName
+// without an N+1 lookup across meshCapableInstances. Call once per
+// request. Instances with no group are simply absent from the map.
+func (s *Server) instanceGroups(ctx context.Context) map[string]string {
+	if s.store == nil {
+		return nil
+	}
+	groups, err := s.store.ListAllProviderGroupNames(ctx)
+	if err != nil {
+		return nil
+	}
+	return groups
+}
+
 // instancePortalVisibility fetches the set of instances an admin has opted
 // into the self-service portal, in one query -- call once per request, not
 // once per instance. Returns nil (not an error) if s.store is unavailable.

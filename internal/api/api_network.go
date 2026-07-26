@@ -183,6 +183,11 @@ type apiMeshSettings struct {
 	MeshCapable     bool   `json:"mesh_capable"`
 	ServiceUnit     string `json:"service_unit,omitempty"`
 	ServiceStatus   string `json:"service_status,omitempty"`
+	// GroupID/GroupName: this instance's network group, if any.
+	// NewGroupName is PUT-only (create-on-the-fly), ignored on GET.
+	GroupID      *int64 `json:"group_id,omitempty"`
+	GroupName    string `json:"group_name,omitempty"`
+	NewGroupName string `json:"new_group_name,omitempty"`
 }
 
 func (s *Server) buildAPIMeshSettings(r *http.Request, providerName string) (apiMeshSettings, error) {
@@ -195,6 +200,8 @@ func (s *Server) buildAPIMeshSettings(r *http.Request, providerName string) (api
 	out.InternetEgress = ps.InternetEgress
 	out.AutoAssignStart = ps.AutoAssignStart
 	out.AutoAssignEnd = ps.AutoAssignEnd
+	out.GroupID = ps.GroupID
+	out.GroupName = s.groupName(r.Context(), ps.GroupID)
 	if prov, ok := s.reg.Get(providerName); ok {
 		if sn, ok := prov.(vpn.ServiceNamed); ok {
 			out.ServiceUnit = sn.ServiceName()
@@ -256,6 +263,20 @@ func (s *Server) apiMeshSettingsUpdate(w http.ResponseWriter, r *http.Request) {
 		Provider: providerName, MeshEnabled: req.MeshEnabled, InternetEgress: req.InternetEgress,
 		AutoAssignStart: req.AutoAssignStart, AutoAssignEnd: req.AutoAssignEnd,
 	}); err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	// The GET response always echoes group_id/group_name back, so the
+	// frontend always resubmits the current-or-changed desired group
+	// state on every save here -- safe to always persist, same as
+	// mesh_enabled/internet_egress just above (no "did it change" guard
+	// needed; nil unambiguously means "no group").
+	groupID, err := s.resolveGroupID(r.Context(), req.GroupID, req.NewGroupName)
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	if _, err := s.store.SetProviderGroup(r.Context(), providerName, groupID); err != nil {
 		writeErr(w, http.StatusInternalServerError, err.Error())
 		return
 	}

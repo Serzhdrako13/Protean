@@ -294,12 +294,20 @@ func (s *Server) applyNetworkDetection(ctx context.Context, providerName string,
 				ownerNodeID = node.ID
 			}
 
+			var groupID *int64
+			if len(d.SubnetsToCreate) > 0 {
+				gid, err := s.ensureProviderGroup(ctx, providerName)
+				if err != nil {
+					return summary, err
+				}
+				groupID = &gid
+			}
 			for _, sn := range d.SubnetsToCreate {
 				cidr := strings.TrimSpace(sn.CIDR)
 				if cidr == "" || existingByCIDR[cidr] {
 					continue
 				}
-				if _, err := s.store.CreateSubnet(ctx, providerName, cidr, sn.Label, &ownerNodeID); err != nil {
+				if _, err := s.store.CreateSubnet(ctx, providerName, cidr, sn.Label, &ownerNodeID, groupID); err != nil {
 					return summary, err
 				}
 				existingByCIDR[cidr] = true
@@ -343,6 +351,9 @@ func meshPairKey(a, b string) string {
 // of the batch or roll back the DB flag that already correctly
 // reflects the admin's decision.
 func (s *Server) enableMeshPair(ctx context.Context, a, b string) error {
+	if err := s.reconcileMeshGroups(ctx, a, b); err != nil {
+		slog.Error("reconcile mesh groups failed", "a", a, "b", b, "err", err)
+	}
 	for _, name := range []string{a, b} {
 		ps, err := s.store.GetProviderSettings(ctx, name)
 		if err != nil {

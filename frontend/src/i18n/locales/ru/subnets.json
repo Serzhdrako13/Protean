@@ -7,7 +7,10 @@
     "cidrTip": "Адресный диапазон локальной сети площадки (например 192.168.10.0/24), которая должна быть видна остальным участникам mesh через VPN-шлюз этой площадки",
     "label": "Название",
     "owner": "Оборудование",
-    "natMode": "Режим NAT"
+    "natMode": "Режим NAT",
+    "group": "Группа сети",
+    "noGroup": "Без группы",
+    "newGroupOption": "+ Новая группа…"
   },
   "deleteConfirm": "Удалить подсеть {{cidr}}?",
   "deleteTitle": "Удалить подсеть",
@@ -15,11 +18,16 @@
     "cidrLabel": "CIDR",
     "cidrPlaceholder": "10.20.0.0/24",
     "labelLabel": "Название",
-    "labelPlaceholder": "офис Москва"
+    "labelPlaceholder": "офис Москва",
+    "ownerNodeLabel": "Оборудование (необязательно)",
+    "ownerNodePlaceholder": "Не выбрано",
+    "groupLabel": "Группа сети",
+    "newGroupPlaceholder": "Название новой группы"
   },
   "messages": {
     "created": "Подсеть добавлена",
-    "natUpdated": "Режим NAT изменён"
+    "natUpdated": "Режим NAT изменён",
+    "groupUpdated": "Группа сети изменена"
   },
   "natMode": {
     "passthrough": "Без NAT",

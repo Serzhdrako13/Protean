@@ -17,6 +17,7 @@ type apiMeshIface struct {
 	TunnelCIDR        string `json:"tunnel_cidr,omitempty"`
 	SupportsForward   bool   `json:"supports_forward"`
 	ForwardingEnabled bool   `json:"forwarding_enabled"`
+	GroupName         string `json:"group_name,omitempty"`
 }
 
 type apiMeshPeer struct {
@@ -27,8 +28,9 @@ type apiMeshPeer struct {
 }
 
 type apiMeshSubnet struct {
-	CIDR  string `json:"cidr"`
-	Label string `json:"label"`
+	CIDR      string `json:"cidr"`
+	Label     string `json:"label"`
+	GroupName string `json:"group_name,omitempty"`
 }
 
 type apiMesh struct {
@@ -49,13 +51,23 @@ func (s *Server) apiMeshGet(w http.ResponseWriter, r *http.Request) {
 	type labelledCIDR struct{ cidr, label string }
 	var all []labelledCIDR
 	labels := s.instanceLabels(ctx)
+	groups := s.instanceGroups(ctx)
+
+	type meshedGroup struct {
+		name, label string
+		groupID     *int64
+	}
+	var meshedGroups []meshedGroup
 
 	for _, name := range s.meshCapableInstances(serverID) {
 		prov, ok := s.reg.Get(name)
 		if !ok {
 			continue
 		}
-		iv := apiMeshIface{Provider: name, Label: s.adminProviderLabel(name, labels)}
+		iv := apiMeshIface{Provider: name, Label: s.adminProviderLabel(name, labels), GroupName: groups[name]}
+		if ps, err := s.store.GetProviderSettings(ctx, name); err == nil && ps.MeshEnabled {
+			meshedGroups = append(meshedGroups, meshedGroup{name: name, label: iv.Label, groupID: ps.GroupID})
+		}
 		status, err := s.providerStatus(ctx, prov)
 		if err == nil && status.Up {
 			iv.Up = true
@@ -87,8 +99,18 @@ func (s *Server) apiMeshGet(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+	subnetGroupNames := map[int64]string{}
+	if allGroups, err := s.store.ListNetworkGroups(ctx); err == nil {
+		for _, g := range allGroups {
+			subnetGroupNames[g.ID] = g.Name
+		}
+	}
 	for _, sn := range subnets {
-		out.Subnets = append(out.Subnets, apiMeshSubnet{CIDR: sn.CIDR, Label: sn.Label})
+		groupName := ""
+		if sn.GroupID != nil {
+			groupName = subnetGroupNames[*sn.GroupID]
+		}
+		out.Subnets = append(out.Subnets, apiMeshSubnet{CIDR: sn.CIDR, Label: sn.Label, GroupName: groupName})
 		all = append(all, labelledCIDR{sn.CIDR, "subnet " + sn.CIDR})
 	}
 
@@ -97,6 +119,23 @@ func (s *Server) apiMeshGet(w http.ResponseWriter, r *http.Request) {
 			if err := vpn.CheckNoOverlap(all[i].cidr, []string{all[j].cidr}); err != nil {
 				out.Warnings = append(out.Warnings, fmt.Sprintf("%s overlaps %s", all[i].label, all[j].label))
 			}
+		}
+	}
+	// Two mesh-enabled instances with different, non-nil groups are
+	// linked (traffic actually flows between them) but still shown under
+	// separate names -- reconcileMeshGroups deliberately never auto-merges
+	// this case, so flag it instead of leaving it silently misleading.
+	for i := 0; i < len(meshedGroups); i++ {
+		for j := i + 1; j < len(meshedGroups); j++ {
+			gi, gj := meshedGroups[i].groupID, meshedGroups[j].groupID
+			if gi == nil || gj == nil || *gi == *gj {
+				continue
+			}
+			ni, _ := s.store.GetNetworkGroup(ctx, *gi)
+			nj, _ := s.store.GetNetworkGroup(ctx, *gj)
+			out.Warnings = append(out.Warnings, fmt.Sprintf(
+				"%s (%s) and %s (%s) are mesh-linked but still shown under different network group names",
+				meshedGroups[i].label, ni.Name, meshedGroups[j].label, nj.Name))
 		}
 	}
 	sort.Slice(out.Peers, func(i, j int) bool {

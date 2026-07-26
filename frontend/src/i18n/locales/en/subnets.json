@@ -7,7 +7,10 @@
     "cidrTip": "Address range of the site's local network (e.g. 192.168.10.0/24) that should be visible to other mesh participants through this site's VPN gateway",
     "label": "Label",
     "owner": "Equipment",
-    "natMode": "NAT mode"
+    "natMode": "NAT mode",
+    "group": "Network group",
+    "noGroup": "No group",
+    "newGroupOption": "+ New group…"
   },
   "deleteConfirm": "Delete subnet {{cidr}}?",
   "deleteTitle": "Delete subnet",
@@ -15,11 +18,16 @@
     "cidrLabel": "CIDR",
     "cidrPlaceholder": "10.20.0.0/24",
     "labelLabel": "Label",
-    "labelPlaceholder": "Moscow office"
+    "labelPlaceholder": "Moscow office",
+    "ownerNodeLabel": "Equipment (optional)",
+    "ownerNodePlaceholder": "Not selected",
+    "groupLabel": "Network group",
+    "newGroupPlaceholder": "New group name"
   },
   "messages": {
     "created": "Subnet added",
-    "natUpdated": "NAT mode updated"
+    "natUpdated": "NAT mode updated",
+    "groupUpdated": "Network group updated"
   },
   "natMode": {
     "passthrough": "Passthrough",

@@ -135,6 +135,7 @@ export interface MeshIface {
   tunnel_cidr?: string;
   supports_forward: boolean;
   forwarding_enabled: boolean;
+  group_name?: string;
 }
 
 export interface MeshPeer {
@@ -147,6 +148,7 @@ export interface MeshPeer {
 export interface MeshSubnet {
   cidr: string;
   label: string;
+  group_name?: string;
 }
 
 export interface Mesh {
@@ -167,6 +169,13 @@ export interface Subnet {
   owner_node_name?: string;
   nat_mode: 'passthrough' | 'masquerade';
   nat_capable: boolean;
+  group_id?: number | null;
+  group_name?: string;
+}
+
+export interface NetworkGroup {
+  id: number;
+  name: string;
 }
 
 export interface AuditEntry {

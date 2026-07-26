@@ -14,7 +14,9 @@ export function useSubnetMutations() {
   const invalidate = () => qc.invalidateQueries({ queryKey: ['subnets'] });
 
   const create = useMutation({
-    mutationFn: (input: { cidr: string; label: string }) => HttpUtil.post<Subnet>('/api/subnets', input),
+    mutationFn: (input: {
+      cidr: string; label: string; owner_node_id?: number | null; group_id?: number | null; new_group_name?: string;
+    }) => HttpUtil.post<Subnet>('/api/subnets', input),
     onSuccess: invalidate,
   });
   const remove = useMutation({
@@ -26,6 +28,11 @@ export function useSubnetMutations() {
       HttpUtil.put<Subnet>(`/api/subnets/${id}`, { nat_mode }),
     onSuccess: invalidate,
   });
+  const updateGroup = useMutation({
+    mutationFn: ({ id, group_id, new_group_name }: { id: number; group_id: number | null; new_group_name?: string }) =>
+      HttpUtil.put<Subnet>(`/api/subnets/${id}/group`, { group_id, new_group_name }),
+    onSuccess: invalidate,
+  });
 
-  return { create, remove, updateNAT };
+  return { create, remove, updateNAT, updateGroup };
 }

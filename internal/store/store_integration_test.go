@@ -150,12 +150,12 @@ func TestAuthSourceUniqueness(t *testing.T) {
 func TestSubnets(t *testing.T) {
 	s := testDB(t)
 	ctx := context.Background()
-	sn, err := s.CreateSubnet(ctx, "", "192.168.5.0/24", "office", nil)
+	sn, err := s.CreateSubnet(ctx, "", "192.168.5.0/24", "office", nil, nil)
 	if err != nil {
 		t.Fatalf("CreateSubnet: %v", err)
 	}
-	if sn.OwnerNodeID != nil || sn.NATMode != "passthrough" {
-		t.Fatalf("new subnet defaults = %+v, want nil owner + passthrough", sn)
+	if sn.OwnerNodeID != nil || sn.NATMode != "passthrough" || sn.GroupID != nil {
+		t.Fatalf("new subnet defaults = %+v, want nil owner + passthrough + nil group", sn)
 	}
 	list, err := s.ListAllSubnets(ctx)
 	if err != nil || len(list) != 1 || list[0].CIDR != "192.168.5.0/24" {

@@ -114,6 +114,17 @@ func TestNetworkDetectionEndToEnd(t *testing.T) {
 	if err != nil || len(subnets) != 1 || subnets[0].CIDR != "192.168.50.0/24" {
 		t.Fatalf("ListAllSubnets = %+v err=%v", subnets, err)
 	}
+	if subnets[0].GroupID == nil {
+		t.Fatalf("subnet should have been auto-assigned a network group, got %+v", subnets[0])
+	}
+	firstGroup, err := st.GetNetworkGroup(ctx, *subnets[0].GroupID)
+	if err != nil || firstGroup.Name != "Сеть 1" {
+		t.Fatalf("GetNetworkGroup = %+v err=%v, want auto-named \"Сеть 1\"", firstGroup, err)
+	}
+	psWG0, err := st.GetProviderSettings(ctx, "srv:wg0")
+	if err != nil || psWG0.GroupID == nil || *psWG0.GroupID != firstGroup.ID {
+		t.Fatalf("srv:wg0 provider_settings.group_id = %+v err=%v, want %d", psWG0.GroupID, err, firstGroup.ID)
+	}
 	dismissed, err := st.IsPeerDetectionDismissed(ctx, "srv:wg0", unnamed.PeerID)
 	if err != nil || !dismissed {
 		t.Fatalf("unnamed peer should be dismissed: dismissed=%v err=%v", dismissed, err)
@@ -223,5 +234,75 @@ func TestNetworkDetectionEndToEnd(t *testing.T) {
 	subnets3, err := st.ListAllSubnets(ctx)
 	if err != nil || len(subnets3) != 3 {
 		t.Fatalf("ListAllSubnets after extra-subnet apply = %+v, want 3 total (router's original + shadow-router's + the new one)", subnets3)
+	}
+	// All 3 subnets were detected/created on the SAME provider instance
+	// (srv:wg0) across separate apply calls -- ensureProviderGroup must
+	// reuse the one existing group every time, never minting a "Сеть 2"
+	// alongside it just because a later apply ran separately.
+	for _, sn := range subnets3 {
+		if sn.GroupID == nil || *sn.GroupID != firstGroup.ID {
+			t.Errorf("subnet %+v should share the same auto-named group %d as the rest of srv:wg0's subnets", sn, firstGroup.ID)
+		}
+	}
+	allGroups, err := st.ListNetworkGroups(ctx)
+	if err != nil || len(allGroups) != 1 {
+		t.Fatalf("ListNetworkGroups = %+v err=%v, want exactly 1 group total (no accidental \"Сеть 2\")", allGroups, err)
+	}
+}
+
+// TestReconcileMeshGroups covers the 3 cases enableMeshPair's group
+// bookkeeping must handle: neither instance grouped yet (create+share one
+// new group), exactly one already grouped (the other silently adopts
+// it), and both already grouped DIFFERENTLY (left untouched -- never an
+// automatic, surprising merge). reconcileMeshGroups only touches
+// GetProviderSettings/SetProviderGroup, so this doesn't need any
+// registered vpn.Provider at all.
+func TestReconcileMeshGroups(t *testing.T) {
+	st := nodesTestDB(t)
+	ctx := context.Background()
+	s := newNodesTestServer(t, st, vpn.NewRegistry())
+
+	// Case 1: neither has a group -- one new shared group for both.
+	if err := s.reconcileMeshGroups(ctx, "srv:wg0", "srv:awg0"); err != nil {
+		t.Fatalf("reconcileMeshGroups (neither grouped): %v", err)
+	}
+	psA, _ := st.GetProviderSettings(ctx, "srv:wg0")
+	psB, _ := st.GetProviderSettings(ctx, "srv:awg0")
+	if psA.GroupID == nil || psB.GroupID == nil || *psA.GroupID != *psB.GroupID {
+		t.Fatalf("case 1: srv:wg0.GroupID=%v srv:awg0.GroupID=%v, want equal non-nil", psA.GroupID, psB.GroupID)
+	}
+	sharedGroup := *psA.GroupID
+
+	// Case 2: srv:wg0 already grouped (from case 1), srv:openvpn has none
+	// -- it should silently adopt srv:wg0's group.
+	if err := s.reconcileMeshGroups(ctx, "srv:wg0", "srv:openvpn"); err != nil {
+		t.Fatalf("reconcileMeshGroups (one grouped): %v", err)
+	}
+	psC, _ := st.GetProviderSettings(ctx, "srv:openvpn")
+	if psC.GroupID == nil || *psC.GroupID != sharedGroup {
+		t.Fatalf("case 2: srv:openvpn.GroupID=%v, want %d (adopted from srv:wg0)", psC.GroupID, sharedGroup)
+	}
+
+	// Case 3: srv:ikev2 gets its OWN separate group first (simulating an
+	// independently-detected network), then gets mesh-linked to
+	// srv:wg0 (already in sharedGroup). Both already-different groups
+	// must be left untouched -- no automatic merge.
+	otherGroup, err := st.CreateNextAutoNamedGroup(ctx)
+	if err != nil {
+		t.Fatalf("CreateNextAutoNamedGroup: %v", err)
+	}
+	if _, err := st.SetProviderGroup(ctx, "srv:ikev2", &otherGroup.ID); err != nil {
+		t.Fatalf("SetProviderGroup: %v", err)
+	}
+	if err := s.reconcileMeshGroups(ctx, "srv:wg0", "srv:ikev2"); err != nil {
+		t.Fatalf("reconcileMeshGroups (both grouped differently): %v", err)
+	}
+	psD, _ := st.GetProviderSettings(ctx, "srv:ikev2")
+	if psD.GroupID == nil || *psD.GroupID != otherGroup.ID {
+		t.Fatalf("case 3: srv:ikev2.GroupID=%v, want untouched at %d (no auto-merge)", psD.GroupID, otherGroup.ID)
+	}
+	psAAfter, _ := st.GetProviderSettings(ctx, "srv:wg0")
+	if psAAfter.GroupID == nil || *psAAfter.GroupID != sharedGroup {
+		t.Fatalf("case 3: srv:wg0.GroupID=%v, want untouched at %d (no auto-merge)", psAAfter.GroupID, sharedGroup)
 	}
 }

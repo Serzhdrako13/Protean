@@ -6,6 +6,7 @@ import { useServerConfigQuery, useMeshSettingsQuery, useProviderSettingsMutation
 import { useCAImportMutation, useCAInfoQuery } from '@/api/queries/ca';
 import { useBackupsQuery, useRestoreBackupMutation, type Backup } from '@/api/queries/backups';
 import { HeaderTip } from '@/components/HeaderTip';
+import { NetworkGroupSelect } from '@/components/NetworkGroupSelect';
 import { ApiError } from '@/api/http-init';
 
 const AWG_OBFUSCATION_KEYS = ['Jc', 'Jmin', 'Jmax', 'S1', 'S2', 'H1', 'H2', 'H3', 'H4'];
@@ -198,6 +199,23 @@ function MeshSettingsCard({ provider }: { provider: string }) {
     }
   }
 
+  async function saveGroup(next: { group_id: number | null; new_group_name?: string }) {
+    if (!data) return;
+    try {
+      await updateMeshSettings.mutateAsync({
+        mesh_enabled: data.mesh_enabled,
+        internet_egress: data.internet_egress,
+        auto_assign_start: data.auto_assign_start,
+        auto_assign_end: data.auto_assign_end,
+        group_id: next.group_id,
+        new_group_name: next.new_group_name,
+      });
+      message.success(t('common:actions.saved'));
+    } catch (e) {
+      if (e instanceof ApiError) message.error(e.message);
+    }
+  }
+
   async function saveRange() {
     if (!data) return;
     try {
@@ -241,6 +259,20 @@ function MeshSettingsCard({ provider }: { provider: string }) {
             <HeaderTip label="" tip={t('provider-settings:mesh.meshEnabledTip')} />
           </span>
           <Switch checked={data?.mesh_enabled} onChange={(v) => toggle('mesh_enabled', v)} disabled={!data?.mesh_capable} />
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            {t('provider-settings:mesh.group')}
+            <HeaderTip label="" tip={t('provider-settings:mesh.groupTip')} />
+          </span>
+          <NetworkGroupSelect
+            value={data?.group_id}
+            onChange={saveGroup}
+            size="small"
+            noGroupLabel={t('provider-settings:mesh.noGroup')}
+            newGroupLabel={t('provider-settings:mesh.newGroupOption')}
+            newGroupPlaceholder={t('provider-settings:mesh.newGroupPlaceholder')}
+          />
         </div>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
