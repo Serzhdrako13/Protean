@@ -4,6 +4,15 @@ All notable changes to Protean are documented here. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/); versions before 1.0 don't
 promise a stable API/schema between releases.
 
+## [0.2.5-alpha] - 2026-07-26
+
+### Fixed
+- Enabling mesh through network detection's apply flow only flipped
+  the `MeshEnabled` DB flag -- it never re-provisioned a cert-based
+  (OpenVPN/IKEv2) sibling's routes/FORWARD rules or re-checked
+  `ip_forward`, unlike the manual mesh toggle on a provider's own
+  settings page. Detection-enabled mesh now hot-applies the same way.
+
 ## [0.2.4-alpha] - 2026-07-26
 
 ### Fixed
