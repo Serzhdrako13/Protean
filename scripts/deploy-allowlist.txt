@@ -1,0 +1,21 @@
+# Explicit allow-list of source paths shipped to a deploy target.
+# deploy.sh passes this to `rsync --files-from` -- ONLY these paths are
+# ever touched on the remote host. Anything not listed here (most
+# importantly .env*, secrets/, any DB/volume data) is structurally
+# unreachable by the deploy script, not just "excluded by convention".
+#
+# Directories are synced recursively; internal/web/dist and
+# frontend/node_modules are still stripped via deploy.sh's --exclude
+# flags since they're build output, not source.
+cmd
+internal
+frontend/src
+frontend/public
+frontend/index.html
+frontend/package.json
+frontend/package-lock.json
+frontend/tsconfig.json
+frontend/vite.config.ts
+go.mod
+go.sum
+Dockerfile
