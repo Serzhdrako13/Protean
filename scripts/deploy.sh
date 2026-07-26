@@ -55,7 +55,11 @@ if grep -Eq '(^|/)(\.env|secrets|\.git)(/|$)|\.db$|\.sqlite' "$ALLOWLIST"; then
 fi
 
 SSH="ssh -i $KEY"
-RSYNC_FLAGS=(-a --relative --exclude 'internal/web/dist/' --exclude 'node_modules/' -e "$SSH")
+# -r explicit alongside -a: on this rsync build, -a's implied recursion
+# does not reliably descend into bare directory entries coming from
+# --files-from (observed empty transfers for "internal"/"cmd" without
+# it) -- redundant with -a everywhere else, but confirmed necessary here.
+RSYNC_FLAGS=(-a -r --relative --exclude 'internal/web/dist/' --exclude 'node_modules/' -e "$SSH")
 [ "$APPLY" -eq 0 ] && RSYNC_FLAGS+=(--dry-run -v)
 
 if [ "$APPLY" -eq 1 ]; then MODE="APPLY"; else MODE="DRY RUN"; fi
