@@ -4,6 +4,16 @@ All notable changes to Protean are documented here. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/); versions before 1.0 don't
 promise a stable API/schema between releases.
 
+## [0.3.5-alpha] - 2026-07-27
+
+### Fixed
+- The Type-column split in v0.3.4-alpha also dropped the equipment-name
+  fallback from the Name column, leaving equipment rows blank there
+  since Protean never rewrites an adopted peer's own conf-side name.
+  Restored: Name shows the peer's own name, falling back to the owning
+  equipment's name, falling back to a dash. Type stays a separate
+  column alongside it.
+
 ## [0.3.4-alpha] - 2026-07-27
 
 ### Fixed

@@ -1,7 +1,7 @@
 {
   "name": "protean-frontend",
   "private": true,
-  "version": "0.3.4-alpha",
+  "version": "0.3.5-alpha",
   "type": "module",
   "description": "Protean — React + Ant Design SPA",
   "scripts": {
