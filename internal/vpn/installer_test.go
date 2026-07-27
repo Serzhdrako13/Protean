@@ -2,6 +2,7 @@ package vpn
 
 import (
 	"context"
+	"strings"
 	"testing"
 )
 
@@ -56,5 +57,77 @@ func TestInstallerInstallValidatesProvider(t *testing.T) {
 
 	if _, err := inst.Install(nil, "evil; rm -rf /"); err == nil { //nolint:staticcheck
 		t.Error("expected rejection of invalid provider")
+	}
+}
+
+// sequencedInstallerSSH returns a scripted sequence of (out, err) pairs,
+// one per call, and records every command it was asked to run -- for
+// exercising the self-heal retry path (fails with "usage: ..." once,
+// succeeds after a refresh).
+type sequencedInstallerSSH struct {
+	calls   []string
+	results []struct {
+		out string
+		err error
+	}
+	i int
+}
+
+func (f *sequencedInstallerSSH) Run(_ context.Context, cmd string) (string, error) {
+	f.calls = append(f.calls, cmd)
+	if f.i >= len(f.results) {
+		return "", nil
+	}
+	r := f.results[f.i]
+	f.i++
+	return r.out, r.err
+}
+
+type usageError struct{ msg string }
+
+func (e usageError) Error() string { return e.msg }
+
+func TestInstallerSelfHealsOnUsageMismatch(t *testing.T) {
+	f := &sequencedInstallerSSH{results: []struct {
+		out string
+		err error
+	}{
+		{err: usageError{"Process exited with status 2 (stderr: usage: " + InstallerPath + " {detect|install <provider>|...})"}},
+		{}, // the refreshScript push
+		{out: "ok"}, // the retried subnet-nat command succeeds
+	}}
+	inst := NewInstaller(f)
+
+	if err := inst.SubnetNAT(nil, "add", "192.168.10.0/24"); err != nil { //nolint:staticcheck
+		t.Fatalf("SubnetNAT: %v", err)
+	}
+	if len(f.calls) != 3 {
+		t.Fatalf("expected 3 calls (fail, refresh, retry), got %d: %+v", len(f.calls), f.calls)
+	}
+	if f.calls[0] != "sudo "+InstallerPath+" subnet-nat add 192.168.10.0/24" {
+		t.Errorf("call[0] = %q", f.calls[0])
+	}
+	if !strings.Contains(f.calls[1], "base64 -d | sudo tee "+InstallerPath) {
+		t.Errorf("call[1] should push a fresh script, got %q", f.calls[1])
+	}
+	if f.calls[2] != "sudo "+InstallerPath+" subnet-nat add 192.168.10.0/24" {
+		t.Errorf("call[2] (retry) = %q", f.calls[2])
+	}
+}
+
+func TestInstallerNoSelfHealOnOtherErrors(t *testing.T) {
+	f := &sequencedInstallerSSH{results: []struct {
+		out string
+		err error
+	}{
+		{err: usageError{"Process exited with status 1 (stderr: some real iptables failure)"}},
+	}}
+	inst := NewInstaller(f)
+
+	if err := inst.SubnetNAT(nil, "add", "192.168.10.0/24"); err == nil { //nolint:staticcheck
+		t.Fatal("expected the real error to propagate")
+	}
+	if len(f.calls) != 1 {
+		t.Fatalf("a non-\"usage:\" error must not trigger a refresh+retry, got %d calls: %+v", len(f.calls), f.calls)
 	}
 }

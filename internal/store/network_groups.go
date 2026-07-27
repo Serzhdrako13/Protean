@@ -61,7 +61,23 @@ func (s *Store) GetNetworkGroup(ctx context.Context, id int64) (NetworkGroup, er
 	return g, err
 }
 
-func isUniqueViolation(err error) bool {
+// RenameNetworkGroup changes a group's name (e.g. an admin renaming an
+// auto-generated "Сеть 1" to something meaningful). Returns ErrNotFound if
+// the group doesn't exist; a UNIQUE violation (name clash with another
+// group) is returned as-is for the caller to surface.
+func (s *Store) RenameNetworkGroup(ctx context.Context, id int64, name string) (NetworkGroup, error) {
+	var g NetworkGroup
+	err := s.pool.QueryRow(ctx, `
+		UPDATE protean.network_groups SET name = $2 WHERE id = $1
+		RETURNING id, name, created_at
+	`, id, name).Scan(&g.ID, &g.Name, &g.CreatedAt)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return NetworkGroup{}, ErrNotFound
+	}
+	return g, err
+}
+
+func IsUniqueViolation(err error) bool {
 	var pgErr *pgconn.PgError
 	return errors.As(err, &pgErr) && pgErr.Code == "23505"
 }
@@ -83,7 +99,7 @@ func (s *Store) CreateNextAutoNamedGroup(ctx context.Context) (NetworkGroup, err
 		if err == nil {
 			return g, nil
 		}
-		if !isUniqueViolation(err) {
+		if !IsUniqueViolation(err) {
 			return NetworkGroup{}, err
 		}
 		n++

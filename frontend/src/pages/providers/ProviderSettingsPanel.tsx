@@ -272,6 +272,7 @@ function MeshSettingsCard({ provider }: { provider: string }) {
             noGroupLabel={t('provider-settings:mesh.noGroup')}
             newGroupLabel={t('provider-settings:mesh.newGroupOption')}
             newGroupPlaceholder={t('provider-settings:mesh.newGroupPlaceholder')}
+            renameTooltip={t('provider-settings:mesh.renameGroup')}
           />
         </div>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>

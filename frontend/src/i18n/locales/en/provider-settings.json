@@ -37,6 +37,7 @@
     "groupTip": "The unified network's name this instance belongs to -- shown everywhere this provider's subnets/mesh state appears. A purely informational label, nothing technical depends on it.",
     "noGroup": "No group",
     "newGroupOption": "+ New group…",
+    "renameGroup": "Rename group",
     "newGroupPlaceholder": "Group name",
     "egress": "Route internet traffic through this server",
     "egressTip": "Clients route all other traffic (not just mesh) through this server",

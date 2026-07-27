@@ -74,6 +74,7 @@ export function SubnetsPage() {
           noGroupLabel={t('columns.noGroup')}
           newGroupLabel={t('columns.newGroupOption')}
           newGroupPlaceholder={t('form.newGroupPlaceholder')}
+          renameTooltip={t('columns.renameGroup')}
         />
       ),
     },
@@ -82,15 +83,7 @@ export function SubnetsPage() {
       key: 'natMode',
       render: (_: unknown, r: Subnet) => {
         const toMasquerade = r.nat_mode !== 'masquerade';
-        const sw = (
-          <Switch
-            size="small"
-            checked={r.nat_mode === 'masquerade'}
-            disabled={!r.nat_capable}
-            checkedChildren={t('natMode.masquerade')}
-            unCheckedChildren={t('natMode.passthrough')}
-          />
-        );
+        const sw = <Switch size="small" checked={r.nat_mode === 'masquerade'} disabled={!r.nat_capable} />;
         if (!r.nat_capable) {
           return <Tooltip title={t('natMode.notCapableTip')}>{sw}</Tooltip>;
         }
@@ -100,6 +93,7 @@ export function SubnetsPage() {
             description={t(toMasquerade ? 'natMode.toMasqueradeWarning' : 'natMode.toPassthroughWarning')}
             onConfirm={() => onToggleNAT(r)}
             okText={t('common:actions.confirm')}
+            overlayStyle={{ maxWidth: 320 }}
           >
             {sw}
           </Popconfirm>
@@ -159,6 +153,7 @@ export function SubnetsPage() {
               noGroupLabel={t('columns.noGroup')}
               newGroupLabel={t('columns.newGroupOption')}
               newGroupPlaceholder={t('form.newGroupPlaceholder')}
+              renameTooltip={t('columns.renameGroup')}
             />
           </Form.Item>
         </Form>

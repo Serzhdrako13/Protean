@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
-import { Select, Input, Space } from 'antd';
-import { useNetworkGroupsQuery } from '@/api/queries/networkGroups';
+import { Select, Input, Space, Button, Tooltip, message } from 'antd';
+import { EditOutlined, CheckOutlined, CloseOutlined } from '@ant-design/icons';
+import { useNetworkGroupsQuery, useNetworkGroupRenameMutation } from '@/api/queries/networkGroups';
+import { ApiError } from '@/api/http-init';
 
 interface NetworkGroupSelectProps {
   value: number | null | undefined;
@@ -8,6 +10,7 @@ interface NetworkGroupSelectProps {
   noGroupLabel: string;
   newGroupLabel: string;
   newGroupPlaceholder: string;
+  renameTooltip: string;
   size?: 'small' | 'middle';
   style?: React.CSSProperties;
 }
@@ -17,12 +20,20 @@ interface NetworkGroupSelectProps {
 // mode="tags" -- that's for multiple free values, wrong shape for a
 // single FK. Labels are passed in rather than owned here so each caller
 // keeps its own i18n namespace instead of this component needing one.
+//
+// Auto-generated names ("Сеть 1") are never a dead end -- the edit icon
+// (shown whenever a real group is selected) renames it in place via
+// PUT /api/network-groups/{id}, visible everywhere else immediately
+// (shared ['network-groups'] query key).
 export function NetworkGroupSelect({
-  value, onChange, noGroupLabel, newGroupLabel, newGroupPlaceholder, size, style,
+  value, onChange, noGroupLabel, newGroupLabel, newGroupPlaceholder, renameTooltip, size, style,
 }: NetworkGroupSelectProps) {
   const { data: groups } = useNetworkGroupsQuery();
+  const rename = useNetworkGroupRenameMutation();
   const [selected, setSelected] = useState<number | 'none' | 'new'>(value ?? 'none');
   const [newName, setNewName] = useState('');
+  const [renaming, setRenaming] = useState(false);
+  const [renameValue, setRenameValue] = useState('');
 
   useEffect(() => {
     if (selected !== 'new') setSelected(value ?? 'none');
@@ -39,6 +50,41 @@ export function NetworkGroupSelect({
     if (name) onChange({ group_id: null, new_group_name: name });
   }
 
+  function startRename() {
+    if (typeof selected !== 'number') return;
+    setRenameValue(groups?.find((g) => g.id === selected)?.name ?? '');
+    setRenaming(true);
+  }
+
+  async function commitRename() {
+    if (typeof selected !== 'number') return;
+    const name = renameValue.trim();
+    if (!name) { setRenaming(false); return; }
+    try {
+      await rename.mutateAsync({ id: selected, name });
+      setRenaming(false);
+    } catch (e) {
+      if (e instanceof ApiError) message.error(e.message);
+    }
+  }
+
+  if (renaming) {
+    return (
+      <Space>
+        <Input
+          size={size}
+          autoFocus
+          value={renameValue}
+          onChange={(e) => setRenameValue(e.target.value)}
+          onPressEnter={commitRename}
+          style={{ width: 160 }}
+        />
+        <Button size={size} icon={<CheckOutlined />} onClick={commitRename} loading={rename.isPending} />
+        <Button size={size} icon={<CloseOutlined />} onClick={() => setRenaming(false)} />
+      </Space>
+    );
+  }
+
   return (
     <Space>
       <Select<number | 'none' | 'new'>
@@ -52,6 +98,11 @@ export function NetworkGroupSelect({
           { value: 'new', label: newGroupLabel },
         ]}
       />
+      {typeof selected === 'number' && (
+        <Tooltip title={renameTooltip}>
+          <Button size={size} icon={<EditOutlined />} onClick={startRename} />
+        </Tooltip>
+      )}
       {selected === 'new' && (
         <Input
           size={size}

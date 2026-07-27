@@ -165,14 +165,22 @@ export function ProviderDetailPage() {
     {
       title: t('provider-detail:table.columns.name'),
       key: 'name',
-      sorter: textSorter((p: Peer) => p.Name),
-      render: (_: unknown, p: Peer) => (
-        <span>
-          {p.Name}
-          {p.Category === 'site' && <Tag style={{ marginLeft: 6 }}>{t('provider-detail:table.siteTag')}</Tag>}
-          {expiryTag(p.ExpiresAt, t) && <div>{expiryTag(p.ExpiresAt, t)}</div>}
-        </span>
-      ),
+      sorter: textSorter((p: Peer) => p.Name || nodes?.find((n) => n.id === p.NodeOwnerID)?.name || ''),
+      render: (_: unknown, p: Peer) => {
+        // An adopted peer promoted to equipment via network detection never
+        // gets its own conf-side name rewritten (Protean never touches an
+        // existing hand-authored config) -- fall back to the owning Node's
+        // name so the row doesn't read as blank with just a "Сайт" tag
+        // hanging where the name should be.
+        const displayName = p.Name || (p.NodeOwnerID ? nodes?.find((n) => n.id === p.NodeOwnerID)?.name : undefined) || '—';
+        return (
+          <span>
+            {displayName}
+            {p.Category === 'site' && <Tag style={{ marginLeft: 6 }}>{t('provider-detail:table.siteTag')}</Tag>}
+            {expiryTag(p.ExpiresAt, t) && <div>{expiryTag(p.ExpiresAt, t)}</div>}
+          </span>
+        );
+      },
     },
     {
       title: t('provider-detail:table.columns.status'),

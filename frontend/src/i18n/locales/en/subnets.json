@@ -10,7 +10,8 @@
     "natMode": "NAT mode",
     "group": "Network group",
     "noGroup": "No group",
-    "newGroupOption": "+ New group…"
+    "newGroupOption": "+ New group…",
+    "renameGroup": "Rename group"
   },
   "deleteConfirm": "Delete subnet {{cidr}}?",
   "deleteTitle": "Delete subnet",

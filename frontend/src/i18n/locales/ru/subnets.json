@@ -10,7 +10,8 @@
     "natMode": "Режим NAT",
     "group": "Группа сети",
     "noGroup": "Без группы",
-    "newGroupOption": "+ Новая группа…"
+    "newGroupOption": "+ Новая группа…",
+    "renameGroup": "Переименовать группу"
   },
   "deleteConfirm": "Удалить подсеть {{cidr}}?",
   "deleteTitle": "Удалить подсеть",

@@ -2,11 +2,14 @@ package vpn
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"regexp"
 	"strconv"
 	"strings"
+
+	"protean/internal/hostboot"
 )
 
 // InstallerPath is where setup-host.sh places the root-owned installer that
@@ -54,11 +57,38 @@ func NewInstaller(ssh installerRunner) *Installer {
 	return &Installer{ssh: ssh}
 }
 
+// run executes one installer.sh verb, self-healing the mismatch that
+// happens when the panel gains a new verb (e.g. subnet-nat) but an
+// already-provisioned host's on-disk copy of the script -- written ONCE by
+// setup-host.sh/the bootstrap flow, never auto-updated since -- doesn't
+// have it yet. The script's own fallback case prints "usage: <path>
+// {...}" and exits 2 for any verb it doesn't recognize; on exactly that
+// signal, push a fresh copy of the embedded script (protean-installer.sh
+// and hostboot's embedded copy are kept in sync, see hostboot.go) and
+// retry the original command once. Any other failure (a real error from
+// a verb the script DOES recognize) is returned as-is, no retry.
+func (i *Installer) run(ctx context.Context, args string) (string, error) {
+	cmd := "sudo " + InstallerPath + " " + args
+	out, err := i.ssh.Run(ctx, cmd)
+	if err != nil && strings.Contains(err.Error(), "usage: "+InstallerPath) {
+		if refreshErr := i.refreshScript(ctx); refreshErr == nil {
+			out, err = i.ssh.Run(ctx, cmd)
+		}
+	}
+	return out, err
+}
+
+func (i *Installer) refreshScript(ctx context.Context) error {
+	encoded := base64.StdEncoding.EncodeToString(hostboot.InstallerScript())
+	_, err := i.ssh.Run(ctx, "echo "+encoded+" | base64 -d | sudo tee "+InstallerPath+" >/dev/null && sudo chmod 750 "+InstallerPath)
+	return err
+}
+
 var validProvider = regexp.MustCompile(`^(wireguard|amneziawg|openvpn|ikev2|xray)$`)
 
 // Detect returns the host's OS/provider state.
 func (i *Installer) Detect(ctx context.Context) (HostInfo, error) {
-	out, err := i.ssh.Run(ctx, "sudo "+InstallerPath+" detect")
+	out, err := i.run(ctx, "detect")
 	if err != nil {
 		return HostInfo{}, fmt.Errorf("run detect: %w", err)
 	}
@@ -84,7 +114,7 @@ func (i *Installer) Install(ctx context.Context, provider string) (string, error
 	if !validProvider.MatchString(provider) {
 		return "", fmt.Errorf("invalid provider %q", provider)
 	}
-	out, err := i.ssh.Run(ctx, "sudo "+InstallerPath+" install "+provider)
+	out, err := i.run(ctx, "install "+provider)
 	if err != nil {
 		return out, fmt.Errorf("install %s: %w", provider, err)
 	}
@@ -105,7 +135,7 @@ func (i *Installer) Service(ctx context.Context, action, unit string) (string, e
 	if !validUnit.MatchString(unit) {
 		return "", fmt.Errorf("invalid unit %q", unit)
 	}
-	out, err := i.ssh.Run(ctx, "sudo "+InstallerPath+" service "+action+" "+unit)
+	out, err := i.run(ctx, "service "+action+" "+unit)
 	if err != nil {
 		return out, fmt.Errorf("service %s %s: %w", action, unit, err)
 	}
@@ -124,7 +154,7 @@ func (i *Installer) Forward(ctx context.Context, action, cidr string) error {
 	if !validCIDR.MatchString(cidr) {
 		return fmt.Errorf("invalid cidr %q", cidr)
 	}
-	_, err := i.ssh.Run(ctx, "sudo "+InstallerPath+" forward "+action+" "+cidr)
+	_, err := i.run(ctx, "forward "+action+" "+cidr)
 	return err
 }
 
@@ -143,7 +173,7 @@ func (i *Installer) SubnetNAT(ctx context.Context, action, cidr string) error {
 	if !validCIDR.MatchString(cidr) {
 		return fmt.Errorf("invalid cidr %q", cidr)
 	}
-	_, err := i.ssh.Run(ctx, "sudo "+InstallerPath+" subnet-nat "+action+" "+cidr)
+	_, err := i.run(ctx, "subnet-nat "+action+" "+cidr)
 	return err
 }
 
@@ -154,7 +184,7 @@ func (i *Installer) SubnetNAT(ctx context.Context, action, cidr string) error {
 // or a manual override) would otherwise silently stop routing between
 // sites/egress until someone happened to notice.
 func (i *Installer) EnsureIPForward(ctx context.Context) error {
-	_, err := i.ssh.Run(ctx, "sudo "+InstallerPath+" ensure-ip-forward")
+	_, err := i.run(ctx, "ensure-ip-forward")
 	return err
 }
 
@@ -163,7 +193,7 @@ func (i *Installer) ServiceStatus(ctx context.Context, unit string) (string, err
 	if !validUnit.MatchString(unit) {
 		return "", fmt.Errorf("invalid unit %q", unit)
 	}
-	out, err := i.ssh.Run(ctx, "sudo "+InstallerPath+" status "+unit)
+	out, err := i.run(ctx, "status "+unit)
 	if err != nil {
 		return "unknown", nil
 	}
@@ -186,7 +216,7 @@ type UpdatesInfo struct {
 // except for a package-index refresh (apt-get update / pacman -Sy / zypper
 // refresh), matching each package manager's own idiom for "check".
 func (i *Installer) CheckUpdates(ctx context.Context) (UpdatesInfo, error) {
-	out, err := i.ssh.Run(ctx, "sudo "+InstallerPath+" updates-check")
+	out, err := i.run(ctx, "updates-check")
 	if err != nil {
 		return UpdatesInfo{}, fmt.Errorf("updates-check: %w", err)
 	}
@@ -211,7 +241,7 @@ func (i *Installer) ServiceLogs(ctx context.Context, unit string, lines int) (st
 	if lines <= 0 || lines > 2000 {
 		lines = 200
 	}
-	out, err := i.ssh.Run(ctx, "sudo "+InstallerPath+" logs "+unit+" "+strconv.Itoa(lines))
+	out, err := i.run(ctx, "logs "+unit+" "+strconv.Itoa(lines))
 	if err != nil {
 		return "", fmt.Errorf("logs %s: %w", unit, err)
 	}

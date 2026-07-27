@@ -26,13 +26,19 @@ interface RowState {
   nodeName: string;
   nodeKind: 'router' | 'device' | 'other';
   subnetChecked: Record<string, boolean>;
-  subnetLabel: Record<string, string>;
   meshChecked: Record<string, boolean>;
+}
+
+// subnetLabel: the equipment name if we have one, never the CIDR again
+// (already its own column/value everywhere this is shown) and never the
+// raw peer_id (an encoded key, not human text -- was leaking through here
+// for unnamed adopted peers).
+function subnetLabel(row: RowState, item: DetectedItem): string {
+  return (row.nodeName || item.name || '').trim();
 }
 
 function initialRowState(item: DetectedItem): RowState {
   const subnetChecked: Record<string, boolean> = {};
-  const subnetLabel: Record<string, string> = {};
   const meshProviders = new Set((item.mesh_candidates ?? []).map((m) => m.provider));
   for (const cidr of item.routed_subnets ?? []) {
     // A CIDR that's a mesh candidate is handled by meshChecked instead --
@@ -40,7 +46,6 @@ function initialRowState(item: DetectedItem): RowState {
     // structurally separate, matching the backend's own separation).
     if ((item.mesh_candidates ?? []).some((m) => m.cidr === cidr)) continue;
     subnetChecked[cidr] = !item.existing_subnet_cidrs?.includes(cidr);
-    subnetLabel[cidr] = `${item.name || item.peer_id} — ${cidr}`;
   }
   const meshChecked: Record<string, boolean> = {};
   for (const p of meshProviders) meshChecked[p] = true;
@@ -49,7 +54,6 @@ function initialRowState(item: DetectedItem): RowState {
     nodeName: item.name,
     nodeKind: 'router',
     subnetChecked,
-    subnetLabel,
     meshChecked,
   };
 }
@@ -160,7 +164,7 @@ export function NetworkDetectionModal({ open, onClose }: { open: boolean; onClos
         node_kind: row.nodeKind,
         subnets_to_create: Object.entries(row.subnetChecked)
           .filter(([, checked]) => checked)
-          .map(([cidr]) => ({ cidr, label: row.subnetLabel[cidr] ?? cidr })),
+          .map(([cidr]) => ({ cidr, label: subnetLabel(row, item) || cidr })),
         mesh_with: Object.entries(row.meshChecked).filter(([, checked]) => checked).map(([p]) => p),
       });
     }
@@ -206,7 +210,7 @@ export function NetworkDetectionModal({ open, onClose }: { open: boolean; onClos
     if (!row) return;
     const subnetsToCreate = Object.entries(row.subnetChecked)
       .filter(([, checked]) => checked)
-      .map(([cidr]) => ({ cidr, label: row.subnetLabel[cidr] ?? cidr }));
+      .map(([cidr]) => ({ cidr, label: subnetLabel(row, item) || cidr }));
     const meshWith = Object.entries(row.meshChecked).filter(([, checked]) => checked).map(([p]) => p);
     if (subnetsToCreate.length === 0 && meshWith.length === 0) {
       message.info(t('nodes:networkDetection.nothingSelected'));
