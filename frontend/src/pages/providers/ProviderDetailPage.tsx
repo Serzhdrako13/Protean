@@ -166,13 +166,22 @@ export function ProviderDetailPage() {
     {
       title: t('provider-detail:table.columns.name'),
       key: 'name',
-      sorter: textSorter((p: Peer) => p.Name),
-      render: (_: unknown, p: Peer) => (
-        <span>
-          {p.Name || '—'}
-          {expiryTag(p.ExpiresAt, t) && <div>{expiryTag(p.ExpiresAt, t)}</div>}
-        </span>
-      ),
+      sorter: textSorter((p: Peer) => p.Name || nodes?.find((n) => n.id === p.NodeOwnerID)?.name || ''),
+      render: (_: unknown, p: Peer) => {
+        // Protean never rewrites an adopted peer's own conf-side name --
+        // for equipment configured through the panel, the name the admin
+        // typed lives on the Node, not the peer. Fall back to it so this
+        // column reads as the client's actual name, matching the admin's
+        // own mental model (they set "the name" when configuring the
+        // equipment) rather than a technicality of which table stores it.
+        const displayName = p.Name || (p.NodeOwnerID ? nodes?.find((n) => n.id === p.NodeOwnerID)?.name : undefined) || '—';
+        return (
+          <span>
+            {displayName}
+            {expiryTag(p.ExpiresAt, t) && <div>{expiryTag(p.ExpiresAt, t)}</div>}
+          </span>
+        );
+      },
     },
     {
       title: t('provider-detail:table.columns.type'),
