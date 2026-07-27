@@ -4,6 +4,26 @@ All notable changes to Protean are documented here. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/); versions before 1.0 don't
 promise a stable API/schema between releases.
 
+## [0.3.3-alpha] - 2026-07-27
+
+### Fixed
+- Network groups could never be renamed after auto-naming -- added a
+  rename endpoint + an edit icon on the group picker everywhere it
+  appears.
+- Auto-generated subnet labels leaked the raw encoded peer key for
+  unnamed peers and redundantly repeated the CIDR -- now just the
+  equipment name.
+- The NAT toggle on the Subnets page failed on any host whose
+  installed installer script predates the `subnet-nat` verb (written
+  once at setup time, never auto-updated) -- the panel now self-heals:
+  on the script's own "unrecognized verb" response it pushes a fresh
+  copy and retries automatically. Also compacted the oversized
+  switch/confirmation popup.
+- A router promoted to equipment via network detection showed a blank
+  name (just a "Сайт" tag) in the provider's client table since its
+  own conf-side name is never rewritten -- now falls back to the
+  owning equipment's name.
+
 ## [0.3.2-alpha] - 2026-07-26
 
 ### Fixed
