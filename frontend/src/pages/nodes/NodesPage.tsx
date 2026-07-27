@@ -4,7 +4,7 @@ import {
 } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import {
-  PlusOutlined, DeleteOutlined, EditOutlined, WifiOutlined, DesktopOutlined, QuestionCircleOutlined,
+  PlusOutlined, DeleteOutlined, EditOutlined, WifiOutlined, DesktopOutlined, QuestionCircleOutlined, ClusterOutlined,
 } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { PageShell } from '@/layouts/PageShell';
@@ -374,7 +374,7 @@ function NetworkOverviewTab() {
     { title: t('mesh:columns.status'), key: 'up', render: (_: unknown, r: MeshIface) => (r.up ? <Tag color="success">● UP</Tag> : <Tag color="error">● DOWN</Tag>) },
     { title: t('mesh:columns.port'), dataIndex: 'listen_port', key: 'listen_port' },
     { title: t('mesh:columns.peerCount'), dataIndex: 'peer_count', key: 'peer_count' },
-    { title: t('mesh:columns.group'), key: 'group', render: (_: unknown, r: MeshIface) => r.group_name ? <Tag>{r.group_name}</Tag> : '—' },
+    { title: t('mesh:columns.group'), key: 'group', render: (_: unknown, r: MeshIface) => r.group_name ? <Tag icon={<ClusterOutlined />}>{r.group_name}</Tag> : '—' },
     {
       title: <HeaderTip label={t('mesh:tunnelNetwork.label')} tip={t('mesh:tunnelNetwork.tip')} />,
       dataIndex: 'tunnel_cidr', key: 'tunnel_cidr', render: (v: string) => v || '—',
@@ -421,7 +421,7 @@ function NetworkOverviewTab() {
           {(data?.subnets ?? []).map((s) => (
             <Space key={s.cidr} size={4}>
               <Tag>{s.cidr}{s.label ? ` — ${s.label}` : ''}</Tag>
-              {s.group_name && <Tag>{s.group_name}</Tag>}
+              {s.group_name && <Tag icon={<ClusterOutlined />}>{s.group_name}</Tag>}
             </Space>
           ))}
           {(!data?.subnets || data.subnets.length === 0) && <span style={{ color: 'var(--ant-color-text-tertiary)' }}>{t('mesh:noSubnets')}</span>}
