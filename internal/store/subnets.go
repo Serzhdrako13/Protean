@@ -100,6 +100,23 @@ func (s *Store) SetSubnetGroup(ctx context.Context, id int64, groupID *int64) (S
 	return sn, err
 }
 
+// SetSubnetLabel persists a subnet's free-text human label (e.g. "Офис
+// Москва") -- the only thing this field is for; fixes an old auto-filled
+// bad default (peer key gibberish) that had no way to be corrected since
+// nothing exposed an edit path for it. Returns ErrNotFound if the subnet
+// doesn't exist.
+func (s *Store) SetSubnetLabel(ctx context.Context, id int64, label string) (Subnet, error) {
+	var sn Subnet
+	err := s.pool.QueryRow(ctx, `
+		UPDATE protean.subnets SET label = $2 WHERE id = $1
+		RETURNING id, provider, cidr::text, label, owner_node_id, nat_mode, group_id, created_at
+	`, id, label).Scan(&sn.ID, &sn.Provider, &sn.CIDR, &sn.Label, &sn.OwnerNodeID, &sn.NATMode, &sn.GroupID, &sn.CreatedAt)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return Subnet{}, ErrNotFound
+	}
+	return sn, err
+}
+
 func (s *Store) DeleteSubnet(ctx context.Context, id int64) error {
 	_, err := s.pool.Exec(ctx, `DELETE FROM protean.subnets WHERE id = $1`, id)
 	return err

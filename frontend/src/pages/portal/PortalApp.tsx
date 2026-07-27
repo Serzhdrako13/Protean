@@ -310,7 +310,7 @@ function InstanceRow({ inst, onRefresh, onQr, onManualSetup }: {
               <Space wrap>
                 <span style={titleStyle}>{inst.provider_label}</span>
                 <Tag color="success">{t('portal:instance.available')}</Tag>
-                {inst.online ? <Tag color="success">{t('portal:instance.online')}</Tag> : <Tag color="default">{t('portal:instance.offline')}</Tag>}
+                {inst.online ? <Tag color="success">{t('portal:instance.online')}</Tag> : <Tag color="error">{t('portal:instance.offline')}</Tag>}
                 {inst.config_stale && <Tag color="warning">{t('portal:instance.configStale')}</Tag>}
               </Space>
               <Typography.Text type="secondary" style={{ fontSize: 12 }}>

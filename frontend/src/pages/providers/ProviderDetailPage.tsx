@@ -8,6 +8,7 @@ import type { ColumnsType } from 'antd/es/table';
 import {
   PlusOutlined, QrcodeOutlined, DownloadOutlined, SyncOutlined,
   DeleteOutlined, EditOutlined, BellOutlined, BellFilled, ArrowLeftOutlined, FileTextOutlined,
+  WifiOutlined, DesktopOutlined, QuestionCircleOutlined, UserOutlined,
 } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
@@ -59,7 +60,7 @@ const RANGE_KEYS = ['1h', '6h', '24h', '3d'] as const;
 const MANUAL_SETUP_TYPES = new Set(['wireguard', 'amneziawg', 'openvpn']);
 
 export function ProviderDetailPage() {
-  const { t } = useTranslation(['provider-detail', 'common']);
+  const { t } = useTranslation(['provider-detail', 'nodes', 'common']);
   const { provider = '' } = useParams();
   const navigate = useNavigate();
   // Provider keys are "serverId:localName" — back goes to that server's
@@ -165,29 +166,31 @@ export function ProviderDetailPage() {
     {
       title: t('provider-detail:table.columns.name'),
       key: 'name',
-      sorter: textSorter((p: Peer) => p.Name || nodes?.find((n) => n.id === p.NodeOwnerID)?.name || ''),
+      sorter: textSorter((p: Peer) => p.Name),
+      render: (_: unknown, p: Peer) => (
+        <span>
+          {p.Name || '—'}
+          {expiryTag(p.ExpiresAt, t) && <div>{expiryTag(p.ExpiresAt, t)}</div>}
+        </span>
+      ),
+    },
+    {
+      title: t('provider-detail:table.columns.type'),
+      key: 'type',
       render: (_: unknown, p: Peer) => {
-        // An adopted peer promoted to equipment via network detection never
-        // gets its own conf-side name rewritten (Protean never touches an
-        // existing hand-authored config) -- fall back to the owning Node's
-        // name so the row doesn't read as blank with just a "Сайт" tag
-        // hanging where the name should be.
-        const displayName = p.Name || (p.NodeOwnerID ? nodes?.find((n) => n.id === p.NodeOwnerID)?.name : undefined) || '—';
-        return (
-          <span>
-            {displayName}
-            {p.Category === 'site' && <Tag style={{ marginLeft: 6 }}>{t('provider-detail:table.siteTag')}</Tag>}
-            {expiryTag(p.ExpiresAt, t) && <div>{expiryTag(p.ExpiresAt, t)}</div>}
-          </span>
-        );
+        const node = p.NodeOwnerID ? nodes?.find((n) => n.id === p.NodeOwnerID) : undefined;
+        const icon = !node ? <UserOutlined /> : node.kind === 'router' ? <WifiOutlined />
+          : node.kind === 'device' ? <DesktopOutlined /> : <QuestionCircleOutlined />;
+        const label = node ? t(`nodes:kindLabels.${node.kind}`) : t('provider-detail:table.type.client');
+        return <Tag icon={icon}>{label}</Tag>;
       },
     },
     {
       title: t('provider-detail:table.columns.status'),
       key: 'status',
       filters: [
-        { text: t('provider-detail:table.status.online'), value: 'online' },
-        { text: t('provider-detail:table.status.offline'), value: 'offline' },
+        { text: t('common:status.online'), value: 'online' },
+        { text: t('common:status.offline'), value: 'offline' },
         { text: t('provider-detail:table.status.disabled'), value: 'disabled' },
       ],
       onFilter: (value, p: Peer) => (p.Disabled ? 'disabled' : p.Online ? 'online' : 'offline') === value,
@@ -196,9 +199,9 @@ export function ProviderDetailPage() {
         p.Disabled ? (
           <Tag>{t('provider-detail:table.status.disabled')}</Tag>
         ) : p.Online ? (
-          <Tag color="success">{t('provider-detail:table.status.online')}</Tag>
+          <Tag color="success">{t('common:status.online')}</Tag>
         ) : (
-          <Tag color="default">{t('provider-detail:table.status.offline')}</Tag>
+          <Tag color="error">{t('common:status.offline')}</Tag>
         ),
     },
     {

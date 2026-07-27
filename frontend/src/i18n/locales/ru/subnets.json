@@ -28,7 +28,8 @@
   "messages": {
     "created": "Подсеть добавлена",
     "natUpdated": "Режим NAT изменён",
-    "groupUpdated": "Группа сети изменена"
+    "groupUpdated": "Группа сети изменена",
+    "labelUpdated": "Название изменено"
   },
   "natMode": {
     "passthrough": "Без NAT",

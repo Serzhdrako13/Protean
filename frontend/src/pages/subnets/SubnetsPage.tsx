@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Table, Button, Modal, Form, Input, Popconfirm, Space, Switch, Tooltip, Select, message } from 'antd';
-import { PlusOutlined, DeleteOutlined } from '@ant-design/icons';
+import { PlusOutlined, DeleteOutlined, EditOutlined, CheckOutlined, CloseOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { PageShell } from '@/layouts/PageShell';
 import { useSubnetMutations, useSubnetsQuery } from '@/api/queries/subnets';
@@ -11,11 +11,44 @@ import { HeaderTip } from '@/components/HeaderTip';
 import { PageTitleBar } from '@/components/PageTitleBar';
 import { NetworkGroupSelect } from '@/components/NetworkGroupSelect';
 
+// Inline-editable free-text label -- the ONLY way to fix an old
+// auto-filled bad label (there was no edit path for it at all before).
+function EditableLabel({ value, onSave }: { value: string; onSave: (v: string) => Promise<void> }) {
+  const [editing, setEditing] = useState(false);
+  const [val, setVal] = useState(value);
+
+  async function commit() {
+    await onSave(val.trim());
+    setEditing(false);
+  }
+
+  if (editing) {
+    return (
+      <Space>
+        <Input size="small" autoFocus value={val} onChange={(e) => setVal(e.target.value)} onPressEnter={commit} style={{ width: 160 }} />
+        <Button size="small" icon={<CheckOutlined />} onClick={commit} />
+        <Button size="small" icon={<CloseOutlined />} onClick={() => setEditing(false)} />
+      </Space>
+    );
+  }
+  return (
+    <Space>
+      <span>{value || '—'}</span>
+      <Button
+        size="small"
+        type="text"
+        icon={<EditOutlined />}
+        onClick={() => { setVal(value); setEditing(true); }}
+      />
+    </Space>
+  );
+}
+
 export function SubnetsPage() {
   const { t } = useTranslation(['subnets', 'common']);
   const { data, isLoading } = useSubnetsQuery();
   const { data: nodes } = useNodesQuery();
-  const { create, remove, updateNAT, updateGroup } = useSubnetMutations();
+  const { create, remove, updateNAT, updateGroup, updateLabel } = useSubnetMutations();
   const [modalOpen, setModalOpen] = useState(false);
   const [newSubnetGroup, setNewSubnetGroup] = useState<{ group_id: number | null; new_group_name?: string }>({ group_id: null });
   const [form] = Form.useForm();
@@ -41,6 +74,15 @@ export function SubnetsPage() {
     }
   }
 
+  async function onChangeLabel(r: Subnet, label: string) {
+    try {
+      await updateLabel.mutateAsync({ id: r.id, label });
+      message.success(t('messages.labelUpdated'));
+    } catch (e) {
+      if (e instanceof ApiError) message.error(e.message);
+    }
+  }
+
   async function onChangeGroup(r: Subnet, next: { group_id: number | null; new_group_name?: string }) {
     try {
       await updateGroup.mutateAsync({ id: r.id, ...next });
@@ -57,7 +99,11 @@ export function SubnetsPage() {
       key: 'cidr',
       render: (v: string) => <code>{v}</code>,
     },
-    { title: t('columns.label'), dataIndex: 'label', key: 'label' },
+    {
+      title: t('columns.label'),
+      key: 'label',
+      render: (_: unknown, r: Subnet) => <EditableLabel value={r.label} onSave={(v) => onChangeLabel(r, v)} />,
+    },
     {
       title: t('columns.owner'),
       key: 'owner',

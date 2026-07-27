@@ -76,7 +76,7 @@ function NodeAccessPanel({ node }: { node: Node }) {
         row.state !== 'granted' ? '—' : row.online ? (
           <Tag color="success">{t('common:status.online')}</Tag>
         ) : (
-          <Tag>{t('common:status.offline')}</Tag>
+          <Tag color="error">{t('common:status.offline')}</Tag>
         ),
     },
     {
@@ -316,7 +316,7 @@ function AllClientsTab() {
         { text: t('common:status.offline'), value: false },
       ],
       onFilter: (value, c) => c.online === value,
-      render: (_: unknown, c: Client) => (c.online ? <Tag color="success">{t('common:status.online')}</Tag> : <Tag>{t('common:status.offline')}</Tag>),
+      render: (_: unknown, c: Client) => (c.online ? <Tag color="success">{t('common:status.online')}</Tag> : <Tag color="error">{t('common:status.offline')}</Tag>),
     },
     {
       title: t('clients.columns.traffic'),
@@ -445,7 +445,7 @@ function NetworkOverviewTab() {
             { title: t('mesh:columns.address'), dataIndex: 'address', key: 'address' },
             {
               title: t('mesh:columns.status'), key: 'online',
-              render: (_: unknown, r: MeshPeer) => (r.online ? <Tag color="success">{t('common:status.online')}</Tag> : <Tag>{t('common:status.offline')}</Tag>),
+              render: (_: unknown, r: MeshPeer) => (r.online ? <Tag color="success">{t('common:status.online')}</Tag> : <Tag color="error">{t('common:status.offline')}</Tag>),
             },
           ]}
         />

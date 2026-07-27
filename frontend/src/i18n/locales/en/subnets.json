@@ -28,7 +28,8 @@
   "messages": {
     "created": "Subnet added",
     "natUpdated": "NAT mode updated",
-    "groupUpdated": "Network group updated"
+    "groupUpdated": "Network group updated",
+    "labelUpdated": "Label updated"
   },
   "natMode": {
     "passthrough": "Passthrough",

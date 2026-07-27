@@ -64,7 +64,7 @@ export function AdminPortalPage() {
       title: t('columns.online'),
       dataIndex: 'online',
       key: 'online',
-      render: (v: boolean) => (v ? <Tag color="success">{t('onlineStatus.online')}</Tag> : <Tag>{t('onlineStatus.offline')}</Tag>),
+      render: (v: boolean) => (v ? <Tag color="success">{t('onlineStatus.online')}</Tag> : <Tag color="error">{t('onlineStatus.offline')}</Tag>),
     },
     {
       title: '',

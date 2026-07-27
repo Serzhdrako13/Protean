@@ -33,6 +33,11 @@ export function useSubnetMutations() {
       HttpUtil.put<Subnet>(`/api/subnets/${id}/group`, { group_id, new_group_name }),
     onSuccess: invalidate,
   });
+  const updateLabel = useMutation({
+    mutationFn: ({ id, label }: { id: number; label: string }) =>
+      HttpUtil.put<Subnet>(`/api/subnets/${id}/label`, { label }),
+    onSuccess: invalidate,
+  });
 
-  return { create, remove, updateNAT, updateGroup };
+  return { create, remove, updateNAT, updateGroup, updateLabel };
 }

@@ -47,13 +47,14 @@
         "label": "Owner",
         "tip": "Portal user this device is assigned to — they'll be able to download the config/QR and see it in self-service (/portal). Only accounts with the \"user\" role can be assigned."
       },
-      "enabled": "Enabled"
+      "enabled": "Enabled",
+      "type": "Type"
     },
-    "siteTag": "🖧 site",
+    "type": {
+      "client": "Client"
+    },
     "status": {
-      "disabled": "⛔ disabled",
-      "online": "🟢 online",
-      "offline": "⚪ offline"
+      "disabled": "disabled"
     },
     "owner": {
       "unassigned": "unassigned",

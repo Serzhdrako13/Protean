@@ -258,6 +258,36 @@ func (s *Server) apiSubnetsUpdateGroup(w http.ResponseWriter, r *http.Request) {
 	writeOK(w, toAPISubnet(updated, "", s.groupName(r.Context(), updated.GroupID)))
 }
 
+type apiSubnetLabelReq struct {
+	Label string `json:"label"`
+}
+
+// PUT /api/subnets/{id}/label -- edit a subnet's free-text human label.
+// The only way to fix an auto-filled label an admin doesn't want to keep
+// (this field is purely descriptive, nothing else reads it).
+func (s *Server) apiSubnetsUpdateLabel(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil {
+		writeErr(w, http.StatusNotFound, msg(r, "not found", "не найдено"))
+		return
+	}
+	var req apiSubnetLabelReq
+	if err := decodeJSON(r, &req); err != nil {
+		writeErr(w, http.StatusBadRequest, msg(r, "bad request body", "некорректное тело запроса"))
+		return
+	}
+	updated, err := s.store.SetSubnetLabel(r.Context(), id, strings.TrimSpace(req.Label))
+	if errors.Is(err, store.ErrNotFound) {
+		writeErr(w, http.StatusNotFound, msg(r, "not found", "не найдено"))
+		return
+	} else if err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	s.audit(r.Context(), "subnet.label", updated.CIDR)
+	writeOK(w, toAPISubnet(updated, "", s.groupName(r.Context(), updated.GroupID)))
+}
+
 // DELETE /api/subnets/{id}
 func (s *Server) apiSubnetsDelete(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
