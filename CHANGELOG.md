@@ -4,6 +4,22 @@ All notable changes to Protean are documented here. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/); versions before 1.0 don't
 promise a stable API/schema between releases.
 
+## [0.3.4-alpha] - 2026-07-27
+
+### Fixed
+- Subnet labels had no edit path -- added an inline-editable label
+  field on the Subnets page.
+- The provider client table's Name column was showing the owning
+  equipment's name as a fallback, duplicating the existing Owner
+  column. Reverted -- Name is strictly the peer's own name now -- and
+  added a dedicated Type column (router/device/other/client
+  icon+label) in its place.
+- Offline status was inconsistently colored across the app -- unified
+  every remaining spot (provider client table, 3 in Клиенты/Оборудование,
+  admin portal, self-service portal) to red, matching the one place
+  that already had it right. One of them had the status color
+  hard-coded into emoji text, which silently defeated any color fix.
+
 ## [0.3.3-alpha] - 2026-07-27
 
 ### Fixed
