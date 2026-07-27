@@ -4,6 +4,13 @@ All notable changes to Protean are documented here. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/); versions before 1.0 don't
 promise a stable API/schema between releases.
 
+## [0.3.2-alpha] - 2026-07-26
+
+### Fixed
+- Network group tags (Обзор сети: interfaces table + subnets card) had
+  no icon at all -- added a `ClusterOutlined` icon, matching the same
+  convention already used for equipment Kind icons.
+
 ## [0.3.1-alpha] - 2026-07-26
 
 ### Added
