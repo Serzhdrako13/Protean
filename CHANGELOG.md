@@ -4,6 +4,16 @@ All notable changes to Protean are documented here. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/); versions before 1.0 don't
 promise a stable API/schema between releases.
 
+## [0.3.6-alpha] - 2026-09-03
+
+### Added
+- Per-peer FORWARD destination allowlist: restrict a specific VPN client
+  to reaching only chosen subnets/hosts, enforced on the host's FORWARD
+  chain (not just a client-side routing suggestion). Available for
+  WireGuard/AmneziaWG/OpenVPN peers (stable tunnel address required);
+  IKEv2 and Xray are not applicable. Configured from the peer's edit
+  modal with a Keenetic-style address chip list.
+
 ## [0.3.5-alpha] - 2026-07-27
 
 ### Fixed
