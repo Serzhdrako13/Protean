@@ -14,7 +14,11 @@ import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
 import { PageShell } from '@/layouts/PageShell';
 import { PageTitleBar } from '@/components/PageTitleBar';
-import { useProviderDetailQuery, useTrafficQuery, usePeerMutations, useProviderSetupMutation } from '@/api/queries/providers';
+import {
+  useProviderDetailQuery, useTrafficQuery, usePeerMutations, useProviderSetupMutation,
+  usePeerForwardRulesQuery, usePeerForwardRulesMutation,
+} from '@/api/queries/providers';
+import { CIDRChipList } from '@/components/CIDRChipList';
 import { usePortalUsersQuery, usePeerOwnerMutation } from '@/api/queries/users';
 import { useNodesQuery, useNodeOwnerMutation } from '@/api/queries/nodes';
 import { Sparkline } from '@/components/viz/Sparkline';
@@ -58,6 +62,11 @@ function expiryTag(iso: string, t: TFunction) {
 
 const RANGE_KEYS = ['1h', '6h', '24h', '3d'] as const;
 const MANUAL_SETUP_TYPES = new Set(['wireguard', 'amneziawg', 'openvpn']);
+// Providers whose peer tunnel address is fixed/panel-assigned and survives
+// reconnects -- matches the backend's own peerAddressIsStable gate in
+// internal/api/api_peer_forward.go. IKEv2 assigns from a shared pool per
+// session (unstable), xray has no routed-subnet/FORWARD concept at all.
+const STABLE_ADDRESS_TYPES = new Set(['wireguard', 'amneziawg', 'openvpn']);
 
 export function ProviderDetailPage() {
   const { t } = useTranslation(['provider-detail', 'nodes', 'common']);
@@ -97,6 +106,22 @@ export function ProviderDetailPage() {
   const [importOpen, setImportOpen] = useState(false);
   const [importForm] = Form.useForm();
   const { query: peerQuery, setQuery: setPeerQuery, filtered: filteredPeers } = useTableSearch(data?.peers, (p) => p.Name);
+
+  const [destinations, setDestinations] = useState<string[]>([]);
+  const forwardRulesQuery = usePeerForwardRulesQuery(provider, editing?.URLID ?? '');
+  const forwardRulesMut = usePeerForwardRulesMutation(provider, editing?.URLID ?? '');
+  useEffect(() => {
+    setDestinations(forwardRulesQuery.data?.destinations ?? []);
+  }, [forwardRulesQuery.data]);
+
+  async function onSaveDestinations() {
+    try {
+      await forwardRulesMut.mutateAsync(destinations);
+      message.success(t('common:actions.saved'));
+    } catch (e) {
+      if (e instanceof ApiError) message.error(e.message);
+    }
+  }
 
   // Adopts an already-issued client certificate (e.g. a client from a VPN
   // server being taken over by the panel) instead of issuing a new one --
@@ -501,6 +526,7 @@ export function ProviderDetailPage() {
         onOk={onSubmit}
         confirmLoading={mut.create.isPending || mut.update.isPending}
         destroyOnHidden
+        width={720}
       >
         <Form form={form} layout="vertical">
           <Form.Item name="name" label={t('provider-detail:modals.form.fields.name')} rules={[{ required: true }]}>
@@ -529,6 +555,33 @@ export function ProviderDetailPage() {
             </Form.Item>
           )}
         </Form>
+
+        {editing && STABLE_ADDRESS_TYPES.has(data?.type ?? '') && (
+          <>
+            <Typography.Title level={5} style={{ marginTop: 16 }}>
+              {t('provider-detail:modals.form.allowedDestinations.title')}
+            </Typography.Title>
+            <Alert
+              type="warning"
+              showIcon
+              style={{ marginBottom: 12 }}
+              message={t('provider-detail:modals.form.allowedDestinations.warning')}
+            />
+            <CIDRChipList
+              value={destinations}
+              onChange={setDestinations}
+              placeholder={t('provider-detail:modals.form.allowedDestinations.placeholder')}
+              disabled={forwardRulesQuery.isLoading}
+            />
+            <Button
+              style={{ marginTop: 12 }}
+              onClick={onSaveDestinations}
+              loading={forwardRulesMut.isPending}
+            >
+              {t('provider-detail:modals.form.allowedDestinations.save')}
+            </Button>
+          </>
+        )}
       </Modal>
 
       <Modal

@@ -122,3 +122,31 @@ export function usePeerMutations(provider: string) {
 
   return { create, update, remove, enable, disable, rotate, toggleMute, importPeer };
 }
+
+// Per-peer FORWARD destination allowlist -- separate from usePeerMutations
+// deliberately, matching the modal's own separate "Применить список
+// адресов" save button: a routine name/keepalive edit and "restrict this
+// client to only these destinations" are different blast-radius actions.
+export function usePeerForwardRulesQuery(provider: string, peerId: string) {
+  return useQuery({
+    queryKey: ['providers', provider, 'peers', peerId, 'allowed-destinations'],
+    queryFn: () =>
+      HttpUtil.get<{ destinations: string[] }>(
+        `/api/providers/${encodeURIComponent(provider)}/peers/${encodeURIComponent(peerId)}/allowed-destinations`,
+      ),
+    enabled: !!provider && !!peerId,
+  });
+}
+
+export function usePeerForwardRulesMutation(provider: string, peerId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (destinations: string[]) =>
+      HttpUtil.put<{ destinations: string[] }>(
+        `/api/providers/${encodeURIComponent(provider)}/peers/${encodeURIComponent(peerId)}/allowed-destinations`,
+        { destinations },
+      ),
+    onSuccess: () =>
+      qc.invalidateQueries({ queryKey: ['providers', provider, 'peers', peerId, 'allowed-destinations'] }),
+  });
+}

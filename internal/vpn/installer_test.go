@@ -115,6 +115,35 @@ func TestInstallerSelfHealsOnUsageMismatch(t *testing.T) {
 	}
 }
 
+func TestSetPeerForwardRules(t *testing.T) {
+	f := &fakeInstallerSSH{out: "ok"}
+	inst := NewInstaller(f)
+
+	if err := inst.SetPeerForwardRules(nil, "10.10.0.5", []string{"192.168.10.0/24", "192.168.20.5"}); err != nil { //nolint:staticcheck
+		t.Fatalf("SetPeerForwardRules: %v", err)
+	}
+	want := "sudo " + InstallerPath + " peer-forward-rules 10.10.0.5/32 192.168.10.0/24,192.168.20.5/32"
+	if f.cmd != want {
+		t.Errorf("cmd = %q, want %q", f.cmd, want)
+	}
+
+	// Already-masked peer address and empty destination list (delete-only,
+	// i.e. clear the restriction) are both passed through unmodified/bare.
+	if err := inst.SetPeerForwardRules(nil, "10.10.0.5/32", nil); err != nil { //nolint:staticcheck
+		t.Fatalf("SetPeerForwardRules (clear): %v", err)
+	}
+	if f.cmd != "sudo "+InstallerPath+" peer-forward-rules 10.10.0.5/32" {
+		t.Errorf("clear cmd = %q", f.cmd)
+	}
+
+	if err := inst.SetPeerForwardRules(nil, "not-an-ip", nil); err == nil { //nolint:staticcheck
+		t.Error("expected rejection of invalid peer address")
+	}
+	if err := inst.SetPeerForwardRules(nil, "10.10.0.5", []string{"evil; rm -rf /"}); err == nil { //nolint:staticcheck
+		t.Error("expected rejection of invalid destination")
+	}
+}
+
 func TestInstallerNoSelfHealOnOtherErrors(t *testing.T) {
 	f := &sequencedInstallerSSH{results: []struct {
 		out string

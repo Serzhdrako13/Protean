@@ -149,6 +149,51 @@ func (s *Server) ReapplySubnetNAT(ctx context.Context) {
 	})
 }
 
+// ReapplyPeerForwardRules re-installs every peer's FORWARD-chain
+// destination allowlist -- like SubnetNAT's rules, these are standalone
+// iptables rules outside any wg-quick conf's PostUp/PostDown, so they
+// don't survive a host reboot on their own. Best-effort, runs in
+// background, mirrors ReapplySubnetNAT: re-resolves each peer's LIVE
+// tunnel address rather than trusting any cached value.
+func (s *Server) ReapplyPeerForwardRules(ctx context.Context) {
+	s.goWorker(func() {
+		groups, err := s.store.ListAllPeerForwardRules(ctx)
+		if err != nil {
+			slog.Error("reapply peer forward rules: list", "err", err)
+			return
+		}
+		for _, g := range groups {
+			if ctx.Err() != nil {
+				return
+			}
+			prov, ok := s.reg.Get(g.Provider)
+			if !ok {
+				continue
+			}
+			pubkey, err := decodePeerID(g.PeerKey)
+			if err != nil {
+				continue
+			}
+			peers, err := s.providerPeers(ctx, prov)
+			if err != nil {
+				slog.Error("reapply peer forward rules: list peers", "provider", g.Provider, "err", err)
+				continue
+			}
+			addr, ok := peerTunnelAddress(peers, pubkey)
+			if !ok {
+				continue // peer no longer exists / server not up yet
+			}
+			inst, ok := s.installerForProvider(g.Provider)
+			if !ok {
+				continue
+			}
+			if err := inst.SetPeerForwardRules(ctx, addr, g.Destinations); err != nil {
+				slog.Error("reapply peer forward rules", "provider", g.Provider, "peer_key", g.PeerKey, "err", err)
+			}
+		}
+	})
+}
+
 // meshAddressSpace returns every CIDR already in use (all interface tunnels +
 // all catalogued site subnets), for overlap rejection.
 func (s *Server) meshAddressSpace(ctx context.Context) ([]string, error) {

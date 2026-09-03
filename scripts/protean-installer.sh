@@ -623,6 +623,58 @@ cmd_subnet_nat() {
 	esac
 }
 
+# cmd_peer_forward_rules <peer/32> [dest1,dest2,...]: replace one VPN
+# peer's FORWARD-chain destination allowlist (full sync -- always deletes
+# every existing rule tagged for this peer first, then reinserts fresh, so
+# repeated calls with a different destination list never leave stale
+# rules behind). An empty/absent destination list means "delete only" --
+# the peer goes back to fully unrestricted (today's default: nothing in
+# this script's own FORWARD-ACCEPT-everywhere baseline changes for it).
+#
+# Rules always go in at position 1 (never appended): wg-family's own
+# blanket per-interface accept (PostUp `iptables -I FORWARD -i %i -j
+# ACCEPT`) is ALSO inserted at the head of the chain every time that
+# interface (re)starts, so this peer's block must be freshly re-inserted
+# at the top on every sync, or a later interface bounce would push that
+# blanket accept above us and shadow the restriction entirely.
+#
+# Insertion order matters: the DROP pair goes in FIRST, then the ACCEPT
+# pairs on top of it (each `-I FORWARD 1` pushes the previous insert down
+# one) -- so the final top-to-bottom order is this peer's ALLOWs, then
+# this peer's DROPs, then everything that existed before (other peers'
+# blocks, the wg-family/mesh blanket accepts). Bidirectional pairs
+# (matching both `-s`/`-d`) follow cmd_forward's own existing convention
+# above, rather than conntrack/ESTABLISHED state.
+cmd_peer_forward_rules() {
+	local peer="$1" destcsv="${2:-}"
+	command -v iptables >/dev/null 2>&1 || { echo "no iptables" >&2; return 1; }
+	local tag="protean-peer-fw:${peer%/*}"
+
+	# Delete pass: remove every existing rule tagged for this peer,
+	# regardless of how many there were last sync.
+	local spec
+	while IFS= read -r spec; do
+		[ -n "$spec" ] || continue
+		# shellcheck disable=SC2086
+		iptables -D FORWARD ${spec#-A FORWARD } 2>/dev/null || true
+	done <<EOF
+$(iptables -S FORWARD 2>/dev/null | grep -F -- "--comment $tag")
+EOF
+
+	[ -n "$destcsv" ] || return 0
+
+	iptables -I FORWARD 1 -d "$peer" -j DROP -m comment --comment "$tag"
+	iptables -I FORWARD 1 -s "$peer" -j DROP -m comment --comment "$tag"
+
+	local dest
+	local IFS=','
+	for dest in $destcsv; do
+		[[ "$dest" =~ $VALID_CIDR ]] || { echo "invalid destination $dest" >&2; return 2; }
+		iptables -I FORWARD 1 -d "$peer" -s "$dest" -j ACCEPT -m comment --comment "$tag"
+		iptables -I FORWARD 1 -s "$peer" -d "$dest" -j ACCEPT -m comment --comment "$tag"
+	done
+}
+
 # cmd_ensure_ip_forward: turn on net.ipv4.ip_forward if it isn't already, the
 # same sysctl drop-in setup-host.sh's interactive bootstrap uses -- but
 # idempotent and non-interactive, so the panel can re-check/re-apply it any
@@ -1077,6 +1129,7 @@ VALID_LINES='^[0-9]{1,4}$'
 VALID_FW_WINDOW='^[0-9]{2,4}$'
 VALID_PORT='^[0-9]{1,5}$'
 VALID_FW_PORTLIST='^(tcp|udp):[0-9]{1,5}(,(tcp|udp):[0-9]{1,5}){0,31}$'
+VALID_DEST_LIST='^[0-9]{1,3}(\.[0-9]{1,3}){3}/[0-9]{1,2}(,[0-9]{1,3}(\.[0-9]{1,3}){3}/[0-9]{1,2}){0,63}$'
 
 main() {
 	local verb="${1:-}"
@@ -1111,6 +1164,12 @@ main() {
 			[[ "$a" =~ $VALID_FWD ]] || { echo "invalid action" >&2; exit 2; }
 			[[ "$c" =~ $VALID_CIDR ]] || { echo "invalid cidr" >&2; exit 2; }
 			cmd_subnet_nat "$a" "$c"
+			;;
+		peer-forward-rules)
+			local peer="${2:-}" dests="${3:-}"
+			[[ "$peer" =~ $VALID_CIDR ]] || { echo "invalid peer address" >&2; exit 2; }
+			[[ -z "$dests" || "$dests" =~ $VALID_DEST_LIST ]] || { echo "invalid destination list" >&2; exit 2; }
+			cmd_peer_forward_rules "$peer" "$dests"
 			;;
 		logs)
 			local u="${2:-}" n="${3:-200}"
@@ -1156,7 +1215,7 @@ main() {
 			cmd_firewall_boot_restore
 			;;
 		*)
-			echo "usage: $0 {detect|install <provider>|status <unit>|service <action> <unit>|forward <add|del> <cidr>|subnet-nat <add|del> <cidr>|logs <unit> <lines>|ensure-ip-forward|updates-check|updates-apply|firewall-baseline|firewall-validate|firewall-apply|firewall-confirm|firewall-rollback|firewall-status|firewall-boot-restore}" >&2
+			echo "usage: $0 {detect|install <provider>|status <unit>|service <action> <unit>|forward <add|del> <cidr>|subnet-nat <add|del> <cidr>|peer-forward-rules <peer/32> [dest1,dest2,...]|logs <unit> <lines>|ensure-ip-forward|updates-check|updates-apply|firewall-baseline|firewall-validate|firewall-apply|firewall-confirm|firewall-rollback|firewall-status|firewall-boot-restore}" >&2
 			exit 2
 			;;
 	esac

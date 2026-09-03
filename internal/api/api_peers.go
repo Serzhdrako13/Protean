@@ -300,6 +300,11 @@ func (s *Server) apiDeletePeer(w http.ResponseWriter, r *http.Request) {
 	_ = s.store.DeletePeerExpiry(r.Context(), providerName, pubkey)
 	_ = s.store.DeletePeerCategory(r.Context(), providerName, pubkey)
 	_ = s.store.SetPeerMuted(r.Context(), providerName, pubkey, false)
+	// peer_forward_rules keys on the encoded urlID (node_peer's modern
+	// convention), unlike the raw-pubkey cleanup calls above -- without
+	// this, a deleted-then-recreated peer reusing the same tunnel address
+	// would silently inherit a stale destination restriction.
+	_ = s.store.DeletePeerForwardRules(r.Context(), providerName, r.PathValue("id"))
 	s.audit(r.Context(), "peer.delete", providerName+"/"+pubkey)
 	s.invalidateStatus(providerName)
 	writeOK(w, nil)

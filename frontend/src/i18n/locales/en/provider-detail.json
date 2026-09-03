@@ -119,7 +119,13 @@
         "client": "Client",
         "site": "Site (mesh)"
       },
-      "ownPublicKeyPlaceholder": "leave empty for the panel to generate a key"
+      "ownPublicKeyPlaceholder": "leave empty for the panel to generate a key",
+      "allowedDestinations": {
+        "title": "Allowed destination addresses",
+        "warning": "Empty = unrestricted (today's behavior). As soon as you add one address, this client can only reach addresses on the list — access to every other network and subnet, including other sites and the mesh, is cut off immediately.",
+        "placeholder": "10.10.0.0/24 or 10.10.0.5",
+        "save": "Apply address list"
+      }
     },
     "qr": {
       "title": "QR — {{name}}"

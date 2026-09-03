@@ -1182,6 +1182,62 @@ func TestNodesAndNodePeers(t *testing.T) {
 	}
 }
 
+func TestPeerForwardRules(t *testing.T) {
+	s := testDB(t)
+	ctx := context.Background()
+
+	if got, err := s.ListPeerForwardRules(ctx, "srv:wg0", "peer1"); err != nil || len(got) != 0 {
+		t.Fatalf("ListPeerForwardRules unset: %+v err=%v", got, err)
+	}
+
+	if err := s.SetPeerForwardRules(ctx, "srv:wg0", "peer1", []string{"192.168.10.0/24", "192.168.20.5/32"}); err != nil {
+		t.Fatalf("SetPeerForwardRules: %v", err)
+	}
+	got, err := s.ListPeerForwardRules(ctx, "srv:wg0", "peer1")
+	if err != nil || len(got) != 2 || got[0] != "192.168.10.0/24" || got[1] != "192.168.20.5/32" {
+		t.Fatalf("ListPeerForwardRules after set: %+v err=%v", got, err)
+	}
+
+	// A second peer's rules must stay isolated from the first.
+	if err := s.SetPeerForwardRules(ctx, "srv:wg0", "peer2", []string{"10.0.0.0/8"}); err != nil {
+		t.Fatalf("SetPeerForwardRules peer2: %v", err)
+	}
+
+	// Full-replace semantics: a re-sync with a different list must not
+	// merge with the old one, only leave exactly the new list behind.
+	if err := s.SetPeerForwardRules(ctx, "srv:wg0", "peer1", []string{"172.16.0.0/16"}); err != nil {
+		t.Fatalf("SetPeerForwardRules replace: %v", err)
+	}
+	if got, err := s.ListPeerForwardRules(ctx, "srv:wg0", "peer1"); err != nil || len(got) != 1 || got[0] != "172.16.0.0/16" {
+		t.Fatalf("ListPeerForwardRules after replace: %+v err=%v", got, err)
+	}
+
+	groups, err := s.ListAllPeerForwardRules(ctx)
+	if err != nil || len(groups) != 2 {
+		t.Fatalf("ListAllPeerForwardRules: %+v err=%v", groups, err)
+	}
+
+	// Clearing back to an empty list (rather than deleting the peer) must
+	// also return to fully-unrestricted -- SetPeerForwardRules with nil is
+	// how the UI's "remove all chips, save" flow un-restricts a peer.
+	if err := s.SetPeerForwardRules(ctx, "srv:wg0", "peer1", nil); err != nil {
+		t.Fatalf("SetPeerForwardRules clear: %v", err)
+	}
+	if got, err := s.ListPeerForwardRules(ctx, "srv:wg0", "peer1"); err != nil || len(got) != 0 {
+		t.Fatalf("ListPeerForwardRules after clear: %+v err=%v", got, err)
+	}
+	if groups, err := s.ListAllPeerForwardRules(ctx); err != nil || len(groups) != 1 || groups[0].PeerKey != "peer2" {
+		t.Fatalf("ListAllPeerForwardRules after clearing peer1: %+v err=%v", groups, err)
+	}
+
+	if err := s.DeletePeerForwardRules(ctx, "srv:wg0", "peer2"); err != nil {
+		t.Fatalf("DeletePeerForwardRules: %v", err)
+	}
+	if groups, err := s.ListAllPeerForwardRules(ctx); err != nil || len(groups) != 0 {
+		t.Fatalf("ListAllPeerForwardRules after DeletePeerForwardRules: %+v err=%v", groups, err)
+	}
+}
+
 func TestFirewallPolicyAndRules(t *testing.T) {
 	s := testDB(t)
 	ctx := context.Background()

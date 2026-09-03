@@ -403,6 +403,8 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("GET /api/providers/{provider}/peers/{id}/qr", s.requireAuthAPI(s.handlePeerQR))
 	mux.HandleFunc("POST /api/providers/{provider}/peers/{id}/owner", s.requireAuthAPI(s.apiPeerSetOwner))
 	mux.HandleFunc("POST /api/providers/{provider}/peers/{id}/node-owner", s.requireAuthAPI(s.apiPeerSetNodeOwner))
+	mux.HandleFunc("GET /api/providers/{provider}/peers/{id}/allowed-destinations", s.requireAuthAPI(s.apiPeerForwardRulesGet))
+	mux.HandleFunc("PUT /api/providers/{provider}/peers/{id}/allowed-destinations", s.requireAuthAPI(s.apiPeerForwardRulesPut))
 
 	mux.HandleFunc("GET /api/mesh", s.requireAuthAPI(s.apiMeshGet))
 	mux.HandleFunc("POST /api/mesh/providers/{provider}/forwarding", s.requireAuthAPI(s.apiMeshEnableForwarding))

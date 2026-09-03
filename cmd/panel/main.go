@@ -216,8 +216,9 @@ func main() {
 	srv.SetPanelPorts(panelPorts(cfg.ListenAddr))
 	srv.StartExpiryWorker(ctx, 5*time.Minute)
 	srv.ReconcileState(ctx)        // log DB-vs-host divergences at startup
-	srv.ReapplyMeshForwarding(ctx) // cert-provider FORWARD rules don't survive reboot
-	srv.ReapplySubnetNAT(ctx)      // masquerade-mode subnet NAT rules don't survive reboot either
+	srv.ReapplyMeshForwarding(ctx)    // cert-provider FORWARD rules don't survive reboot
+	srv.ReapplySubnetNAT(ctx)        // masquerade-mode subnet NAT rules don't survive reboot either
+	srv.ReapplyPeerForwardRules(ctx) // per-peer FORWARD destination allowlist rules don't survive reboot either
 	srv.StartNotifyWatcher(ctx, time.Minute)
 	srv.StartReportWorker(ctx, 10*time.Minute)
 	srv.StartTrafficSampler(ctx, cfg.TrafficSampleInterval, cfg.TrafficRetention)

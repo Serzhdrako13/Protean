@@ -177,6 +177,53 @@ func (i *Installer) SubnetNAT(ctx context.Context, action, cidr string) error {
 	return err
 }
 
+// validHostOrCIDR accepts either a bare IPv4 host or an explicit CIDR --
+// normalizeHostOrCIDR always appends "/32" for a bare host before this is
+// ever sent to the shell, so both forms are accepted here defensively.
+var validHostOrCIDR = regexp.MustCompile(`^[0-9]{1,3}(\.[0-9]{1,3}){3}(/[0-9]{1,2})?$`)
+
+// normalizeHostOrCIDR appends "/32" to a bare host IP so every entry this
+// package sends to the shell always carries an explicit mask.
+func normalizeHostOrCIDR(s string) (string, error) {
+	if !validHostOrCIDR.MatchString(s) {
+		return "", fmt.Errorf("invalid address %q", s)
+	}
+	if strings.Contains(s, "/") {
+		return s, nil
+	}
+	return s + "/32", nil
+}
+
+// SetPeerForwardRules replaces one VPN peer's FORWARD-chain destination
+// allowlist (full sync: delete-then-reinsert, matching how the admin UI
+// presents "the current list", not incremental add/del events). peerAddr
+// is the peer's own stable tunnel address (bare IP or /32, normalized
+// here); allowed is the full desired destination list (each entry a bare
+// host IP or CIDR, normalized here). An empty allowed list removes all
+// restriction for this peer -- back to today's fully-unrestricted default,
+// see internal/firewall's own INPUT-only scope: this manages FORWARD only,
+// and only for peers an admin has explicitly restricted.
+func (i *Installer) SetPeerForwardRules(ctx context.Context, peerAddr string, allowed []string) error {
+	addr, err := normalizeHostOrCIDR(peerAddr)
+	if err != nil {
+		return fmt.Errorf("invalid peer address %q: %w", peerAddr, err)
+	}
+	norm := make([]string, 0, len(allowed))
+	for _, a := range allowed {
+		n, err := normalizeHostOrCIDR(a)
+		if err != nil {
+			return fmt.Errorf("invalid destination %q: %w", a, err)
+		}
+		norm = append(norm, n)
+	}
+	args := addr
+	if len(norm) > 0 {
+		args += " " + strings.Join(norm, ",")
+	}
+	_, err = i.run(ctx, "peer-forward-rules "+args)
+	return err
+}
+
 // EnsureIPForward turns on net.ipv4.ip_forward on the host if it isn't
 // already (idempotent). Called whenever mesh/egress routing is turned on --
 // setup-host.sh's interactive bootstrap only ever offers this once, so a
