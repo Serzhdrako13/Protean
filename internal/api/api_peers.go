@@ -255,14 +255,42 @@ func (s *Server) apiUpdatePeer(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+
+	// The edit modal has no subnet-selection UI at all -- req.SubnetIDs is
+	// always empty on every save. Rebuilding AllowedIPs purely from it
+	// would silently strip any subnet CIDR this peer already routes (e.g.
+	// a router peer's site subnet, adopted from an existing wg0.conf by
+	// Network structure detection) on every routine name/keepalive edit.
+	// Preserve whatever extra AllowedIPs entries the peer already has
+	// (index 0 is always its own address, by this codebase's own
+	// convention -- see handlers_peers.go/peerTunnelAddress) and only add
+	// to that from req.SubnetIDs, never rebuild from scratch.
+	var existingExtra []string
+	if peers, perr := s.providerPeers(r.Context(), prov); perr == nil {
+		for _, p := range peers {
+			if p.PublicKey == pubkey && len(p.AllowedIPs) > 1 {
+				existingExtra = p.AllowedIPs[1:]
+				break
+			}
+		}
+	}
+
 	allowedIPs := []string{clientAddress}
+	seen := map[string]bool{clientAddress: true}
+	for _, cidr := range existingExtra {
+		if !seen[cidr] {
+			allowedIPs = append(allowedIPs, cidr)
+			seen[cidr] = true
+		}
+	}
 	wanted := map[int64]bool{}
 	for _, id := range req.SubnetIDs {
 		wanted[id] = true
 	}
 	for _, sn := range subnets {
-		if wanted[sn.ID] {
+		if wanted[sn.ID] && !seen[sn.CIDR] {
 			allowedIPs = append(allowedIPs, sn.CIDR)
+			seen[sn.CIDR] = true
 		}
 	}
 
