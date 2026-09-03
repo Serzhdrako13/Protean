@@ -675,6 +675,34 @@ EOF
 	done
 }
 
+# cmd_fix_conf_perms <path>: re-assert group ownership + mode on a
+# wg-family conf file. setup-host.sh's setup_conf_permissions() grants
+# this ONCE at initial setup (chgrp protean-conf; chmod 660), so the
+# panel's SSH user can read/write [Peer] blocks without sudo -- but
+# WireGuard's own SaveConfig=true feature rewrites the file FROM SCRATCH
+# (via `wg showconf > file`, run by wg-quick's own down/PostDown hook)
+# on every interface stop, which resets it to root:root 0600 and silently
+# revokes that grant. Real incident: an admin's routine "enable mesh
+# forwarding" click restarted the interface (EnableForwarding always
+# does a full reload) and the panel lost read access to its own peer
+# list minutes later. Called from wgfamily's restart() right after every
+# successful service restart, so this self-heals on every occasion that
+# would otherwise break it, not just the one observed. Path is
+# whitelisted to wg-family's own conf directories -- this verb must never
+# be usable to chgrp/chmod an arbitrary file.
+cmd_fix_conf_perms() {
+	local path="$1"
+	[[ "$path" =~ ^/etc/(wireguard|amnezia/amneziawg)/[A-Za-z0-9_.-]+\.conf$ ]] || {
+		echo "invalid conf path" >&2
+		return 2
+	}
+	[ -f "$path" ] || { echo "no such file: $path" >&2; return 1; }
+	getent group protean-conf >/dev/null 2>&1 || { echo "no protean-conf group" >&2; return 1; }
+	chgrp protean-conf "$path"
+	chmod 660 "$path"
+	chmod g+x "$(dirname "$path")"
+}
+
 # cmd_ensure_ip_forward: turn on net.ipv4.ip_forward if it isn't already, the
 # same sysctl drop-in setup-host.sh's interactive bootstrap uses -- but
 # idempotent and non-interactive, so the panel can re-check/re-apply it any
@@ -1171,6 +1199,9 @@ main() {
 			[[ -z "$dests" || "$dests" =~ $VALID_DEST_LIST ]] || { echo "invalid destination list" >&2; exit 2; }
 			cmd_peer_forward_rules "$peer" "$dests"
 			;;
+		fix-conf-perms)
+			cmd_fix_conf_perms "${2:-}"
+			;;
 		logs)
 			local u="${2:-}" n="${3:-200}"
 			[[ "$u" =~ $VALID_UNIT ]] || { echo "invalid unit" >&2; exit 2; }
@@ -1215,7 +1246,7 @@ main() {
 			cmd_firewall_boot_restore
 			;;
 		*)
-			echo "usage: $0 {detect|install <provider>|status <unit>|service <action> <unit>|forward <add|del> <cidr>|subnet-nat <add|del> <cidr>|peer-forward-rules <peer/32> [dest1,dest2,...]|logs <unit> <lines>|ensure-ip-forward|updates-check|updates-apply|firewall-baseline|firewall-validate|firewall-apply|firewall-confirm|firewall-rollback|firewall-status|firewall-boot-restore}" >&2
+			echo "usage: $0 {detect|install <provider>|status <unit>|service <action> <unit>|forward <add|del> <cidr>|subnet-nat <add|del> <cidr>|peer-forward-rules <peer/32> [dest1,dest2,...]|fix-conf-perms <path>|logs <unit> <lines>|ensure-ip-forward|updates-check|updates-apply|firewall-baseline|firewall-validate|firewall-apply|firewall-confirm|firewall-rollback|firewall-status|firewall-boot-restore}" >&2
 			exit 2
 			;;
 	esac

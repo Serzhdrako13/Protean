@@ -582,11 +582,35 @@ func (p *Provider) detectWAN(ctx context.Context) (string, error) {
 	return "", fmt.Errorf("no default route found")
 }
 
+// restart reloads the systemd unit and then re-asserts the conf file's
+// group/permissions -- WireGuard's own SaveConfig=true rewrites the file
+// from scratch (root:root 0600) on every stop, silently revoking the
+// group grant setup-host.sh set up once at initial provisioning. Without
+// this, every restart -- including EnableForwarding's own, which ALWAYS
+// restarts the interface by design -- risks the panel losing read access
+// to its own peer list minutes later (a real incident, not a hypothetical
+// one). Failing loud here rather than best-effort: the interface is
+// already back up by this point, so surfacing the error tells the admin
+// immediately rather than leaving them to discover "no peers visible"
+// on their own later.
 func (p *Provider) restart(ctx context.Context) error {
-	if _, err := vpn.NewInstaller(p.opts.SSH).Service(ctx, "restart", p.opts.ServiceName); err != nil {
+	inst := vpn.NewInstaller(p.opts.SSH)
+	if _, err := inst.Service(ctx, "restart", p.opts.ServiceName); err != nil {
 		return fmt.Errorf("restart %s: %w", p.opts.ServiceName, err)
 	}
+	if err := inst.FixConfPerms(ctx, p.opts.ConfPath); err != nil {
+		return fmt.Errorf("restore conf permissions after restart: %w", err)
+	}
 	return nil
+}
+
+// RestoreConfPerms implements vpn.ConfPermsRestorer, for callers that
+// restart this provider's service through some OTHER path than this
+// package's own restart() (e.g. the generic admin "restart service"
+// action, which goes straight through Installer.Service) -- see
+// restart()'s own doc comment for why this matters.
+func (p *Provider) RestoreConfPerms(ctx context.Context) error {
+	return vpn.NewInstaller(p.opts.SSH).FixConfPerms(ctx, p.opts.ConfPath)
 }
 
 // EnsureServer brings this interface up for the FIRST time if (and only

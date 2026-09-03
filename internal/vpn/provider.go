@@ -151,6 +151,18 @@ type ServiceNamed interface {
 	ServiceName() string
 }
 
+// ConfPermsRestorer is implemented by providers whose config file
+// permissions can be silently reset by a service restart -- wg-family's
+// SaveConfig=true rewrites the conf file from scratch (root:root 0600) on
+// every stop, revoking the group grant setup-host.sh set up once at
+// initial provisioning. Callers that restart a provider's service outside
+// wgfamily.Provider's own restart() (which already re-asserts this
+// itself) must type-assert and call this afterward too, or the panel
+// risks losing read access to its own peer list.
+type ConfPermsRestorer interface {
+	RestoreConfPerms(ctx context.Context) error
+}
+
 // ClientConfigProvider is implemented by certificate-based providers
 // (OpenVPN, IKEv2) that manage their own client credential storage and
 // produce a downloadable client config file themselves. When a provider

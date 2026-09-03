@@ -177,6 +177,25 @@ func (i *Installer) SubnetNAT(ctx context.Context, action, cidr string) error {
 	return err
 }
 
+var validConfPath = regexp.MustCompile(`^/etc/(wireguard|amnezia/amneziawg)/[A-Za-z0-9_.-]+\.conf$`)
+
+// FixConfPerms re-asserts group ownership (protean-conf) + mode 660 on a
+// wg-family conf file. setup-host.sh grants this ONCE at initial setup so
+// the panel's SSH user can read/write [Peer] blocks without sudo -- but
+// WireGuard's own SaveConfig=true feature rewrites the file from scratch
+// (root:root 0600) every time the interface is stopped, silently revoking
+// that grant. Called from wgfamily's restart() after every successful
+// service restart -- see cmd_fix_conf_perms in protean-installer.sh for
+// the real incident this fixes (a routine "enable mesh forwarding" click
+// restarts the interface by design and broke panel read access).
+func (i *Installer) FixConfPerms(ctx context.Context, path string) error {
+	if !validConfPath.MatchString(path) {
+		return fmt.Errorf("invalid conf path %q", path)
+	}
+	_, err := i.run(ctx, "fix-conf-perms "+path)
+	return err
+}
+
 // validHostOrCIDR accepts either a bare IPv4 host or an explicit CIDR --
 // normalizeHostOrCIDR always appends "/32" for a bare host before this is
 // ever sent to the shell, so both forms are accepted here defensively.

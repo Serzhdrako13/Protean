@@ -354,6 +354,20 @@ func (s *Server) apiServiceAction(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+	// A restart can silently revoke the panel's own read access to a
+	// wg-family conf file (SaveConfig=true rewrites it root:root 0600 on
+	// every stop) -- this is the SAME restart wgfamily.Provider's own
+	// internal restart() already guards, but reached here through a
+	// completely separate path (the generic service-control action, not
+	// EnableForwarding/ApplyNetworking/etc), so it needs its own call.
+	if req.Action == "restart" {
+		if cpr, ok := prov.(vpn.ConfPermsRestorer); ok {
+			if err := cpr.RestoreConfPerms(r.Context()); err != nil {
+				writeErr(w, http.StatusInternalServerError, err.Error())
+				return
+			}
+		}
+	}
 	s.audit(r.Context(), "service."+req.Action, providerName)
 	s.invalidateStatus(providerName)
 	writeOK(w, nil)

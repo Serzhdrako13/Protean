@@ -144,6 +144,35 @@ func TestSetPeerForwardRules(t *testing.T) {
 	}
 }
 
+func TestFixConfPerms(t *testing.T) {
+	f := &fakeInstallerSSH{out: "ok"}
+	inst := NewInstaller(f)
+
+	if err := inst.FixConfPerms(nil, "/etc/wireguard/wg0.conf"); err != nil { //nolint:staticcheck
+		t.Fatalf("FixConfPerms: %v", err)
+	}
+	want := "sudo " + InstallerPath + " fix-conf-perms /etc/wireguard/wg0.conf"
+	if f.cmd != want {
+		t.Errorf("cmd = %q, want %q", f.cmd, want)
+	}
+
+	if err := inst.FixConfPerms(nil, "/etc/amnezia/amneziawg/awg0.conf"); err != nil { //nolint:staticcheck
+		t.Fatalf("FixConfPerms (amneziawg): %v", err)
+	}
+
+	for _, bad := range []string{
+		"/etc/passwd",
+		"/etc/wireguard/../passwd",
+		"/etc/wireguard/wg0.conf; rm -rf /",
+		"/etc/openvpn/server.conf",
+		"relative/wg0.conf",
+	} {
+		if err := inst.FixConfPerms(nil, bad); err == nil { //nolint:staticcheck
+			t.Errorf("expected rejection of path %q", bad)
+		}
+	}
+}
+
 func TestInstallerNoSelfHealOnOtherErrors(t *testing.T) {
 	f := &sequencedInstallerSSH{results: []struct {
 		out string

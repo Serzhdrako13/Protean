@@ -19,6 +19,9 @@ type fakeSSH struct {
 	conf    string
 	iface   string
 	applied map[string]bool // peers applied live via `wg set`
+	calls   []string        // every command Run was asked to execute, in order
+
+	failFixPerms bool // simulate the fix-conf-perms verb failing on the host
 }
 
 func newFakeSSH() *fakeSSH {
@@ -52,6 +55,12 @@ func (f *fakeSSH) WriteFile(_ context.Context, _ string, content string) error {
 }
 
 func (f *fakeSSH) Run(_ context.Context, cmd string) (string, error) {
+	f.mu.Lock()
+	f.calls = append(f.calls, cmd)
+	f.mu.Unlock()
+	if f.failFixPerms && strings.Contains(cmd, "fix-conf-perms") {
+		return "", fmt.Errorf("simulated fix-conf-perms failure")
+	}
 	// Emulate `wg set <iface> peer <pk> ...` recording live peer state.
 	if strings.Contains(cmd, " set ") && strings.Contains(cmd, " peer ") {
 		return "", nil
@@ -192,5 +201,55 @@ func TestUpdateServerConfigMTU(t *testing.T) {
 	}
 	if strings.Contains(f.conf, "MTU") {
 		t.Errorf("conf should have no MTU line after clearing it:\n%s", f.conf)
+	}
+}
+
+// TestRestartReassertsConfPerms is the regression test for the real
+// incident on 2026-09-03: EnableForwarding always restarts the interface
+// by design, and WireGuard's own SaveConfig=true rewrites the conf file
+// from scratch (root:root 0600) on every stop, silently revoking the
+// group grant setup-host.sh set up once at initial provisioning -- an
+// admin's routine "enable mesh forwarding" click broke the panel's own
+// read access to its peer list minutes later. restart() must re-run
+// fix-conf-perms right after the service restart, every time.
+func TestRestartReassertsConfPerms(t *testing.T) {
+	f := newFakeSSH()
+	p := testProvider(f)
+
+	if err := p.EnableForwarding(context.Background()); err != nil {
+		t.Fatalf("EnableForwarding: %v", err)
+	}
+
+	restartIdx, fixPermsIdx := -1, -1
+	for i, c := range f.calls {
+		if strings.Contains(c, "service restart wg-quick@wg0") {
+			restartIdx = i
+		}
+		if strings.Contains(c, "fix-conf-perms /etc/wireguard/wg0.conf") {
+			fixPermsIdx = i
+		}
+	}
+	if restartIdx == -1 {
+		t.Fatalf("expected a service restart call, calls: %v", f.calls)
+	}
+	if fixPermsIdx == -1 {
+		t.Fatalf("expected a fix-conf-perms call after restart, calls: %v", f.calls)
+	}
+	if fixPermsIdx < restartIdx {
+		t.Errorf("fix-conf-perms ran before the restart (idx %d < %d) -- must run after, calls: %v", fixPermsIdx, restartIdx, f.calls)
+	}
+}
+
+// TestRestartPropagatesFixConfPermsError ensures a failure re-asserting
+// permissions surfaces as an error rather than being silently swallowed
+// -- the whole point is the admin finds out immediately, not by
+// discovering "no peers visible" on their own later.
+func TestRestartPropagatesFixConfPermsError(t *testing.T) {
+	f := newFakeSSH()
+	f.failFixPerms = true
+	p := testProvider(f)
+
+	if err := p.EnableForwarding(context.Background()); err == nil {
+		t.Fatal("expected EnableForwarding to fail when fix-conf-perms fails")
 	}
 }
