@@ -403,6 +403,20 @@ func (s *Server) apiNodeAccessSet(w http.ResponseWriter, r *http.Request) {
 
 type apiPeerNodeOwnerReq struct {
 	NodeID int64 `json:"node_id"`
+	// NewNodeName/NewNodeKind: create-on-the-fly, mirroring
+	// resolveGroupID's network-group pattern (api_subnets.go) -- lets the
+	// peer's own Owner picker create a brand-new piece of equipment and
+	// assign it in one request, instead of requiring a trip to the
+	// separate Nodes/"Оборудование" page first. Real incident this
+	// closes: that page's own standalone create form has no field to
+	// link a peer at all, so a node created there could only ever be
+	// linked via THIS endpoint anyway -- collapsing both steps into one
+	// removes the easy-to-miss second step entirely. Role always defaults
+	// to "member" here (the less common "network_node" role -- one
+	// dedicated instance per node -- stays an explicit Оборудование edit,
+	// not a quick-create decision). Only used when NodeID is 0.
+	NewNodeName string `json:"new_node_name,omitempty"`
+	NewNodeKind string `json:"new_node_kind,omitempty"`
 }
 
 // POST /api/providers/{provider}/peers/{id}/node-owner -- assigns a node as
@@ -424,7 +438,7 @@ func (s *Server) apiPeerSetNodeOwner(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, msg(r, "bad request body", "некорректное тело запроса"))
 		return
 	}
-	if req.NodeID == 0 {
+	if req.NodeID == 0 && strings.TrimSpace(req.NewNodeName) == "" {
 		if err := s.store.ClearNodePeer(r.Context(), provider, peerID); err != nil {
 			writeErr(w, http.StatusInternalServerError, err.Error())
 			return
@@ -433,10 +447,28 @@ func (s *Server) apiPeerSetNodeOwner(w http.ResponseWriter, r *http.Request) {
 		writeOK(w, nil)
 		return
 	}
-	node, err := s.store.GetNode(r.Context(), req.NodeID)
-	if err != nil {
-		writeErr(w, http.StatusBadRequest, msg(r, "unknown node", "неизвестный узел"))
-		return
+	var node store.Node
+	if req.NodeID == 0 {
+		kind := req.NewNodeKind
+		if !nodeKinds[kind] {
+			kind = "device"
+		}
+		created, err := s.store.CreateNode(r.Context(), store.Node{
+			Name: strings.TrimSpace(req.NewNodeName), Kind: kind, Role: "member",
+		})
+		if err != nil {
+			writeErr(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		s.audit(r.Context(), "node.create", created.Name+" (from peer owner picker)")
+		node = created
+	} else {
+		got, err := s.store.GetNode(r.Context(), req.NodeID)
+		if err != nil {
+			writeErr(w, http.StatusBadRequest, msg(r, "unknown node", "неизвестный узел"))
+			return
+		}
+		node = got
 	}
 	if _, has, err := s.store.GetPeerOwnerUserID(r.Context(), provider, peerID); err == nil && has {
 		writeErr(w, http.StatusBadRequest, msg(r,
@@ -444,7 +476,7 @@ func (s *Server) apiPeerSetNodeOwner(w http.ResponseWriter, r *http.Request) {
 			"у этого клиента уже есть владелец-пользователь портала, сначала снимите его"))
 		return
 	}
-	if err := s.store.SetNodePeer(r.Context(), provider, peerID, req.NodeID); err != nil {
+	if err := s.store.SetNodePeer(r.Context(), provider, peerID, node.ID); err != nil {
 		writeErr(w, http.StatusInternalServerError, err.Error())
 		return
 	}

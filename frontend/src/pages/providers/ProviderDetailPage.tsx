@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import type { ReactNode } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
   Card, Table, Tag, Switch, Button, Space, Modal, Form, Input, InputNumber,
@@ -21,6 +22,8 @@ import {
 import { CIDRChipList } from '@/components/CIDRChipList';
 import { usePortalUsersQuery, usePeerOwnerMutation } from '@/api/queries/users';
 import { useNodesQuery, useNodeOwnerMutation } from '@/api/queries/nodes';
+import type { Node } from '@/api/queries/nodes';
+import type { PanelUser } from '@/types/api';
 import { Sparkline } from '@/components/viz/Sparkline';
 import { PollIntervalSelect } from '@/components/viz/PollIntervalSelect';
 import { HeaderTip } from '@/components/HeaderTip';
@@ -282,39 +285,9 @@ export function ProviderDetailPage() {
     {
       title: <HeaderTip label={t('provider-detail:table.columns.owner.label')} tip={t('provider-detail:table.columns.owner.tip')} />,
       key: 'owner',
-      render: (_: unknown, p: Peer) => {
-        // Composite "u:<id>"/"n:<id>" values disambiguate the two owner
-        // kinds, which live in separate tables (peer_owner/node_peer) --
-        // see ProviderDetailPage's plan notes. A peer has at most one
-        // owner of either kind (enforced server-side); switching kinds
-        // clears the old one first.
-        const value = p.OwnerUserID ? `u:${p.OwnerUserID}` : p.NodeOwnerID ? `n:${p.NodeOwnerID}` : undefined;
-        async function onChange(v?: string) {
-          if (p.NodeOwnerID) await nodeOwnerMut.mutateAsync({ peerId: p.URLID, nodeId: 0 });
-          if (p.OwnerUserID) await ownerMut.mutateAsync({ peerId: p.URLID, userId: 0 });
-          if (!v) return;
-          const [kind, idStr] = v.split(':');
-          const id = Number(idStr);
-          if (kind === 'u') await ownerMut.mutateAsync({ peerId: p.URLID, userId: id });
-          else await nodeOwnerMut.mutateAsync({ peerId: p.URLID, nodeId: id });
-        }
-        return (
-          <Select
-            size="small"
-            allowClear
-            style={{ minWidth: 160 }}
-            placeholder={t('provider-detail:table.owner.unassigned')}
-            value={value}
-            options={[
-              { label: t('provider-detail:table.owner.groupUsers'), options: (portalUsers ?? []).map((u) => ({ value: `u:${u.id}`, label: u.username })) },
-              { label: t('provider-detail:table.owner.groupNodes'), options: (nodes ?? []).map((n) => ({ value: `n:${n.id}`, label: n.name })) },
-            ]}
-            onChange={onChange}
-            onClear={() => onChange(undefined)}
-            disabled={p.Disabled}
-          />
-        );
-      },
+      render: (_: unknown, p: Peer) => (
+        <PeerOwnerCell peer={p} portalUsers={portalUsers} nodes={nodes} ownerMut={ownerMut} nodeOwnerMut={nodeOwnerMut} />
+      ),
     },
     {
       title: t('provider-detail:table.columns.enabled'),
@@ -613,6 +586,116 @@ export function ProviderDetailPage() {
 
 // Top clients by traffic (Rx+Tx) — a quick "who's using this VPN the most"
 // glance without having to eyeball the full table and sort it mentally.
+const NODE_KIND_ICONS: Record<Node['kind'], ReactNode> = {
+  router: <WifiOutlined />,
+  device: <DesktopOutlined />,
+  other: <QuestionCircleOutlined />,
+};
+
+// Composite "u:<id>"/"n:<id>" values disambiguate the two owner kinds,
+// which live in separate tables (peer_owner/node_peer) -- see
+// ProviderDetailPage's plan notes. A peer has at most one owner of
+// either kind (enforced server-side); switching kinds clears the old
+// one first. "n:new" is a synthetic value that never gets sent to the
+// backend -- selecting it switches this cell into create-a-node mode
+// instead of calling onChange with it directly, mirroring
+// NetworkGroupSelect's own inline-create UX. This is the ONLY place a
+// node can be created now (see NodesPage's own create button removed
+// for the same reason: a node made there had no way to link a peer at
+// all, an easy-to-miss dead end that's what caused this to exist).
+function PeerOwnerCell({
+  peer, portalUsers, nodes, ownerMut, nodeOwnerMut,
+}: {
+  peer: Peer;
+  portalUsers: PanelUser[] | undefined;
+  nodes: Node[] | undefined;
+  ownerMut: ReturnType<typeof usePeerOwnerMutation>;
+  nodeOwnerMut: ReturnType<typeof useNodeOwnerMutation>;
+}) {
+  const { t } = useTranslation(['provider-detail', 'nodes']);
+  const [creating, setCreating] = useState(false);
+  const [newName, setNewName] = useState('');
+  const [newKind, setNewKind] = useState<Node['kind']>('router');
+
+  const value = peer.OwnerUserID ? `u:${peer.OwnerUserID}` : peer.NodeOwnerID ? `n:${peer.NodeOwnerID}` : undefined;
+
+  async function onChange(v?: string) {
+    if (v === 'n:new') {
+      setNewName('');
+      setNewKind('router');
+      setCreating(true);
+      return;
+    }
+    if (peer.NodeOwnerID) await nodeOwnerMut.mutateAsync({ peerId: peer.URLID, nodeId: 0 });
+    if (peer.OwnerUserID) await ownerMut.mutateAsync({ peerId: peer.URLID, userId: 0 });
+    if (!v) return;
+    const [kind, idStr] = v.split(':');
+    const id = Number(idStr);
+    if (kind === 'u') await ownerMut.mutateAsync({ peerId: peer.URLID, userId: id });
+    else await nodeOwnerMut.mutateAsync({ peerId: peer.URLID, nodeId: id });
+  }
+
+  async function commitNewNode() {
+    const name = newName.trim();
+    if (!name) {
+      setCreating(false);
+      return;
+    }
+    if (peer.OwnerUserID) await ownerMut.mutateAsync({ peerId: peer.URLID, userId: 0 });
+    await nodeOwnerMut.mutateAsync({ peerId: peer.URLID, nodeId: 0, newNodeName: name, newNodeKind: newKind });
+    setCreating(false);
+  }
+
+  if (creating) {
+    return (
+      <Space.Compact size="small">
+        <Select<Node['kind']>
+          size="small"
+          style={{ width: 90 }}
+          value={newKind}
+          onChange={setNewKind}
+          options={(['router', 'device', 'other'] as const).map((k) => ({
+            value: k, label: <span>{NODE_KIND_ICONS[k]} {t(`nodes:kindLabels.${k}`)}</span>,
+          }))}
+        />
+        <Input
+          size="small"
+          autoFocus
+          style={{ width: 130 }}
+          placeholder={t('nodes:form.namePlaceholder')}
+          value={newName}
+          onChange={(e) => setNewName(e.target.value)}
+          onPressEnter={commitNewNode}
+          onBlur={commitNewNode}
+        />
+      </Space.Compact>
+    );
+  }
+
+  return (
+    <Select
+      size="small"
+      allowClear
+      style={{ minWidth: 160 }}
+      placeholder={t('provider-detail:table.owner.unassigned')}
+      value={value}
+      options={[
+        { label: t('provider-detail:table.owner.groupUsers'), options: (portalUsers ?? []).map((u) => ({ value: `u:${u.id}`, label: u.username })) },
+        {
+          label: t('provider-detail:table.owner.groupNodes'),
+          options: [
+            ...(nodes ?? []).map((n) => ({ value: `n:${n.id}`, label: n.name })),
+            { value: 'n:new', label: `+ ${t('nodes:form.newNode')}` },
+          ],
+        },
+      ]}
+      onChange={onChange}
+      onClear={() => onChange(undefined)}
+      disabled={peer.Disabled}
+    />
+  );
+}
+
 function TopClients({ peers }: { peers: Peer[] }) {
   const { t } = useTranslation(['provider-detail', 'common']);
   const ranked = peers

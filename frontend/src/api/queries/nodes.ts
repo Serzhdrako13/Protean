@@ -123,13 +123,26 @@ export function useClientsQuery() {
 // Assigns/clears a node as a peer's owner -- the manual-creation fallback
 // for cert-based providers (OpenVPN/IKEv2), where a client is created via
 // the normal "Add client" form first, then handed to a node here instead
-// of a portal user.
+// of a portal user. newNodeName/newNodeKind (nodeId: 0 + a name) create
+// the node and assign it in the same request, mirroring
+// useNetworkGroupsQuery's create-on-the-fly group picker -- lets this
+// picker create a brand-new piece of equipment without a trip to the
+// separate Nodes/"Оборудование" page, which has no way to link a peer
+// at all (a real gap: a node created there could only ever be linked via
+// this same endpoint anyway).
 export function useNodeOwnerMutation(provider: string) {
   const qc = useQueryClient();
   const base = `/api/providers/${encodeURIComponent(provider)}/peers`;
   return useMutation({
-    mutationFn: ({ peerId, nodeId }: { peerId: string; nodeId: number }) =>
-      HttpUtil.post<null>(`${base}/${encodeURIComponent(peerId)}/node-owner`, { node_id: nodeId }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['providers', provider] }),
+    mutationFn: ({ peerId, nodeId, newNodeName, newNodeKind }: {
+      peerId: string; nodeId: number; newNodeName?: string; newNodeKind?: string;
+    }) =>
+      HttpUtil.post<null>(`${base}/${encodeURIComponent(peerId)}/node-owner`, {
+        node_id: nodeId, new_node_name: newNodeName, new_node_kind: newNodeKind,
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['providers', provider] });
+      qc.invalidateQueries({ queryKey: ['nodes'] });
+    },
   });
 }

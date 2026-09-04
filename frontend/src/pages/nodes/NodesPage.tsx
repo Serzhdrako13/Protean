@@ -4,7 +4,7 @@ import {
 } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import {
-  PlusOutlined, DeleteOutlined, EditOutlined, WifiOutlined, DesktopOutlined, QuestionCircleOutlined, ClusterOutlined,
+  DeleteOutlined, EditOutlined, WifiOutlined, DesktopOutlined, QuestionCircleOutlined, ClusterOutlined,
 } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { PageShell } from '@/layouts/PageShell';
@@ -118,17 +118,19 @@ function NodeAccessPanel({ node }: { node: Node }) {
 function NodesTable() {
   const { t } = useTranslation(['nodes', 'common']);
   const { data, isLoading } = useNodesQuery();
-  const { create, update, remove } = useNodeMutations();
+  const { update, remove } = useNodeMutations();
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<Node | null>(null);
   const [form] = Form.useForm();
 
-  function openCreate() {
-    setEditing(null);
-    form.resetFields();
-    setModalOpen(true);
-  }
-
+  // No "create" here anymore -- deliberately. This page's own create form
+  // had no field to link a peer/IP at all, so a node made here could only
+  // ever be linked afterward via a peer's "Owner" picker on the provider
+  // page anyway. That easy-to-miss second step is exactly what caused a
+  // real support case (a node created here with nothing ever pointing at
+  // it). Creating equipment now happens in ONE place -- that same Owner
+  // picker's "+ Новое оборудование" option -- which creates AND links in
+  // a single action. This page is edit/delete/access-management only.
   function openEdit(n: Node) {
     setEditing(n);
     form.setFieldsValue({ name: n.name, kind: n.kind, role: n.role, description: n.description });
@@ -136,13 +138,10 @@ function NodesTable() {
   }
 
   async function onSubmit() {
+    if (!editing) return;
     try {
       const values = await form.validateFields();
-      if (editing) {
-        await update.mutateAsync({ id: editing.id, ...values });
-      } else {
-        await create.mutateAsync(values);
-      }
+      await update.mutateAsync({ id: editing.id, ...values });
       setModalOpen(false);
       message.success(t('common:actions.saved'));
     } catch (e) {
@@ -212,7 +211,6 @@ function NodesTable() {
       <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
         <Space>
           <NetworkDetectionButton />
-          <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>{t('createButton')}</Button>
         </Space>
       </div>
       <Table
@@ -225,11 +223,11 @@ function NodesTable() {
       />
 
       <Modal
-        title={editing ? t('modal.editTitle', { name: editing.name }) : t('modal.createTitle')}
+        title={editing ? t('modal.editTitle', { name: editing.name }) : ''}
         open={modalOpen}
         onCancel={() => setModalOpen(false)}
         onOk={onSubmit}
-        confirmLoading={create.isPending || update.isPending}
+        confirmLoading={update.isPending}
         destroyOnHidden
       >
         <Form form={form} layout="vertical">

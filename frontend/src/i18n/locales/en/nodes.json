@@ -26,7 +26,8 @@
   "roleTip": "\"Network member\" is a plain client, it doesn't route anything for others. \"Network node\" is a full participant in the internal network (it may have a subnet behind it, e.g. a home network behind a router) -- other VPN nodes can depend on it. A \"network node\" gets internet-access/NAT configured on a dedicated provider instance just for it -- this protects against an accidental traffic leak from sharing NAT across nodes.",
   "form": {
     "namePlaceholder": "Keenetic-Office",
-    "descriptionPlaceholder": "e.g.: home network behind the router, 192.168.50.0/24"
+    "descriptionPlaceholder": "e.g.: home network behind the router, 192.168.50.0/24",
+    "newNode": "New equipment"
   },
   "modal": {
     "createTitle": "New device",

@@ -192,6 +192,63 @@ func TestNodeAccessGrantAutoProvision(t *testing.T) {
 // (see HasNetworkNodePeer) -- a second grant attempt must be rejected, not
 // silently create a second peer that would share the first node's NAT
 // configuration.
+func doPeerSetNodeOwner(s *Server, provider, peerID, body string) *httptest.ResponseRecorder {
+	req := httptest.NewRequest(http.MethodPost, "/api/providers/"+provider+"/peers/"+peerID+"/node-owner", strings.NewReader(body))
+	req.SetPathValue("provider", provider)
+	req.SetPathValue("id", peerID)
+	rec := httptest.NewRecorder()
+	s.apiPeerSetNodeOwner(rec, req)
+	return rec
+}
+
+// TestPeerSetNodeOwnerCreatesNode is the regression test for a real
+// support case: NodesPage's own standalone "add equipment" form had no
+// field to link a peer at all, so a node created there needed a SEPARATE
+// trip to a peer's Owner picker to actually mean anything -- an
+// easy-to-miss second step that, when skipped, left the node created but
+// completely unlinked (found live: a node existed in the DB with zero
+// node_peer rows). apiPeerSetNodeOwner now creates the node itself when
+// NodeID is 0 and a name is given, so the picker can do both in one call.
+func TestPeerSetNodeOwnerCreatesNode(t *testing.T) {
+	st := nodesTestDB(t)
+	reg := vpn.NewRegistry()
+	reg.Register(&nodeFakeWGProvider{name: "srv:wg0", address: "10.10.0.1/24"})
+	s := newNodesTestServer(t, st, reg)
+	ctx := context.Background()
+
+	rec := doPeerSetNodeOwner(s, "srv:wg0", "b.somepeerkey", `{"node_id":0,"new_node_name":"Keenetic-New","new_node_kind":"router"}`)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+	}
+
+	nodes, err := st.ListNodes(ctx)
+	if err != nil {
+		t.Fatalf("ListNodes: %v", err)
+	}
+	var created *store.Node
+	for i := range nodes {
+		if nodes[i].Name == "Keenetic-New" {
+			created = &nodes[i]
+		}
+	}
+	if created == nil {
+		t.Fatalf("expected a node named Keenetic-New to have been created, got: %+v", nodes)
+	}
+	if created.Kind != "router" {
+		t.Errorf("kind = %q, want router", created.Kind)
+	}
+	if created.Role != "member" {
+		t.Errorf("role = %q, want member (quick-create never picks network_node)", created.Role)
+	}
+
+	// The whole point: the peer must actually be linked, not just the
+	// node existing in isolation.
+	nodeID, ok, err := st.GetNodePeerOwnerID(ctx, "srv:wg0", "b.somepeerkey")
+	if err != nil || !ok || nodeID != created.ID {
+		t.Fatalf("GetNodePeerOwnerID after create-and-assign: id=%d ok=%v err=%v, want %d", nodeID, ok, err, created.ID)
+	}
+}
+
 func TestNodeAccessNetworkNodeConflict(t *testing.T) {
 	st := nodesTestDB(t)
 	ctx := context.Background()
