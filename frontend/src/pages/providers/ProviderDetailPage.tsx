@@ -627,17 +627,21 @@ function TopClients({ peers }: { peers: Peer[] }) {
   return (
     <Card title={t('provider-detail:overview.topClientsCardTitle')} style={{ marginBottom: 16 }}>
       <Space orientation="vertical" style={{ width: '100%' }} size={10}>
-        {ranked.map(({ peer, total }) => (
-          <div key={peer.URLID}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, marginBottom: 2 }}>
-              <span>{peer.Name}</span>
-              <span style={{ color: 'var(--ant-color-text-tertiary)' }}>
-                ↓{formatBytes(peer.RxBytes)} ↑{formatBytes(peer.TxBytes)}
-              </span>
+        {ranked.map(({ peer, total }) => {
+          const { ownAddress } = splitAllowedIPs(peer.AllowedIPs);
+          const label = peer.Name || ownAddress || peer.URLID;
+          return (
+            <div key={peer.URLID}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, marginBottom: 2 }}>
+                <span>{label}</span>
+                <span style={{ color: 'var(--ant-color-text-tertiary)' }}>
+                  ↓{formatBytes(peer.RxBytes)} ↑{formatBytes(peer.TxBytes)}
+                </span>
+              </div>
+              <Progress percent={Math.round((total / max) * 100)} showInfo={false} size="small" />
             </div>
-            <Progress percent={Math.round((total / max) * 100)} showInfo={false} size="small" />
-          </div>
-        ))}
+          );
+        })}
       </Space>
     </Card>
   );
