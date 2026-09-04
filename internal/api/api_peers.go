@@ -265,13 +265,27 @@ func (s *Server) apiUpdatePeer(w http.ResponseWriter, r *http.Request) {
 	// (index 0 is always its own address, by this codebase's own
 	// convention -- see handlers_peers.go/peerTunnelAddress) and only add
 	// to that from req.SubnetIDs, never rebuild from scratch.
+	// Fail closed, not open: if the peer list can't be read at all (the
+	// most likely cause being the exact wg0.conf-permission incident this
+	// preservation logic exists because of -- see the fix-conf-perms
+	// commits), silently treating that as "no existing subnets" would
+	// reintroduce the very bug this block fixes, and precisely when a
+	// host is already in a degraded state. An admin retrying once the
+	// underlying issue is fixed is a far better outcome than a second,
+	// compounding data-loss event.
+	peers, perr := s.providerPeers(r.Context(), prov)
+	if perr != nil {
+		writeErr(w, http.StatusInternalServerError, msgf(r,
+			"cannot read the current peer list, refusing to update this peer to avoid losing its existing routes: %v",
+			"не удалось прочитать текущий список пиров; обновление отменено, чтобы не потерять уже настроенные маршруты пира: %v",
+			perr))
+		return
+	}
 	var existingExtra []string
-	if peers, perr := s.providerPeers(r.Context(), prov); perr == nil {
-		for _, p := range peers {
-			if p.PublicKey == pubkey && len(p.AllowedIPs) > 1 {
-				existingExtra = p.AllowedIPs[1:]
-				break
-			}
+	for _, p := range peers {
+		if p.PublicKey == pubkey && len(p.AllowedIPs) > 1 {
+			existingExtra = p.AllowedIPs[1:]
+			break
 		}
 	}
 

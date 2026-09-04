@@ -12,6 +12,7 @@ package api
 import (
 	"context"
 	"encoding/base64"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -78,8 +79,9 @@ func peersTestDB(t *testing.T) *store.Store {
 // AllowedIPs (unlike nodeFakeWGProvider's stub) -- needed to assert on
 // what apiUpdatePeer actually computed and sent down.
 type updateTrackingProvider struct {
-	name  string
-	peers []vpn.Peer
+	name    string
+	peers   []vpn.Peer
+	listErr error // simulates ListPeers failing, e.g. a wg0.conf permission incident
 }
 
 func (f *updateTrackingProvider) Name() string { return f.name }
@@ -87,7 +89,12 @@ func (f *updateTrackingProvider) Type() string { return "wireguard" }
 func (f *updateTrackingProvider) Status(context.Context) (vpn.ServerStatus, error) {
 	return vpn.ServerStatus{Provider: f.name, Up: true, PeerCount: len(f.peers)}, nil
 }
-func (f *updateTrackingProvider) ListPeers(context.Context) ([]vpn.Peer, error) { return f.peers, nil }
+func (f *updateTrackingProvider) ListPeers(context.Context) ([]vpn.Peer, error) {
+	if f.listErr != nil {
+		return nil, f.listErr
+	}
+	return f.peers, nil
+}
 func (f *updateTrackingProvider) AddPeer(context.Context, vpn.PeerSpec) (vpn.NewPeerResult, error) {
 	return vpn.NewPeerResult{}, vpn.ErrNotImplemented
 }
@@ -197,5 +204,38 @@ func TestUpdatePeerPreservesSubnetRoutes(t *testing.T) {
 	}
 	if got[0] != "192.168.99.26/32" {
 		t.Errorf("new own address should be index 0, got %v", got)
+	}
+}
+
+// TestUpdatePeerFailsClosedWhenPeerListUnreadable is the regression test
+// for a fail-open bug in the fix above: if the peer list can't be read at
+// all (the most likely real cause being the exact wg0.conf-permission
+// incident this preservation logic exists because of), the update must be
+// refused, not silently proceed as if the peer had no existing subnets --
+// which would reintroduce the subnet-wipe bug precisely when a host is
+// already in a degraded state.
+func TestUpdatePeerFailsClosedWhenPeerListUnreadable(t *testing.T) {
+	st := peersTestDB(t)
+	reg := vpn.NewRegistry()
+	routerKey := fakePubkey("router2")
+	prov := &updateTrackingProvider{
+		name: "srv:wg0",
+		peers: []vpn.Peer{
+			{PublicKey: routerKey, Name: "router", AllowedIPs: []string{"192.168.99.25/32", "192.168.10.0/24"}},
+		},
+	}
+	reg.Register(prov)
+	s := newPeersTestServer(t, st, reg)
+	routerID := mustEncodePeerID(t, routerKey)
+
+	prov.listErr = errors.New("read conf: permission denied")
+	rec := doUpdatePeer(s, "srv:wg0", routerID,
+		`{"name":"router-renamed","client_address":"192.168.99.25/32","keepalive":25,"subnet_ids":[]}`)
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("status = %d, want 500 (refuse the update): body=%s", rec.Code, rec.Body.String())
+	}
+	// The peer must be completely untouched -- no partial/wiped update.
+	if prov.peers[0].Name != "router" || len(prov.peers[0].AllowedIPs) != 2 {
+		t.Errorf("peer should be untouched after a refused update, got: %+v", prov.peers[0])
 	}
 }
