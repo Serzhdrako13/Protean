@@ -97,6 +97,49 @@ func testProvider() (*Provider, *fakeStore) {
 	return p, st
 }
 
+// callTrackingSSH records every command Run was asked to execute --
+// separate from the package's own value-type fakeSSH (which has no
+// fields to track calls in, and is shared by several other tests via
+// testProvider() that don't need this).
+type callTrackingSSH struct{ calls []string }
+
+func (f *callTrackingSSH) Run(_ context.Context, cmd string) (string, error) {
+	f.calls = append(f.calls, cmd)
+	return "", nil
+}
+func (callTrackingSSH) ReadFile(context.Context, string) (string, error) {
+	return "", fmt.Errorf("no such file")
+}
+func (callTrackingSSH) WriteFile(context.Context, string, string) error { return nil }
+
+// TestEnsureServerChmodsPrivateKey is the regression test for a real
+// finding: WriteFile leaves a brand-new file at whatever mode the remote
+// shell's umask produces (commonly 644) -- fine for the two certs
+// EnsureServer also writes, not for the server's private key. Contained
+// today only by the parent directory's own mode, which a package upgrade
+// or an unrelated permissions reset elsewhere could loosen.
+func TestEnsureServerChmodsPrivateKey(t *testing.T) {
+	ssh := &callTrackingSSH{}
+	p := New(Options{
+		SwanctlDir: "/etc/swanctl", ServerID: "vpn.example.com", ServiceName: "ipsec",
+		SSH: ssh, Store: newFakeStore(), Enc: fakeEnc{},
+	})
+	if err := p.EnsureServer(context.Background(), nil, false); err != nil {
+		t.Fatalf("EnsureServer: %v", err)
+	}
+	want := "chmod 600 '/etc/swanctl/private/server.key'"
+	found := false
+	for _, c := range ssh.calls {
+		if c == want {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("expected a call %q, got calls: %v", want, ssh.calls)
+	}
+}
+
 func TestImportPeerAcceptsCertSignedByCurrentCA(t *testing.T) {
 	p, st := testProvider()
 	ctx := context.Background()

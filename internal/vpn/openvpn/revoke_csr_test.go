@@ -16,9 +16,15 @@ import (
 	"protean/internal/vpn/pki"
 )
 
-type fakeSSH struct{ files map[string]string }
+type fakeSSH struct {
+	files map[string]string
+	calls []string
+}
 
-func (f *fakeSSH) Run(context.Context, string) (string, error) { return "", nil }
+func (f *fakeSSH) Run(_ context.Context, cmd string) (string, error) {
+	f.calls = append(f.calls, cmd)
+	return "", nil
+}
 func (f *fakeSSH) ReadFile(_ context.Context, p string) (string, error) {
 	if v, ok := f.files[p]; ok {
 		return v, nil
@@ -155,6 +161,37 @@ func TestEnsureServerWritesTunMTUAndMssfix(t *testing.T) {
 	conf := ssh.files["/etc/openvpn/server/server.conf"]
 	if !strings.Contains(conf, "tun-mtu 1400") || !strings.Contains(conf, "mssfix 1350") {
 		t.Errorf("server conf missing tun-mtu/mssfix:\n%s", conf)
+	}
+}
+
+// TestEnsureServerChmodsPrivateKeys is the regression test for a real
+// finding: WriteFile leaves a brand-new file at whatever mode the remote
+// shell's umask produces (commonly 644) -- fine for certs, not for the
+// server's private key or the tls-crypt static key, both of which
+// EnsureServer writes the same way. Contained today only by the parent
+// directory's own mode, which a package upgrade or an unrelated
+// permissions reset elsewhere could loosen.
+func TestEnsureServerChmodsPrivateKeys(t *testing.T) {
+	p, ssh, _ := testProvider()
+	p.opts.ConfPath = "/etc/openvpn/server/server.conf"
+	p.opts.ServerNet, p.opts.ServerMask = "10.8.0.0", "255.255.255.0"
+	if err := p.EnsureServer(context.Background(), nil, false); err != nil {
+		t.Fatalf("EnsureServer: %v", err)
+	}
+	for _, want := range []string{
+		"chmod 600 '/etc/openvpn/server/server.key'",
+		"chmod 600 '/etc/openvpn/server/tls-crypt.key'",
+	} {
+		found := false
+		for _, c := range ssh.calls {
+			if c == want {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Errorf("expected a call %q, got calls: %v", want, ssh.calls)
+		}
 	}
 }
 

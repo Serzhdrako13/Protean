@@ -612,6 +612,19 @@ func (p *Provider) EnsureServer(ctx context.Context, pushRoutes []string, redire
 			return fmt.Errorf("write %s: %w", path, err)
 		}
 	}
+	// A brand-new file WriteFile creates gets whatever mode the remote
+	// shell's umask leaves it at (commonly 644) -- fine for the certs
+	// above, not for the two private keys here. The parent directory
+	// being group-writable only controls who can WRITE a new file, not
+	// who can READ this one once it exists; contained today only by that
+	// directory's own mode, which a package upgrade or a permissions
+	// reset elsewhere can loosen (see the fix-conf-perms commits this
+	// same audit produced for the analogous wg-family case).
+	for _, keyPath := range []string{p.opts.ServerDir + "/server.key", p.tlsCryptPath()} {
+		if _, err := p.opts.SSH.Run(ctx, "chmod 600 "+shellQuote(keyPath)); err != nil {
+			return fmt.Errorf("chmod %s: %w", keyPath, err)
+		}
+	}
 
 	conf := ServerParams{
 		Port: p.opts.ListenPort, Proto: p.opts.Proto,

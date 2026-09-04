@@ -537,6 +537,13 @@ func (p *Provider) EnsureServer(ctx context.Context, pushRoutes []string, redire
 			return fmt.Errorf("write %s: %w", path, err)
 		}
 	}
+	// A brand-new file WriteFile creates gets whatever mode the remote
+	// shell's umask leaves it at (commonly 644) -- fine for the two certs
+	// above, not for the private key. See openvpn/provider.go's own
+	// EnsureServer for the identical reasoning.
+	if _, err := p.opts.SSH.Run(ctx, "chmod 600 "+shellQuote(p.opts.SwanctlDir+"/private/server.key")); err != nil {
+		return fmt.Errorf("chmod server.key: %w", err)
+	}
 	// Write the CRL (possibly empty) so revocation checking has a file to read.
 	if err := p.rebuildCRL(ctx, ca); err != nil {
 		return fmt.Errorf("build CRL: %w", err)
