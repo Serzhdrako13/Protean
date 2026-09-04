@@ -192,6 +192,12 @@ function MeshSettingsCard({ provider }: { provider: string }) {
         internet_egress: field === 'internet_egress' ? value : data.internet_egress,
         auto_assign_start: data.auto_assign_start,
         auto_assign_end: data.auto_assign_end,
+        // The backend always persists group_id verbatim on this endpoint
+        // (no partial-patch semantics -- see api_network.go's own comment
+        // on that call) on the assumption every save resubmits it. Leaving
+        // it out here (the real bug) meant flipping either switch cleared
+        // this instance's network group as an undocumented side effect.
+        group_id: data.group_id,
       });
       message.success(t('common:actions.saved'));
     } catch (e) {
@@ -224,6 +230,9 @@ function MeshSettingsCard({ provider }: { provider: string }) {
         internet_egress: data.internet_egress,
         auto_assign_start: rangeStart,
         auto_assign_end: rangeEnd,
+        // See toggle()'s own comment: this endpoint always persists
+        // group_id verbatim, so every save here must resubmit it too.
+        group_id: data.group_id,
       });
       message.success(t('common:actions.saved'));
     } catch (e) {

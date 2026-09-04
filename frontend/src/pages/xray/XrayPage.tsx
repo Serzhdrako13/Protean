@@ -26,6 +26,12 @@ export function XrayPage({ provider }: { provider: string }) {
   const [qrClient, setQrClient] = useState<string | null>(null);
   const [addOpen, setAddOpen] = useState(false);
   const [addForm] = Form.useForm();
+  // Tracked explicitly rather than via antd's own isFieldTouched: Form.List's
+  // add/remove/move operations go through setFieldsValue internally, which
+  // doesn't reliably flip antd's own touched state the way typing into an
+  // Input does -- and "admin removed every hop without typing anything" is
+  // exactly the one case this flag exists to catch correctly.
+  const [relayTouched, setRelayTouched] = useState(false);
 
   useEffect(() => {
     if (!data) return;
@@ -33,6 +39,7 @@ export function XrayPage({ provider }: { provider: string }) {
       const sel = data.strategies.find((s) => s.selected);
       if (sel) setStrategy(sel.name);
     }
+    setRelayTouched(false);
     const values: Record<string, unknown> = {
       relay_links: data.relay_chain?.length ? data.relay_chain.map(() => '') : [],
     };
@@ -46,7 +53,16 @@ export function XrayPage({ provider }: { provider: string }) {
     try {
       const values = await form.validateFields();
       const { relay_links, ...params } = values;
-      const links: string[] = (relay_links ?? []).filter((l: string) => l && l.trim() !== '');
+      // Relay links are write-only -- the form always starts with blank
+      // placeholders for an already-configured chain (see the effect
+      // above), so "every field still blank" is indistinguishable from
+      // "genuinely empty" UNLESS we also check whether the admin ever
+      // touched this field (typed into a hop, or added/removed/reordered
+      // one). Untouched -> omit entirely, so the backend leaves the
+      // existing chain alone instead of reading blanks as "clear it".
+      const links: string[] | undefined = relayTouched
+        ? (relay_links ?? []).filter((l: string) => l && l.trim() !== '')
+        : undefined;
       await apply.mutateAsync({ strategy, params, relay_links: links });
       message.success(t('xray:messages.applied'));
     } catch (e) {
@@ -116,20 +132,20 @@ export function XrayPage({ provider }: { provider: string }) {
                     <Space key={field.key} style={{ width: '100%' }} align="baseline">
                       <span style={{ color: 'var(--ant-color-text-tertiary)', minWidth: 48 }}>{t('xray:relay.hopLabel', { n: idx + 1 })}</span>
                       <Form.Item {...field} noStyle>
-                        <Input style={{ width: 420 }} placeholder="vless://... / trojan://... / ss://..." />
+                        <Input style={{ width: 420 }} placeholder="vless://... / trojan://... / ss://..." onChange={() => setRelayTouched(true)} />
                       </Form.Item>
                       <Button
                         size="small" icon={<ArrowUpOutlined />} disabled={idx === 0}
-                        onClick={() => move(idx, idx - 1)} title={t('xray:relay.moveUpTitle')}
+                        onClick={() => { move(idx, idx - 1); setRelayTouched(true); }} title={t('xray:relay.moveUpTitle')}
                       />
                       <Button
                         size="small" icon={<ArrowDownOutlined />} disabled={idx === fields.length - 1}
-                        onClick={() => move(idx, idx + 1)} title={t('xray:relay.moveDownTitle')}
+                        onClick={() => { move(idx, idx + 1); setRelayTouched(true); }} title={t('xray:relay.moveDownTitle')}
                       />
-                      <Button size="small" danger icon={<DeleteOutlined />} onClick={() => remove(field.name)} title={t('xray:relay.removeTitle')} />
+                      <Button size="small" danger icon={<DeleteOutlined />} onClick={() => { remove(field.name); setRelayTouched(true); }} title={t('xray:relay.removeTitle')} />
                     </Space>
                   ))}
-                  <Button size="small" icon={<PlusOutlined />} onClick={() => add('')}>{t('xray:relay.addButton')}</Button>
+                  <Button size="small" icon={<PlusOutlined />} onClick={() => { add(''); setRelayTouched(true); }}>{t('xray:relay.addButton')}</Button>
                 </Space>
               )}
             </Form.List>

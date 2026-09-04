@@ -5,8 +5,6 @@ import (
 	"net/http"
 	"strings"
 	"time"
-
-	"protean/internal/store"
 )
 
 var validTLSMode = map[string]bool{"self_signed": true, "acme": true, "manual": true, "proxy": true}
@@ -105,19 +103,33 @@ func (s *Server) apiTLSUpdate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	newState := store.TLSState{
-		Mode:              req.Mode,
-		SSKeyAlgo:         req.SSKeyAlgo,
-		SSValidityDays:    req.SSValidityDays,
-		SSRenewBeforeDays: req.SSRenewBeforeDays,
-		SSSans:            strings.TrimSpace(req.SSSans),
-		AcmeDirectoryURL:  strings.TrimSpace(req.AcmeDirectoryURL),
-		AcmeDomains:       strings.TrimSpace(req.AcmeDomains),
-		AcmeEmail:         strings.TrimSpace(req.AcmeEmail),
-		AcmeChallenge:     req.AcmeChallenge,
-		AcmeTrustRootPEM:  req.AcmeTrustRootPEM,
-		ManualCertPEM:     existing.ManualCertPEM,
-		ManualKeyEnc:      existing.ManualKeyEnc,
+	// Start from the existing state and only overwrite the group of fields
+	// that belongs to the mode actually being saved. The frontend's Form
+	// only mounts one mode's Form.Items at a time (self_signed/acme/manual
+	// sections are conditionally rendered), so req's OTHER groups arrive
+	// as Go zero values -- not real data. Building newState from req
+	// directly (the old behavior) meant saving in acme mode wrote empty
+	// strings over ss_sans/ss_key_algo/etc, and saving in self_signed mode
+	// wiped every acme_* field -- degrading self-signed's role as a
+	// permanent fallback regardless of which mode is actually active, and
+	// destroying ACME settings an admin would need again after a debug
+	// detour through another mode. Manual's cert/key are handled by their
+	// own dedicated block below (already correct: only overwritten when a
+	// new key is actually uploaded).
+	newState := existing
+	newState.Mode = req.Mode
+	switch req.Mode {
+	case "self_signed":
+		newState.SSKeyAlgo = req.SSKeyAlgo
+		newState.SSValidityDays = req.SSValidityDays
+		newState.SSRenewBeforeDays = req.SSRenewBeforeDays
+		newState.SSSans = strings.TrimSpace(req.SSSans)
+	case "acme":
+		newState.AcmeDirectoryURL = strings.TrimSpace(req.AcmeDirectoryURL)
+		newState.AcmeDomains = strings.TrimSpace(req.AcmeDomains)
+		newState.AcmeEmail = strings.TrimSpace(req.AcmeEmail)
+		newState.AcmeChallenge = req.AcmeChallenge
+		newState.AcmeTrustRootPEM = req.AcmeTrustRootPEM
 	}
 	if newState.SSKeyAlgo == "" {
 		newState.SSKeyAlgo = "ecdsa_p256"

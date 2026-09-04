@@ -114,9 +114,16 @@ func (s *Server) apiXrayGet(w http.ResponseWriter, r *http.Request) {
 }
 
 type apiXrayApplyReq struct {
-	Strategy   string            `json:"strategy"`
-	Params     map[string]string `json:"params"`
-	RelayLinks []string          `json:"relay_links"`
+	Strategy string            `json:"strategy"`
+	Params   map[string]string `json:"params"`
+	// RelayLinks is a pointer: absent from the request body (nil) means
+	// "leave the relay chain as it is" -- relay links are write-only
+	// (never returned by GET), so the edit form can't tell "untouched"
+	// from "intentionally emptied" any other way. Present-but-empty
+	// ([]string{}) is the genuine "clear it, go back to direct egress"
+	// signal. See xray.Provider.Apply's own doc comment for the incident
+	// this fixes.
+	RelayLinks *[]string `json:"relay_links,omitempty"`
 }
 
 // POST /api/providers/{provider}/xray
@@ -143,18 +150,22 @@ func (s *Server) apiXrayApply(w http.ResponseWriter, r *http.Request) {
 			params[spec.Key] = v
 		}
 	}
-	var relays []xray.RelaySpec
-	for i, link := range req.RelayLinks {
-		link = strings.TrimSpace(link)
-		if link == "" {
-			continue
+	var relays *[]xray.RelaySpec
+	if req.RelayLinks != nil {
+		parsed := make([]xray.RelaySpec, 0, len(*req.RelayLinks))
+		for i, link := range *req.RelayLinks {
+			link = strings.TrimSpace(link)
+			if link == "" {
+				continue
+			}
+			rs, err := xray.ParseClientLink(link)
+			if err != nil {
+				writeErr(w, http.StatusBadRequest, msgf(r, "relay hop %d: %s", "переход реле %d: %s", i+1, err.Error()))
+				return
+			}
+			parsed = append(parsed, rs)
 		}
-		rs, err := xray.ParseClientLink(link)
-		if err != nil {
-			writeErr(w, http.StatusBadRequest, msgf(r, "relay hop %d: %s", "переход реле %d: %s", i+1, err.Error()))
-			return
-		}
-		relays = append(relays, rs)
+		relays = &parsed
 	}
 	if err := xp.Apply(r.Context(), req.Strategy, params, relays); err != nil {
 		writeErr(w, http.StatusInternalServerError, msgf(r, "apply failed: %s", "не удалось применить: %s", err.Error()))

@@ -108,9 +108,24 @@ func (p *Provider) UpdateServerConfig(context.Context, vpn.ServerConfig) error {
 
 // Apply provisions/updates the instance: it saves the strategy+params(+relay
 // chain), ensures instance crypto (Reality keys) and at least one client, then
-// rebuilds the on-host config and restarts the service. An empty/nil relays
-// means direct egress; a non-empty ordered slice chains hop 0 -> hop 1 -> ...
-func (p *Provider) Apply(ctx context.Context, strategyName string, params Params, relays []RelaySpec) error {
+// rebuilds the on-host config and restarts the service.
+//
+// relays distinguishes "the caller didn't send a relay chain at all" (nil)
+// from "set it to exactly this, including clearing it" (non-nil, possibly
+// pointing to an empty/nil slice for direct egress). This matters because
+// relay links are write-only (like the secret params handled just below) --
+// GET never returns the actual link, only host+strategy per hop, so the
+// admin's edit form always starts with blank inputs regardless of whether
+// a chain already exists. Before this distinction existed, submitting the
+// form with those blanks untouched (any routine params-only edit) silently
+// wiped an already-configured relay chain back to direct egress -- a real
+// incident, and a worse one than most such bugs: reverting a deliberately
+// chained-egress setup to direct egress isn't just data loss, it can
+// undermine the whole reason that chain existed. A nil relays here
+// preserves whatever's already configured for the SAME strategy;
+// switching strategy always starts the chain fresh, since a different
+// strategy's hops may not even be meaningful together.
+func (p *Provider) Apply(ctx context.Context, strategyName string, params Params, relays *[]RelaySpec) error {
 	strat, ok := Get(strategyName)
 	if !ok {
 		return fmt.Errorf("unknown strategy %q", strategyName)
@@ -118,10 +133,13 @@ func (p *Provider) Apply(ctx context.Context, strategyName string, params Params
 	if params == nil {
 		params = Params{}
 	}
+	curStrategy, curParams, curRelays, curErr := p.instance(ctx)
+	sameStrategy := curErr == nil && curStrategy == strategyName
+
 	if is, ok := strat.(InstanceSecrets); ok {
 		specs := is.InstanceSecrets()
 		// Preserve instance secrets across re-applies of the same strategy.
-		if cur, curParams, _, err := p.instance(ctx); err == nil && cur == strategyName {
+		if sameStrategy {
 			for _, k := range secretParamKeys(specs) {
 				if curParams.get(k, "") != "" && params.get(k, "") == "" {
 					params[k] = curParams[k]
@@ -132,7 +150,15 @@ func (p *Provider) Apply(ctx context.Context, strategyName string, params Params
 			return err
 		}
 	}
-	if err := p.persistInstance(ctx, strategyName, params, relays); err != nil {
+
+	var finalRelays []RelaySpec
+	if relays != nil {
+		finalRelays = *relays
+	} else if sameStrategy {
+		finalRelays = curRelays
+	}
+
+	if err := p.persistInstance(ctx, strategyName, params, finalRelays); err != nil {
 		return err
 	}
 	// Ensure at least one client so the config is valid.

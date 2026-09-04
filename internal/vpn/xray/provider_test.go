@@ -185,7 +185,7 @@ func TestProviderRelayFromLink(t *testing.T) {
 	p, ssh, _ := testProvider()
 	ctx := context.Background()
 	relay, _ := ParseClientLink("trojan://sekret@relay.abroad:443?security=tls&sni=relay.abroad#r")
-	if err := p.Apply(ctx, "vless-vision-tls", Params{pDomain: "hub.example.com", pPort: "443"}, []RelaySpec{relay}); err != nil {
+	if err := p.Apply(ctx, "vless-vision-tls", Params{pDomain: "hub.example.com", pPort: "443"}, &[]RelaySpec{relay}); err != nil {
 		t.Fatalf("Apply with relay: %v", err)
 	}
 	if !strings.Contains(ssh.conf, "\"tag\": \"relay0\"") {
@@ -198,7 +198,7 @@ func TestProviderRelayChainFromLinks(t *testing.T) {
 	ctx := context.Background()
 	hop0, _ := ParseClientLink("trojan://sekret@relay0.abroad:443?security=tls&sni=relay0.abroad#r0")
 	hop1, _ := ParseClientLink("ss://" + base64.RawURLEncoding.EncodeToString([]byte("2022-blake3-aes-128-gcm:pw1")) + "@relay1.abroad:8388#r1")
-	if err := p.Apply(ctx, "vless-vision-tls", Params{pDomain: "hub.example.com", pPort: "443"}, []RelaySpec{hop0, hop1}); err != nil {
+	if err := p.Apply(ctx, "vless-vision-tls", Params{pDomain: "hub.example.com", pPort: "443"}, &[]RelaySpec{hop0, hop1}); err != nil {
 		t.Fatalf("Apply with relay chain: %v", err)
 	}
 	if !strings.Contains(ssh.conf, "\"tag\": \"relay0\"") || !strings.Contains(ssh.conf, "\"tag\": \"relay1\"") {
@@ -220,6 +220,57 @@ func TestProviderRelayChainFromLinks(t *testing.T) {
 	// The persisted blob is a JSON array, not a single object.
 	if !strings.HasPrefix(strings.TrimSpace(string(st.relay)), "[") {
 		t.Errorf("persisted relay blob should be a JSON array, got %s", st.relay)
+	}
+}
+
+// TestProviderApplyPreservesRelayWhenNil is the regression test for the
+// real bug: relay links are write-only (GET never returns them), so the
+// admin's edit form always starts with blank hop inputs even when a
+// chain is already configured. Before Apply distinguished "no relay
+// argument sent" (nil) from "explicitly set to this" (non-nil), ANY
+// params-only re-apply of the same strategy silently wiped an already-
+// configured relay chain back to direct egress.
+func TestProviderApplyPreservesRelayWhenNil(t *testing.T) {
+	p, _, _ := testProvider()
+	ctx := context.Background()
+	hop, _ := ParseClientLink("trojan://sekret@relay.abroad:443?security=tls&sni=relay.abroad#r")
+
+	if err := p.Apply(ctx, "vless-vision-tls", Params{pDomain: "hub.example.com", pPort: "443"}, &[]RelaySpec{hop}); err != nil {
+		t.Fatalf("Apply with relay: %v", err)
+	}
+
+	// A routine params-only edit -- e.g. changing the port -- must not
+	// touch the relay chain when relays is nil.
+	if err := p.Apply(ctx, "vless-vision-tls", Params{pDomain: "hub.example.com", pPort: "8443"}, nil); err != nil {
+		t.Fatalf("Apply without relay arg: %v", err)
+	}
+	_, _, relays, err := p.Current(ctx)
+	if err != nil {
+		t.Fatalf("Current: %v", err)
+	}
+	if len(relays) != 1 || relays[0].Host != "relay.abroad" {
+		t.Fatalf("relay chain should survive a nil-relays Apply, got %+v", relays)
+	}
+
+	// An explicit empty (but non-nil) slice IS the genuine "clear it" signal.
+	if err := p.Apply(ctx, "vless-vision-tls", Params{pDomain: "hub.example.com", pPort: "8443"}, &[]RelaySpec{}); err != nil {
+		t.Fatalf("Apply clearing relay: %v", err)
+	}
+	if _, _, relays, err := p.Current(ctx); err != nil || len(relays) != 0 {
+		t.Fatalf("relay chain should be cleared by an explicit empty slice, got %+v (err %v)", relays, err)
+	}
+
+	// Switching strategy must never carry an old strategy's relay chain
+	// forward, even with relays left nil -- a different strategy's hops
+	// may not even be meaningful together.
+	if err := p.Apply(ctx, "vless-vision-tls", Params{pDomain: "hub.example.com", pPort: "8443"}, &[]RelaySpec{hop}); err != nil {
+		t.Fatalf("Apply with relay again: %v", err)
+	}
+	if err := p.Apply(ctx, "shadowsocks-2022", Params{pPort: "8388"}, nil); err != nil {
+		t.Fatalf("Apply after switching strategy: %v", err)
+	}
+	if _, _, relays, err := p.Current(ctx); err != nil || len(relays) != 0 {
+		t.Fatalf("relay chain should NOT carry over across a strategy switch, got %+v (err %v)", relays, err)
 	}
 }
 

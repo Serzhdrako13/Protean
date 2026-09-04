@@ -16,7 +16,11 @@ export function useXrayQuery(provider: string, strategy?: string) {
 export interface XrayApplyInput {
   strategy: string;
   params: Record<string, string>;
-  relay_links: string[];
+  // Omit entirely (undefined) to leave the relay chain untouched -- relay
+  // links are write-only (GET never returns them), so the form can't tell
+  // "left blank because untouched" from "left blank to clear it" any
+  // other way. Pass [] only when the admin genuinely removed every hop.
+  relay_links?: string[];
 }
 
 export function useXrayMutations(provider: string) {
