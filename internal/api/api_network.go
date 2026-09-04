@@ -367,13 +367,18 @@ func (s *Server) apiServiceAction(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	// A restart can silently revoke the panel's own read access to a
-	// wg-family conf file (SaveConfig=true rewrites it root:root 0600 on
-	// every stop) -- this is the SAME restart wgfamily.Provider's own
-	// internal restart() already guards, but reached here through a
-	// completely separate path (the generic service-control action, not
-	// EnableForwarding/ApplyNetworking/etc), so it needs its own call.
-	if req.Action == "restart" {
+	// Any action that STOPS the unit can silently revoke the panel's own
+	// read access to a wg-family conf file (SaveConfig=true rewrites it
+	// root:root 0600 on every stop) -- not just "restart": "stop" stops
+	// it directly, and this codebase's own cmd_service maps "disable" to
+	// `systemctl disable --now`, which also stops it. "start"/"enable"
+	// alone never stop a running unit, so they're not included. This is
+	// the SAME guard wgfamily.Provider's own internal restart() already
+	// has, but reached here through a completely separate path (the
+	// generic service-control action, not EnableForwarding/
+	// ApplyNetworking/etc), so it needs its own call.
+	switch req.Action {
+	case "restart", "stop", "disable":
 		if cpr, ok := prov.(vpn.ConfPermsRestorer); ok {
 			if err := cpr.RestoreConfPerms(r.Context()); err != nil {
 				writeErr(w, http.StatusInternalServerError, err.Error())

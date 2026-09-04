@@ -116,3 +116,69 @@ func TestMeshSettingsUpdateSurfacesIPForwardFailure(t *testing.T) {
 		t.Error("mesh_enabled should still be persisted despite the ip_forward failure")
 	}
 }
+
+// serviceActionProvider is a minimal vpn.Provider that also implements
+// vpn.ServiceNamed and vpn.ConfPermsRestorer, tracking whether
+// RestoreConfPerms was called -- for asserting apiServiceAction's own
+// conf-perms guard fires for the right set of actions.
+type serviceActionProvider struct {
+	updateTrackingProvider
+	restoreCalled bool
+	restoreErr    error
+}
+
+func (p *serviceActionProvider) ServiceName() string { return "wg-quick@wg0" }
+func (p *serviceActionProvider) RestoreConfPerms(context.Context) error {
+	p.restoreCalled = true
+	return p.restoreErr
+}
+
+func doServiceAction(s *Server, provider, action string) *httptest.ResponseRecorder {
+	req := httptest.NewRequest(http.MethodPost, "/api/providers/"+provider+"/service",
+		strings.NewReader(`{"action":"`+action+`"}`))
+	req.SetPathValue("provider", provider)
+	rec := httptest.NewRecorder()
+	s.apiServiceAction(rec, req)
+	return rec
+}
+
+// TestServiceActionRestoresConfPermsOnAnyStoppingAction is the regression
+// test for the real bug: apiServiceAction only re-asserted conf
+// permissions for the "restart" action, but scripts/protean-installer.sh's
+// own cmd_service maps "disable" to `systemctl disable --now` (which also
+// stops the unit, and therefore also triggers WireGuard's SaveConfig
+// clobber), and a plain "stop" obviously does too. "start"/"enable" alone
+// never stop an already-running unit, so they must NOT trigger it -- conf
+// perms only need reasserting after the interface has actually restarted.
+func TestServiceActionRestoresConfPermsOnAnyStoppingAction(t *testing.T) {
+	st := networkTestDB(t)
+	for _, tc := range []struct {
+		action      string
+		wantRestore bool
+	}{
+		{"restart", true},
+		{"stop", true},
+		{"disable", true},
+		{"start", false},
+		{"enable", false},
+	} {
+		t.Run(tc.action, func(t *testing.T) {
+			reg := vpn.NewRegistry()
+			prov := &serviceActionProvider{updateTrackingProvider: updateTrackingProvider{name: "srv:wg0"}}
+			reg.Register(prov)
+			s := &Server{
+				reg: reg, store: st,
+				installerFor: func(string) (*vpn.Installer, bool) {
+					return vpn.NewInstaller(failingIPForwardSSH{}), true // succeeds for "service ..." too
+				},
+			}
+			rec := doServiceAction(s, "srv:wg0", tc.action)
+			if rec.Code != http.StatusOK {
+				t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+			}
+			if prov.restoreCalled != tc.wantRestore {
+				t.Errorf("action=%q: RestoreConfPerms called=%v, want %v", tc.action, prov.restoreCalled, tc.wantRestore)
+			}
+		})
+	}
+}
