@@ -506,9 +506,15 @@ setup_conf_permissions() {
 	fi
 	if [ "$IKEV2_INSTALLED" = "1" ]; then
 		# Same model for strongSwan: the panel writes CA/cert/key/conf under
-		# /etc/swanctl without sudo.
+		# /etc/swanctl without sudo. x509crl (CRL revocation) is listed
+		# explicitly, not left to the blanket chgrp -R below: the
+		# strongswan-swanctl package creates it 0755 root:root (confirmed
+		# live), and chgrp -R only fixes the GROUP -- mode 755's group bits
+		# are r-x, no write, so without this the panel could read but never
+		# actually write a revoked client's crl.pem, and revocation would
+		# silently never take effect. Found live via an Opus-driven audit.
 		install -d -m 2770 -g "$PANEL_GROUP" \
-			/etc/swanctl /etc/swanctl/x509 /etc/swanctl/x509ca /etc/swanctl/private /etc/swanctl/conf.d
+			/etc/swanctl /etc/swanctl/x509 /etc/swanctl/x509ca /etc/swanctl/private /etc/swanctl/conf.d /etc/swanctl/x509crl
 		chgrp -R "$PANEL_GROUP" /etc/swanctl
 		log "Prepared /etc/swanctl group-writable by '$PANEL_GROUP'"
 	fi

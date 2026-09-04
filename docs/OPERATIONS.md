@@ -313,7 +313,7 @@ sudo -l -U protean
 
 Для cert-провайдеров и xray скрипт готовит group-writable каталоги (те же права
 той же группе):
-`/etc/openvpn/server` (+ `ccd`), `/etc/swanctl/{x509,x509ca,private,conf.d}`,
+`/etc/openvpn/server` (+ `ccd`), `/etc/swanctl/{x509,x509ca,private,conf.d,x509crl}`,
 `/usr/local/etc/xray` — режим `2770` (setgid), группа `protean-conf`.
 
 ### 4.4 Installer-скрипт: строгий enum действий
