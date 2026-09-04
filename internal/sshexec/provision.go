@@ -278,8 +278,17 @@ func provisionScript(serviceUser, installerPath, b64, pubLine string) string {
 	// fresh host is what finally exercised this path end-to-end; earlier
 	// live testing against an aging host masked it behind an unrelated
 	// stale-file-permission failure that returned first.
+	// wg/awg scoped to `show *`/`set *` (the only shapes internal/vpn/
+	// wgfamily ever runs) rather than the bare binary -- a bare grant
+	// would also cover subcommands this panel never needs, no upside.
+	// swanctl scoped to the two EXACT commands internal/vpn/ikev2 ever
+	// runs (--list-sas, --load-all -- neither takes variable arguments at
+	// all), tighter than a wildcard since none is needed. Found live via
+	// an Opus-driven audit 2026-09-04, alongside similar narrowing in
+	// scripts/setup-host.sh's own sudoers generation.
 	b.WriteString(serviceUser + " ALL=(root) NOPASSWD: " + installerPath +
-		", /usr/bin/wg, /usr/bin/awg, /usr/sbin/swanctl\n")
+		", /usr/bin/wg show *, /usr/bin/wg set *, /usr/bin/awg show *, /usr/bin/awg set *, " +
+		"/usr/sbin/swanctl --list-sas, /usr/sbin/swanctl --load-all\n")
 	b.WriteString("WGP\n")
 	// 0400 not 0440: a subset of the same permission (root-read-only; the
 	// file is root:root, so the dropped group-read bit changes nothing

@@ -584,10 +584,24 @@ cmd_install() {
 grant_provider_sudo() {
 	local owner="${SUDO_USER:-protean}"
 	[[ "$owner" =~ ^[a-z0-9_-]{1,32}$ ]] || owner="protean"
-	local cmds=() b p
-	for b in wg awg swanctl; do
-		p=$(command -v "$b" 2>/dev/null) && [ -n "$p" ] && cmds+=("$p")
-	done
+	local cmds=() p
+	# wg/awg scoped to `show *`/`set *` -- the only shapes
+	# internal/vpn/wgfamily ever runs -- not the bare binary. swanctl
+	# scoped to the two EXACT commands internal/vpn/ikev2 ever runs
+	# (neither takes variable arguments). A bare grant on any of these
+	# would cover subcommands the panel never needs, no upside; see
+	# scripts/setup-host.sh's own setup_sudoers for the same narrowing
+	# and the wg-quick-specific reasoning (root shell via PostUp
+	# injection) that motivated it.
+	if p=$(command -v wg 2>/dev/null) && [ -n "$p" ]; then
+		cmds+=("${p} show *" "${p} set *")
+	fi
+	if p=$(command -v awg 2>/dev/null) && [ -n "$p" ]; then
+		cmds+=("${p} show *" "${p} set *")
+	fi
+	if p=$(command -v swanctl 2>/dev/null) && [ -n "$p" ]; then
+		cmds+=("${p} --list-sas" "${p} --load-all")
+	fi
 	[ ${#cmds[@]} -gt 0 ] || return 0
 
 	local f="/etc/sudoers.d/protean-provider-sudo"

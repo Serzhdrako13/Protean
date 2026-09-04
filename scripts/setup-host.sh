@@ -395,11 +395,22 @@ setup_sudoers() {
 		fi
 	fi
 
+	# wg/awg grants are scoped to `show *`/`set *` -- the only two
+	# invocation shapes internal/vpn/wgfamily ever runs (`wg show <if>
+	# dump`, `wg set <if> peer ...`). No bare wg-quick/awg-quick grant:
+	# wgfamily never calls it directly (interface restarts go through
+	# `systemctl restart wg-quick@*` below, which is scoped to a FIXED
+	# unit name resolved by systemd, not an admin-choosable path) -- a
+	# bare `sudo wg-quick up <anything>` grant would let anyone with the
+	# panel's SSH key point wg-quick at a file THEY control instead of the
+	# real wg0.conf, and wg-quick's own PostUp directive runs as a shell
+	# command as root, making that a straight root shell. Found live via
+	# an Opus-driven audit 2026-09-04, alongside S1-S5 in the same pass.
 	if [ "$WG_INSTALLED" = "1" ]; then
-		cmds+=("$(command -v wg)" "$(command -v wg-quick)" "${systemctl_bin} restart wg-quick@*")
+		cmds+=("$(command -v wg) show *" "$(command -v wg) set *" "${systemctl_bin} restart wg-quick@*")
 	fi
 	if [ "$AWG_INSTALLED" = "1" ]; then
-		cmds+=("$(command -v awg)" "$(command -v awg-quick)" "${systemctl_bin} restart awg-quick@*")
+		cmds+=("$(command -v awg) show *" "$(command -v awg) set *" "${systemctl_bin} restart awg-quick@*")
 	fi
 	# The mesh page restarts interfaces to apply forwarding rules; allow it
 	# even before an interface is up so forwarding can be enabled later.
@@ -415,9 +426,14 @@ setup_sudoers() {
 		"${systemctl_bin} enable --now ipsec*" "${systemctl_bin} restart ipsec*"
 		"${systemctl_bin} enable --now xray" "${systemctl_bin} restart xray"
 	)
-	# IKEv2 status + config load.
+	# IKEv2 status + config load -- internal/vpn/ikev2 only ever runs
+	# these exact two invocations (no variable arguments at all), so this
+	# grants them literally rather than a bare swanctl binary that could
+	# run any other swanctl subcommand as root.
 	if have_cmd swanctl; then
-		cmds+=("$(command -v swanctl)")
+		local swanctl_bin
+		swanctl_bin=$(command -v swanctl)
+		cmds+=("${swanctl_bin} --list-sas" "${swanctl_bin} --load-all")
 	fi
 
 	if [ ${#cmds[@]} -eq 0 ]; then

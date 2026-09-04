@@ -24,7 +24,9 @@ func TestProvisionScriptContent(t *testing.T) {
 		"getent passwd 'protean'",
 		"grep -qxF 'ssh-ed25519 AAAAKEY panel'",
 		"install -d -m 755 /usr/local/lib/protean",
-		"protean ALL=(root) NOPASSWD: /usr/local/lib/protean/protean-installer.sh, /usr/bin/wg, /usr/bin/awg, /usr/sbin/swanctl",
+		"protean ALL=(root) NOPASSWD: /usr/local/lib/protean/protean-installer.sh, " +
+			"/usr/bin/wg show *, /usr/bin/wg set *, /usr/bin/awg show *, /usr/bin/awg set *, " +
+			"/usr/sbin/swanctl --list-sas, /usr/sbin/swanctl --load-all",
 		"visudo -cf /etc/sudoers.d/protean",
 		"install -d -m 750 -o 'protean'",
 		"chown -R 'protean':'protean'",
@@ -36,6 +38,16 @@ func TestProvisionScriptContent(t *testing.T) {
 	}
 	if strings.Contains(script, "systemctl") {
 		t.Errorf("provisionScript must not grant blanket systemctl sudo, got:\n%s", script)
+	}
+	// A bare `wg-quick`/`awg-quick` grant (no arg restriction) would let
+	// anyone with the panel's SSH key run `sudo wg-quick up <any file
+	// they control>` -- wg-quick's own PostUp directive then runs as a
+	// shell command as root, a straight root shell. internal/vpn/wgfamily
+	// never calls wg-quick directly (interface restarts go through
+	// `systemctl restart wg-quick@*`, scoped to a fixed unit name), so
+	// there's no reason to grant it at all.
+	if strings.Contains(script, "wg-quick") {
+		t.Errorf("provisionScript must not grant sudo on wg-quick/awg-quick directly, got:\n%s", script)
 	}
 }
 
