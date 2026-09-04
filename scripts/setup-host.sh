@@ -19,7 +19,18 @@ else
 fi
 log()  { printf '%s[+]%s %s\n' "$C_GREEN" "$C_RESET" "$*"; }
 warn() { printf '%s[!]%s %s\n' "$C_YELLOW" "$C_RESET" "$*" >&2; }
-err()  { printf '%s[x]%s %s\n' "$C_RED" "$C_RESET" "$*" >&2; }
+# HAD_ERROR: this script runs with `set -uo pipefail`, deliberately without
+# `-e` -- an interactive setup wizard needs to keep going past an
+# individual step's failure (e.g. a skippable warn()), and turning on -e
+# globally would risk breaking other steps that already tolerate a
+# sub-command failing on purpose. err() sets this flag instead, checked at
+# the very end by print_summary/main so a real failure (confirmed live:
+# setup_sudoers' own visudo validation failing, which used to print an
+# err() and then main() carried on to print an unqualified success
+# summary anyway) is loudly re-surfaced instead of getting lost among
+# earlier scrollback, and the script's own exit code reflects it.
+HAD_ERROR=0
+err()  { HAD_ERROR=1; printf '%s[x]%s %s\n' "$C_RED" "$C_RESET" "$*" >&2; }
 title(){ printf '\n%s%s%s\n' "$C_BOLD" "$*" "$C_RESET"; }
 
 have_cmd() { command -v "$1" >/dev/null 2>&1; }
@@ -496,11 +507,26 @@ setup_conf_permissions() {
 		fi
 	fi
 	if [ "$OVPN_INSTALLED" = "1" ]; then
-		# The panel provisions OpenVPN by writing ca/cert/key/tls-crypt/conf and
-		# the ccd dir here, without sudo -- so grant the panel group ownership
-		# of the server dir. (Server private key lives here; same documented
-		# trade-off as the wg conf.)
-		install -d -m 2770 -g "$PANEL_GROUP" /etc/openvpn/server /etc/openvpn/server/ccd
+		# The panel provisions OpenVPN by writing ca/cert/key/tls-crypt/conf
+		# here, without sudo -- so grant the panel group ownership of the
+		# server dir. (Server private key lives here; same documented
+		# trade-off as the wg conf.) The actual per-instance ccd dir is
+		# `ccd-<instance name>` (internal/servers/manager.go), created on
+		# demand by the panel's own mkdir -- a bare "ccd" here was always
+		# dead weight (nothing ever reads/writes it) and is left out now;
+		# the real ccd-<name> dir self-heals correct group ownership on its
+		# own via setgid on this parent (verified live), no separate grant
+		# needed. /etc/openvpn itself (not just .../server) is also listed:
+		# most distros leave it world-traversable, but ALT Linux's openvpn
+		# package creates it 750 root:openvpn -- protean isn't in that
+		# group, so it couldn't even traverse into its own correctly-
+		# permissioned server/ccd-* subdirectories underneath (confirmed
+		# live; sshexec.provisionScript already carries this fix, this
+		# backports it to the manual setup-host.sh path).
+		# /etc/openvpn itself only needs GROUP TRAVERSE (2750), not write --
+		# the panel never writes directly into it, only into server/ below.
+		install -d -m 2750 -g "$PANEL_GROUP" /etc/openvpn
+		install -d -m 2770 -g "$PANEL_GROUP" /etc/openvpn/server
 		chgrp -R "$PANEL_GROUP" /etc/openvpn/server
 		log "Prepared /etc/openvpn/server group-writable by '$PANEL_GROUP'"
 	fi
@@ -679,7 +705,13 @@ generate_env() {
 }
 
 print_summary() {
-	title "Done"
+	if [ "$HAD_ERROR" -eq 1 ]; then
+		title "Done, WITH ERRORS"
+		err "One or more steps above failed (look for [x] lines in the output above)."
+		err "The panel may not work correctly until these are fixed by hand and this script is re-run."
+	else
+		title "Done"
+	fi
 	cat <<-EOF
 	Generated in ${PANEL_KEY_DIR}:
 	  id_ed25519, id_ed25519.pub  -- panel's SSH keypair (public key already
@@ -732,6 +764,7 @@ main() {
 	fi
 
 	print_summary
+	[ "$HAD_ERROR" -eq 0 ]
 }
 
 main "$@"

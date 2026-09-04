@@ -515,18 +515,32 @@ WantedBy=multi-user.target
 EOF
 	fi
 	# Upstream unit runs as User=nobody, but /usr/local/etc/xray is locked
-	# to 750 protean:protean (config holds plaintext client UUIDs/Reality
+	# to 750 <service account> (config holds plaintext client UUIDs/Reality
 	# keys, so it's not world-readable like the other conf dirs) -- nobody
 	# then can't even traverse the directory to read its own config file.
 	# Confirmed live: xray.service fails every start with EACCES on
-	# config.json, on every distro. Run as protean instead, which already
-	# owns that directory -- no new privilege surface, no loosening to
-	# world-readable.
+	# config.json, on every distro. Run as the actual service account
+	# instead, which already owns that directory -- no new privilege
+	# surface, no loosening to world-readable.
+	#
+	# The account name was hardcoded "protean" here until this fix, which
+	# broke on a host bootstrapped with a custom service-account name
+	# (sshexec.BootstrapHost's "Add server" flow lets an admin choose one).
+	# $SUDO_USER is set by sudo to whoever actually invoked this script
+	# (the panel always runs it via sudo -- see InstallerPath's own
+	# doc comment), so it reflects the real account regardless of name;
+	# validated against the same charset useradd itself accepts before
+	# it's written into a systemd unit file.
+	local xray_user="${SUDO_USER:-protean}"
+	if [[ ! "$xray_user" =~ ^[a-z0-9_-]{1,32}$ ]]; then
+		echo "[!] \$SUDO_USER='$xray_user' is not a plausible username, falling back to 'protean' for the xray unit" >&2
+		xray_user="protean"
+	fi
 	mkdir -p /etc/systemd/system/xray.service.d
-	cat > /etc/systemd/system/xray.service.d/10-protean-user.conf <<'EOF'
+	cat > /etc/systemd/system/xray.service.d/10-protean-user.conf <<EOF
 [Service]
-User=protean
-Group=protean
+User=${xray_user}
+Group=${xray_user}
 EOF
 	systemctl daemon-reload 2>/dev/null || true
 	provider_installed xray
@@ -557,10 +571,61 @@ cmd_install() {
 	if [ $rc -eq 0 ]; then
 		echo "[+] $provider installed."
 		grant_provider_sudo
+		fix_provider_dirs "$provider"
 	else
 		echo "[x] $provider install failed." >&2
 	fi
 	return $rc
+}
+
+# fix_provider_dirs <provider>: (re-)grants the panel's config directories
+# for one provider, called after every successful cmd_install. Mirrors
+# scripts/setup-host.sh's own setup_conf_permissions, but that one runs
+# ONCE at initial bootstrap, gated on which providers were selected in
+# THAT SAME interactive run -- installing a provider LATER from the
+# panel (the flow this script's own bootstrap prompt recommends: "VPNs
+# can also be installed later from the panel's Install page") never
+# retroactively grants its directories, leaving the panel able to
+# restart the resulting service (that grant, from grant_provider_sudo/
+# setup-host.sh's systemctl entries, is unconditional) but never able to
+# actually write its config. Same two-model detection as
+# cmd_fix_conf_perms: group-based (setup-host.sh) if protean-conf
+# exists, else owner-based (sshexec.BootstrapHost), using the SSH user
+# this script is actually being invoked by ($SUDO_USER), not a
+# hardcoded "protean".
+fix_provider_dirs() {
+	local provider="$1" owner="${SUDO_USER:-protean}"
+	[[ "$owner" =~ ^[a-z0-9_-]{1,32}$ ]] || owner="protean"
+	# traverseOnly: group needs to pass through, never write directly
+	# (only relevant to the group model -- the owner model uses a single
+	# 750 for everything, since the owner already has full rwx by
+	# definition regardless of which dir it is).
+	local traverseOnly=() dirs=()
+	case "$provider" in
+		openvpn) traverseOnly=(/etc/openvpn); dirs=(/etc/openvpn/server) ;;
+		ikev2)   dirs=(/etc/swanctl /etc/swanctl/x509 /etc/swanctl/x509ca /etc/swanctl/private /etc/swanctl/conf.d /etc/swanctl/x509crl) ;;
+		xray)    dirs=(/usr/local/etc/xray) ;;
+		*)       return 0 ;; # wireguard/amneziawg: handled per-file by fix-conf-perms, not per-directory here
+	esac
+	local d
+	if getent group protean-conf >/dev/null 2>&1; then
+		for d in "${traverseOnly[@]}"; do
+			[ -d "$d" ] || continue
+			install -d -m 2750 -g protean-conf "$d"
+		done
+		for d in "${dirs[@]}"; do
+			[ -d "$d" ] || continue
+			install -d -m 2770 -g protean-conf "$d"
+		done
+		[ -d "${dirs[0]}" ] && chgrp -R protean-conf "${dirs[0]}" 2>/dev/null
+	else
+		id -u "$owner" >/dev/null 2>&1 || return 0
+		for d in "${traverseOnly[@]}" "${dirs[@]}"; do
+			[ -d "$d" ] || continue
+			install -d -m 750 -o "$owner" "$d"
+			chown -R "$owner":"$owner" "$d" 2>/dev/null || true
+		done
+	fi
 }
 
 # grant_provider_sudo: regenerates a SEPARATE sudoers fragment (never

@@ -212,7 +212,13 @@ func provisionScript(serviceUser, installerPath, b64, pubLine string) string {
 	// that group, so it couldn't even traverse into its own (correctly
 	// owned) server/ccd subdirectories underneath. Listing it here too
 	// keeps the fix general rather than distro-special-cased.
-	confDirs := "/etc/wireguard /etc/amnezia/amneziawg /etc/openvpn /etc/openvpn/server /etc/openvpn/server/ccd " +
+	// No bare ".../server/ccd" entry: the actual per-instance ccd dir is
+	// "ccd-<instance name>" (internal/servers/manager.go), created on
+	// demand by the panel's own mkdir -- a bare "ccd" here was dead weight
+	// (nothing ever reads/writes it). The real ccd-<name> dir inherits
+	// this loop's -o quotedUser ownership fine on its own (its creator IS
+	// quotedUser), no separate entry needed. Verified live.
+	confDirs := "/etc/wireguard /etc/amnezia/amneziawg /etc/openvpn /etc/openvpn/server " +
 		"/etc/swanctl /etc/swanctl/x509 /etc/swanctl/x509ca /etc/swanctl/private /etc/swanctl/conf.d " +
 		"/etc/swanctl/x509crl /usr/local/etc/xray"
 	quotedUser := ShellQuote(serviceUser)
