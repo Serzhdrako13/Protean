@@ -375,6 +375,24 @@ setup_sudoers() {
 	# inside the script, so this single path is the whole privileged surface.
 	if [ -f "$INSTALLER_PATH" ]; then
 		cmds+=("$INSTALLER_PATH")
+
+		# Self-heal (internal/vpn/installer.go's refreshScript): when the
+		# panel gains a new verb but this on-host copy predates it, it
+		# pushes a fresh copy via `sudo tee <path>` + `sudo chmod 750
+		# <path>` and retries. Without these two exact grants self-heal has
+		# NEVER actually worked -- confirmed live 2026-09-04, it silently
+		# failed on every stale-script encounter since the mechanism was
+		# introduced, always surfacing the original "usage: ..." error
+		# instead. Scoped to the literal installer path, matching the
+		# comment below: this must never become a blanket tee/chmod grant.
+		local tee_bin chmod_bin
+		tee_bin=$(command -v tee)
+		chmod_bin=$(command -v chmod)
+		if [ -n "$tee_bin" ] && [ -n "$chmod_bin" ]; then
+			cmds+=("${tee_bin} ${INSTALLER_PATH}" "${chmod_bin} 750 ${INSTALLER_PATH}")
+		else
+			warn "tee/chmod not found on PATH -- self-heal for a stale installer script will not work until this is fixed by hand"
+		fi
 	fi
 
 	if [ "$WG_INSTALLED" = "1" ]; then

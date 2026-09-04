@@ -73,6 +73,21 @@ func (i *Installer) run(ctx context.Context, args string) (string, error) {
 	if err != nil && strings.Contains(err.Error(), "usage: "+InstallerPath) {
 		if refreshErr := i.refreshScript(ctx); refreshErr == nil {
 			out, err = i.ssh.Run(ctx, cmd)
+		} else {
+			// refreshErr was silently discarded here before 2026-09-04,
+			// so a self-heal failure always looked identical to the
+			// original "usage: ..." mismatch -- indistinguishable from
+			// the panel itself passing a bad verb, with no hint that a
+			// refresh was even attempted. Real incident: this mechanism
+			// had never actually worked on any setup-host.sh-provisioned
+			// host (missing sudo grant for the tee/chmod refreshScript
+			// runs -- see scripts/setup-host.sh's setup_sudoers), and it
+			// took a live UI failure to notice, because the error an
+			// admin saw gave no reason to suspect self-heal at all.
+			err = fmt.Errorf("the on-host installer script is out of date (it doesn't recognize this action) "+
+				"and refreshing it automatically failed -- check the panel's sudo grant for `tee %s` and "+
+				"`chmod 750 %s` (see scripts/setup-host.sh's setup_sudoers): %w (original error: %v)",
+				InstallerPath, InstallerPath, refreshErr, err)
 		}
 	}
 	return out, err

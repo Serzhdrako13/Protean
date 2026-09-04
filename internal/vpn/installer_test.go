@@ -206,6 +206,35 @@ func TestFixConfPermsUsesRealSSHUser(t *testing.T) {
 	}
 }
 
+// TestRunSurfacesRefreshFailure is the regression test for the real
+// incident found 2026-09-04: when refreshScript itself fails (e.g. the
+// panel's sudo grant lacks tee/chmod on the installer path -- exactly
+// the state of every setup-host.sh-provisioned host before that grant
+// was added), the error used to be silently discarded and the caller
+// just saw the original "usage: ..." mismatch again, with zero hint that
+// a refresh was attempted or why it failed.
+func TestRunSurfacesRefreshFailure(t *testing.T) {
+	f := &sequencedInstallerSSH{results: []struct {
+		out string
+		err error
+	}{
+		{err: usageError{"Process exited with status 2 (stderr: usage: " + InstallerPath + " {detect|install <provider>|...})"}},
+		{err: usageError{"Process exited with status 1 (stderr: sudo: a password is required)"}}, // refreshScript denied
+	}}
+	inst := NewInstaller(f)
+
+	err := inst.SubnetNAT(nil, "add", "192.168.10.0/24") //nolint:staticcheck
+	if err == nil {
+		t.Fatal("expected an error when refreshScript fails")
+	}
+	if !strings.Contains(err.Error(), "out of date") || !strings.Contains(err.Error(), "sudo grant") {
+		t.Errorf("error should explain the stale script AND point at the sudo grant, got: %v", err)
+	}
+	if !strings.Contains(err.Error(), "a password is required") {
+		t.Errorf("error should still include the original refresh failure for debugging, got: %v", err)
+	}
+}
+
 func TestInstallerNoSelfHealOnOtherErrors(t *testing.T) {
 	f := &sequencedInstallerSSH{results: []struct {
 		out string

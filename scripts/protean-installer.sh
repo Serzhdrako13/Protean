@@ -554,8 +554,60 @@ cmd_install() {
 		*) echo "unknown provider: $provider" >&2; return 1 ;;
 	esac
 	local rc=$?
-	if [ $rc -eq 0 ]; then echo "[+] $provider installed."; else echo "[x] $provider install failed." >&2; fi
+	if [ $rc -eq 0 ]; then
+		echo "[+] $provider installed."
+		grant_provider_sudo
+	else
+		echo "[x] $provider install failed." >&2
+	fi
 	return $rc
+}
+
+# grant_provider_sudo: regenerates a SEPARATE sudoers fragment (never
+# touches /etc/sudoers.d/protean, setup-host.sh's own file) covering
+# wg/awg/swanctl -- the three binaries the panel calls directly over SSH
+# with no protean-installer.sh verb equivalent (`wg set`/`wg show`,
+# `awg set`/`awg show`, `swanctl --list-sas`/`--load-all`).
+#
+# setup-host.sh's one-time sudoers generation only grants these when that
+# provider was ALREADY installed at bootstrap time -- but the script's own
+# prompt says VPNs "can also be installed later from the panel's Install
+# page" (cmd_install, right here). Installing wireguard/amneziawg/ikev2
+# that way left the panel able to restart the resulting service (that
+# grant IS unconditional) but never able to read its peer list or push a
+# config, since the direct binary was never granted. Called after every
+# successful install so it self-corrects regardless of install order,
+# using `command -v` to grant whatever path this distro/package actually
+# put the binary at -- not a guessed path, which would be wrong on
+# non-Debian families (Arch/RPM, or a distro that ships an alternate
+# prefix).
+grant_provider_sudo() {
+	local owner="${SUDO_USER:-protean}"
+	[[ "$owner" =~ ^[a-z0-9_-]{1,32}$ ]] || owner="protean"
+	local cmds=() b p
+	for b in wg awg swanctl; do
+		p=$(command -v "$b" 2>/dev/null) && [ -n "$p" ] && cmds+=("$p")
+	done
+	[ ${#cmds[@]} -gt 0 ] || return 0
+
+	local f="/etc/sudoers.d/protean-provider-sudo"
+	{
+		echo "# Managed by protean-installer.sh's grant_provider_sudo -- regenerated"
+		echo "# on every successful VPN install so this tracks what's actually"
+		echo "# installed, not just what was present at scripts/setup-host.sh's"
+		echo "# initial bootstrap. Do not edit by hand; it will be overwritten."
+		printf 'Cmnd_Alias PROTEAN_PROVIDER_CMDS = %s\n' "$(IFS=,; echo "${cmds[*]}")"
+		echo "${owner} ALL=(root) NOPASSWD: PROTEAN_PROVIDER_CMDS"
+	} > "${f}.new"
+
+	if visudo -cf "${f}.new" >/dev/null 2>&1; then
+		mv "${f}.new" "$f"
+		chmod 440 "$f"
+		echo "[+] granted sudo for: ${cmds[*]}"
+	else
+		echo "[!] generated sudoers fragment failed validation, not installed" >&2
+		rm -f "${f}.new"
+	fi
 }
 
 cmd_status() {
