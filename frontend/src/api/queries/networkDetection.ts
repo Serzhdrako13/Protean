@@ -54,6 +54,9 @@ export interface DetectionSummary {
   skipped: number;
   already_handled: number;
   undismissed: number;
+  // Soft (non-aborting) failures applying the batch, e.g. enabling mesh
+  // succeeded in the DB but turning on IPv4 forwarding on the host failed.
+  warnings?: string[];
 }
 
 export function useNetworkDetectionApplyMutation(provider: string | undefined) {

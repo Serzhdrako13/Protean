@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"sort"
 	"strings"
@@ -205,6 +206,13 @@ type DetectionSummary struct {
 	Skipped          int `json:"skipped"`
 	AlreadyHandled   int `json:"already_handled"`
 	Undismissed      int `json:"undismissed"`
+	// Warnings holds soft (non-aborting) failures from applying the batch
+	// -- e.g. enableMeshPair's ip_forward step. Before this existed, such
+	// a failure was logged only: the DB flag (and this summary's own
+	// MeshPairsEnabled count) said mesh was on, while traffic silently
+	// wouldn't actually route until an admin happened to read container
+	// logs.
+	Warnings []string `json:"warnings,omitempty"`
 }
 
 // applyNetworkDetection commits a reviewed batch of decisions. Never
@@ -320,9 +328,11 @@ func (s *Server) applyNetworkDetection(ctx context.Context, providerName string,
 				if meshDone[pairKey] {
 					continue
 				}
-				if err := s.enableMeshPair(ctx, providerName, sib); err != nil {
+				warnings, err := s.enableMeshPair(ctx, providerName, sib)
+				if err != nil {
 					return summary, err
 				}
+				summary.Warnings = append(summary.Warnings, warnings...)
 				meshDone[pairKey] = true
 				summary.MeshPairsEnabled++
 			}
@@ -350,21 +360,27 @@ func meshPairKey(a, b string) string {
 // returned -- a host-side hiccup on one side shouldn't abort the rest
 // of the batch or roll back the DB flag that already correctly
 // reflects the admin's decision.
-func (s *Server) enableMeshPair(ctx context.Context, a, b string) error {
+// enableMeshPair's soft failures (cert provisioning, ip_forward) are
+// returned as warnings rather than errors -- still logged, still don't
+// abort the batch or roll back the DB flag, but now also surfaced to the
+// admin in DetectionSummary.Warnings instead of being visible only in
+// container logs.
+func (s *Server) enableMeshPair(ctx context.Context, a, b string) ([]string, error) {
+	var warnings []string
 	if err := s.reconcileMeshGroups(ctx, a, b); err != nil {
 		slog.Error("reconcile mesh groups failed", "a", a, "b", b, "err", err)
 	}
 	for _, name := range []string{a, b} {
 		ps, err := s.store.GetProviderSettings(ctx, name)
 		if err != nil {
-			return err
+			return warnings, err
 		}
 		if ps.MeshEnabled {
 			continue
 		}
 		ps.MeshEnabled = true
 		if err := s.store.SetProviderSettings(ctx, ps); err != nil {
-			return err
+			return warnings, err
 		}
 		s.audit(ctx, "network.update", name+" (mesh enabled, auto-detected)")
 
@@ -372,16 +388,18 @@ func (s *Server) enableMeshPair(ctx context.Context, a, b string) error {
 			if _, certBased := prov.(vpn.ClientConfigProvider); certBased {
 				if err := s.provisionCert(ctx, name); err != nil {
 					slog.Error("provision cert-based mesh sibling failed", "provider", name, "err", err)
+					warnings = append(warnings, fmt.Sprintf("%s: provisioning failed: %v", name, err))
 				}
 			}
 		}
 		if inst, ok := s.installerForProvider(name); ok {
 			if err := inst.EnsureIPForward(ctx); err != nil {
 				slog.Error("ensure ip_forward failed", "provider", name, "err", err)
+				warnings = append(warnings, fmt.Sprintf("%s: enabling IPv4 forwarding failed, traffic will not route through it: %v", name, err))
 			} else {
 				s.audit(ctx, "server.ip_forward_enabled", name)
 			}
 		}
 	}
-	return nil
+	return warnings, nil
 }

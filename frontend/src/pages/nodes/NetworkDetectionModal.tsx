@@ -187,6 +187,13 @@ export function NetworkDetectionModal({ open, onClose }: { open: boolean; onClos
           nodes: summary.nodes_created, subnets: summary.subnets_created, mesh: summary.mesh_pairs_enabled,
         }),
       );
+      // Soft failures (e.g. mesh was enabled in the DB but turning on
+      // IPv4 forwarding on the host failed) used to be visible only in
+      // container logs -- the success toast above would be the whole
+      // story otherwise.
+      for (const w of summary.warnings ?? []) {
+        message.warning(w, 8);
+      }
     } catch (e) {
       if (e instanceof ApiError) message.error(e.message);
     }

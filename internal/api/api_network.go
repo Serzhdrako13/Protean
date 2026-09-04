@@ -304,10 +304,12 @@ func (s *Server) apiMeshSettingsUpdate(w http.ResponseWriter, r *http.Request) {
 	// sysctl.d drop-in surviving, or the value flipped back out-of-band,
 	// would otherwise silently break routing until someone noticed.
 	turningOn := (req.MeshEnabled && !prev.MeshEnabled) || (req.InternetEgress && !prev.InternetEgress)
+	var ipForwardErr error
 	if turningOn {
 		if inst, ok := s.installerForProvider(providerName); ok {
 			if err := inst.EnsureIPForward(r.Context()); err != nil {
 				slog.Error("ensure ip_forward failed", "provider", providerName, "err", err)
+				ipForwardErr = err
 			} else {
 				s.audit(r.Context(), "server.ip_forward_enabled", providerName)
 			}
@@ -317,6 +319,17 @@ func (s *Server) apiMeshSettingsUpdate(w http.ResponseWriter, r *http.Request) {
 	out, _ := s.buildAPIMeshSettings(r, providerName)
 	if applyErr != nil {
 		writeJSON(w, http.StatusOK, apiEnvelope{Success: false, Msg: msgf(r, "settings saved, but applying failed: %v", "настройки сохранены, но применение не удалось: %v", applyErr), Obj: out})
+		return
+	}
+	// Before this, a failure here was logged only -- the UI reported plain
+	// success while the feature's core precondition (traffic can't route
+	// between sites/egress without ip_forward) silently didn't hold,
+	// discoverable only by reading container logs.
+	if ipForwardErr != nil {
+		writeJSON(w, http.StatusOK, apiEnvelope{Success: false, Msg: msgf(r,
+			"settings saved, but enabling IPv4 forwarding on the host failed -- traffic will not route between sites: %v",
+			"настройки сохранены, но включить IPv4-форвардинг на хосте не удалось — трафик между сайтами не пойдёт: %v",
+			ipForwardErr), Obj: out})
 		return
 	}
 	writeOK(w, out)
