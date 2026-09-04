@@ -289,8 +289,28 @@ func (c *Client) ReadFile(ctx context.Context, path string) (string, error) {
 // directory, whereas an in-place overwrite only needs write permission on
 // the file itself -- letting the deployed permission model grant the panel
 // group-write on exactly the config files it manages, nothing more.
+// writeFileDelimiter is the heredoc terminator WriteFile wraps content in.
+// If content contained a line exactly equal to it, that line would
+// terminate the heredoc early and everything after it in content would
+// be executed by the remote shell as this connection's user -- a content
+// injection becoming command execution. No legitimate config/cert/key
+// file WriteFile is ever asked to write coincidentally contains a bare
+// line reading exactly this, so refusing it outright costs nothing real.
+const writeFileDelimiter = "PROTEAN_EOF"
+
+// WriteFile overwrites a remote file's contents in place via a heredoc,
+// avoiding shell-escaping of content. This intentionally isn't a
+// write-temp-then-rename: a rename needs write permission on the parent
+// directory, whereas an in-place overwrite only needs write permission on
+// the file itself -- letting the deployed permission model grant the panel
+// group-write on exactly the config files it manages, nothing more.
 func (c *Client) WriteFile(ctx context.Context, path string, content string) error {
-	cmd := fmt.Sprintf("cat > %s <<'PROTEAN_EOF'\n%s\nPROTEAN_EOF",
+	for _, line := range strings.Split(content, "\n") {
+		if strings.TrimRight(line, "\r") == writeFileDelimiter {
+			return fmt.Errorf("refusing to write content containing the heredoc delimiter %q", writeFileDelimiter)
+		}
+	}
+	cmd := fmt.Sprintf("cat > %s <<'"+writeFileDelimiter+"'\n%s\n"+writeFileDelimiter,
 		ShellQuote(path), content)
 	_, err := c.Run(ctx, cmd)
 	return err

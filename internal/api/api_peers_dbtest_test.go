@@ -239,3 +239,38 @@ func TestUpdatePeerFailsClosedWhenPeerListUnreadable(t *testing.T) {
 		t.Errorf("peer should be untouched after a refused update, got: %+v", prov.peers[0])
 	}
 }
+
+// TestCreateAndUpdatePeerRejectInvalidName is the HTTP-level regression
+// test for the peer-name injection finding: both endpoints must reject a
+// newline-containing name outright, before it ever reaches a cert
+// CommonName or a generated config file.
+func TestCreateAndUpdatePeerRejectInvalidName(t *testing.T) {
+	st := peersTestDB(t)
+	reg := vpn.NewRegistry()
+	plainKey := fakePubkey("plain-name-test")
+	prov := &updateTrackingProvider{
+		name:  "srv:wg0",
+		peers: []vpn.Peer{{PublicKey: plainKey, Name: "plain", AllowedIPs: []string{"192.168.99.20/32"}}},
+	}
+	reg.Register(prov)
+	s := newPeersTestServer(t, st, reg)
+	plainID := mustEncodePeerID(t, plainKey)
+
+	createReq := httptest.NewRequest(http.MethodPost, "/api/providers/srv:wg0/peers",
+		strings.NewReader(`{"name":"evil\nid = injected","client_address":"192.168.99.21/32","keepalive":25}`))
+	createReq.SetPathValue("provider", "srv:wg0")
+	rec := httptest.NewRecorder()
+	s.apiCreatePeer(rec, createReq)
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("create: status=%d, want 400: body=%s", rec.Code, rec.Body.String())
+	}
+
+	rec = doUpdatePeer(s, "srv:wg0", plainID,
+		`{"name":"evil\nid = injected","client_address":"192.168.99.20/32","keepalive":25,"subnet_ids":[]}`)
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("update: status=%d, want 400: body=%s", rec.Code, rec.Body.String())
+	}
+	if prov.peers[0].Name != "plain" {
+		t.Errorf("peer name should be untouched after a rejected update, got: %q", prov.peers[0].Name)
+	}
+}

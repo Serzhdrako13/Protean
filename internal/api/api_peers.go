@@ -3,11 +3,28 @@ package api
 import (
 	"log/slog"
 	"net/http"
+	"regexp"
 	"strings"
 	"time"
 
 	"protean/internal/vpn"
 )
+
+// validPeerName rejects control characters (most importantly newlines) in
+// a peer's display name while allowing any real-world name (Unicode
+// letters/digits, spaces, and the common punctuation display names use).
+// This name flows unvalidated into places that render it literally into a
+// generated config file: cert-based providers set it as the client cert's
+// CommonName (internal/vpn/ikev2/provider.go, internal/vpn/openvpn/
+// provider.go), and ikev2/swanctl.go renders that CN as a bare `id =
+// <value>` line with no escaping. A name containing a newline could
+// inject arbitrary swanctl directives into the generated conf.d file.
+// wg-family's own conf writer already strips \n/\r from names
+// (wgfamily/conf.go), but cert-based providers had no equivalent
+// guard -- fixing it once here, at the one place every peer name enters
+// the system, protects every provider type instead of patching each
+// consumer separately.
+var validPeerName = regexp.MustCompile(`^[\p{L}\p{N} ._@-]{1,64}$`)
 
 type apiPeerCreateReq struct {
 	Name          string  `json:"name"`
@@ -41,6 +58,10 @@ func (s *Server) apiCreatePeer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	name := strings.TrimSpace(req.Name)
+	if !validPeerName.MatchString(name) {
+		writeErr(w, http.StatusBadRequest, msg(r, "invalid peer name", "недопустимое имя клиента"))
+		return
+	}
 	clientAddress := strings.TrimSpace(req.ClientAddress)
 
 	subnets, err := s.store.ListAllSubnets(r.Context())
@@ -248,6 +269,10 @@ func (s *Server) apiUpdatePeer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	name := strings.TrimSpace(req.Name)
+	if !validPeerName.MatchString(name) {
+		writeErr(w, http.StatusBadRequest, msg(r, "invalid peer name", "недопустимое имя клиента"))
+		return
+	}
 	clientAddress := strings.TrimSpace(req.ClientAddress)
 
 	subnets, err := s.store.ListAllSubnets(r.Context())

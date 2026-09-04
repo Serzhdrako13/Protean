@@ -168,6 +168,38 @@ func TestReadWriteFileRoundTrip(t *testing.T) {
 	}
 }
 
+// TestWriteFileRejectsHeredocDelimiter is the regression test for a real
+// finding: content containing a line exactly equal to WriteFile's own
+// heredoc terminator would close the heredoc early, and everything after
+// it in content would be executed by the remote shell as this
+// connection's user. Found live via an Opus-driven audit alongside the
+// unvalidated-peer-name issue that could deliver such content (a
+// newline-containing name flowing into a generated cert/config file).
+func TestWriteFileRejectsHeredocDelimiter(t *testing.T) {
+	c := newClient(t, newTestServer(t), 0)
+	ctx := context.Background()
+	path := filepath.Join(t.TempDir(), "conf")
+
+	malicious := "legit line 1\n" + writeFileDelimiter + "\ntouch /tmp/pwned\n"
+	if err := c.WriteFile(ctx, path, malicious); err == nil {
+		t.Fatal("expected WriteFile to refuse content containing the heredoc delimiter")
+	}
+
+	// A trailing \r (as if the delimiter line came from CRLF-normalized
+	// input) must be caught too, not just an exact match.
+	withCR := "legit line 1\n" + writeFileDelimiter + "\r\ntouch /tmp/pwned\n"
+	if err := c.WriteFile(ctx, path, withCR); err == nil {
+		t.Fatal("expected WriteFile to refuse a delimiter line with a trailing \\r too")
+	}
+
+	// A line that merely CONTAINS the delimiter as a substring (not an
+	// exact line match) is legitimate content and must still be allowed.
+	fine := "this mentions " + writeFileDelimiter + " in passing, not on its own line\n"
+	if err := c.WriteFile(ctx, path, fine); err != nil {
+		t.Fatalf("WriteFile should allow the delimiter as a substring: %v", err)
+	}
+}
+
 func TestRunNonZeroExit(t *testing.T) {
 	c := newClient(t, newTestServer(t), 0)
 	_, err := c.Run(context.Background(), "echo oops >&2; exit 3")
