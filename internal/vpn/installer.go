@@ -177,22 +177,43 @@ func (i *Installer) SubnetNAT(ctx context.Context, action, cidr string) error {
 	return err
 }
 
-var validConfPath = regexp.MustCompile(`^/etc/(wireguard|amnezia/amneziawg)/[A-Za-z0-9_.-]+\.conf$`)
+var (
+	validConfPath = regexp.MustCompile(`^/etc/(wireguard|amnezia/amneziawg)/[A-Za-z0-9_.-]+\.conf$`)
+	validUnixUser = regexp.MustCompile(`^[a-z0-9_-]{1,32}$`)
+)
 
-// FixConfPerms re-asserts group ownership (protean-conf) + mode 660 on a
-// wg-family conf file. setup-host.sh grants this ONCE at initial setup so
-// the panel's SSH user can read/write [Peer] blocks without sudo -- but
+// FixConfPerms re-asserts read/write access to a wg-family conf file.
 // WireGuard's own SaveConfig=true feature rewrites the file from scratch
-// (root:root 0600) every time the interface is stopped, silently revoking
-// that grant. Called from wgfamily's restart() after every successful
-// service restart -- see cmd_fix_conf_perms in protean-installer.sh for
-// the real incident this fixes (a routine "enable mesh forwarding" click
-// restarts the interface by design and broke panel read access).
+// (root:root 0600) every time the interface is stopped, silently undoing
+// whichever of the two provisioning models granted the panel access in
+// the first place:
+//   - scripts/setup-host.sh: group-based (chgrp protean-conf; chmod 660) --
+//     the panel's SSH user is just a MEMBER of that group.
+//   - sshexec.BootstrapHost (the panel's own "Add server" flow): owner-
+//     based (chown <service user>) -- no shared group exists at all.
+//
+// cmd_fix_conf_perms picks between them by checking whether the
+// protean-conf group exists on the host, falling back to chown-ing the
+// file back to the SSH user this Installer actually authenticates as (so
+// a custom service-account name, not just "protean", still works).
+// Called from wgfamily's restart() after every successful service
+// restart -- see the real incident this fixes: a routine "enable mesh
+// forwarding" click restarts the interface by design and broke panel
+// read access to its own peer list minutes later.
 func (i *Installer) FixConfPerms(ctx context.Context, path string) error {
 	if !validConfPath.MatchString(path) {
 		return fmt.Errorf("invalid conf path %q", path)
 	}
-	_, err := i.run(ctx, "fix-conf-perms "+path)
+	owner := "protean"
+	if u, ok := i.ssh.(interface{ User() string }); ok {
+		if su := u.User(); su != "" {
+			owner = su
+		}
+	}
+	if !validUnixUser.MatchString(owner) {
+		return fmt.Errorf("invalid ssh user %q for conf ownership fallback", owner)
+	}
+	_, err := i.run(ctx, "fix-conf-perms "+path+" "+owner)
 	return err
 }
 

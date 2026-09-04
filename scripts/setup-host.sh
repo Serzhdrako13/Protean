@@ -435,18 +435,29 @@ setup_conf_permissions() {
 	if [ "$WG_INSTALLED" = "1" ]; then
 		local f="/etc/wireguard/${WG_IFACE}.conf"
 		if [ -f "$f" ]; then
+			# The directory itself was created 0700 root:root by
+			# install_wireguard -- `chmod g+x` alone (the old version of
+			# this script) grants the GROUP execute bit, but the group is
+			# still root, not $PANEL_GROUP, so it was a complete no-op:
+			# the panel could never even traverse into /etc/wireguard to
+			# reach a file it otherwise had correct perms on. chgrp first.
+			# setgid (2750) so any conf a future interface add creates
+			# inherits the group automatically, matching the convention
+			# already used below for openvpn/swanctl/xray.
+			chgrp "$PANEL_GROUP" /etc/wireguard
+			chmod 2750 /etc/wireguard
 			chgrp "$PANEL_GROUP" "$f"
 			chmod 660 "$f"
-			chmod g+x /etc/wireguard
 			log "Granted group '$PANEL_GROUP' read/write on $f"
 		fi
 	fi
 	if [ "$AWG_INSTALLED" = "1" ]; then
 		local f="/etc/amnezia/amneziawg/${AWG_IFACE}.conf"
 		if [ -f "$f" ]; then
+			chgrp "$PANEL_GROUP" /etc/amnezia/amneziawg
+			chmod 2750 /etc/amnezia/amneziawg
 			chgrp "$PANEL_GROUP" "$f"
 			chmod 660 "$f"
-			chmod g+x /etc/amnezia/amneziawg
 			log "Granted group '$PANEL_GROUP' read/write on $f"
 		fi
 	fi

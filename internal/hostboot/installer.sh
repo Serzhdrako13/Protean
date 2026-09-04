@@ -675,32 +675,53 @@ EOF
 	done
 }
 
-# cmd_fix_conf_perms <path>: re-assert group ownership + mode on a
-# wg-family conf file. setup-host.sh's setup_conf_permissions() grants
-# this ONCE at initial setup (chgrp protean-conf; chmod 660), so the
-# panel's SSH user can read/write [Peer] blocks without sudo -- but
-# WireGuard's own SaveConfig=true feature rewrites the file FROM SCRATCH
-# (via `wg showconf > file`, run by wg-quick's own down/PostDown hook)
-# on every interface stop, which resets it to root:root 0600 and silently
-# revokes that grant. Real incident: an admin's routine "enable mesh
-# forwarding" click restarted the interface (EnableForwarding always
-# does a full reload) and the panel lost read access to its own peer
-# list minutes later. Called from wgfamily's restart() right after every
-# successful service restart, so this self-heals on every occasion that
-# would otherwise break it, not just the one observed. Path is
-# whitelisted to wg-family's own conf directories -- this verb must never
-# be usable to chgrp/chmod an arbitrary file.
+# cmd_fix_conf_perms <path> [owner]: re-assert panel access to a wg-family
+# conf file. WireGuard's own SaveConfig=true feature rewrites the file
+# FROM SCRATCH (via `wg showconf > file`, run by wg-quick's own down/
+# PostDown hook) on every interface stop -- root:root 0600, regardless of
+# which of the two provisioning models originally granted access. Real
+# incident: an admin's routine "enable mesh forwarding" click restarted
+# the interface (EnableForwarding always does a full reload) and the
+# panel lost read access to its own peer list minutes later. Called from
+# wgfamily's restart() right after every successful service restart, so
+# this self-heals on every occasion that would otherwise break it, not
+# just the one observed. Path is whitelisted to wg-family's own conf
+# directories -- this verb must never be usable to chgrp/chown/chmod an
+# arbitrary file.
+#
+# Two provisioning models exist and this verb must handle both -- fixed
+# live 2026-09-03 after the group-only version below hard-failed every
+# restart on a host provisioned by the OTHER model:
+#   - scripts/setup-host.sh: `chgrp protean-conf; chmod 660` -- the panel
+#     user is a MEMBER of a shared group. Detected by the group existing.
+#   - sshexec.BootstrapHost (the panel's own "Add server" flow): `chown
+#     <service user>` -- no shared group is ever created. Falls back to
+#     this when protean-conf doesn't exist, using the owner the Go side
+#     passes (the actual SSH user it authenticates as, not a hardcoded
+#     "protean" -- BootstrapHost's service account name is admin-chosen).
 cmd_fix_conf_perms() {
-	local path="$1"
+	local path="$1" owner="${2:-protean}"
 	[[ "$path" =~ ^/etc/(wireguard|amnezia/amneziawg)/[A-Za-z0-9_.-]+\.conf$ ]] || {
 		echo "invalid conf path" >&2
 		return 2
 	}
+	[[ "$owner" =~ ^[a-z0-9_-]{1,32}$ ]] || { echo "invalid owner" >&2; return 2; }
 	[ -f "$path" ] || { echo "no such file: $path" >&2; return 1; }
-	getent group protean-conf >/dev/null 2>&1 || { echo "no protean-conf group" >&2; return 1; }
-	chgrp protean-conf "$path"
-	chmod 660 "$path"
-	chmod g+x "$(dirname "$path")"
+	if getent group protean-conf >/dev/null 2>&1; then
+		chgrp protean-conf "$path"
+		chmod 660 "$path"
+		# g+x alone is a no-op unless the DIRECTORY's group is also
+		# protean-conf -- setup-host.sh historically only did the former
+		# (see setup_conf_permissions), leaving the panel unable to even
+		# traverse into /etc/wireguard on hosts it hadn't already fixed by
+		# hand. Asserted here too so a stale host self-heals on first use.
+		chgrp protean-conf "$(dirname "$path")"
+		chmod 2750 "$(dirname "$path")"
+	else
+		id -u "$owner" >/dev/null 2>&1 || { echo "no such user: $owner" >&2; return 1; }
+		chown "$owner" "$path"
+		chmod 600 "$path"
+	fi
 }
 
 # cmd_ensure_ip_forward: turn on net.ipv4.ip_forward if it isn't already, the
@@ -1200,7 +1221,7 @@ main() {
 			cmd_peer_forward_rules "$peer" "$dests"
 			;;
 		fix-conf-perms)
-			cmd_fix_conf_perms "${2:-}"
+			cmd_fix_conf_perms "${2:-}" "${3:-}"
 			;;
 		logs)
 			local u="${2:-}" n="${3:-200}"
@@ -1246,7 +1267,7 @@ main() {
 			cmd_firewall_boot_restore
 			;;
 		*)
-			echo "usage: $0 {detect|install <provider>|status <unit>|service <action> <unit>|forward <add|del> <cidr>|subnet-nat <add|del> <cidr>|peer-forward-rules <peer/32> [dest1,dest2,...]|fix-conf-perms <path>|logs <unit> <lines>|ensure-ip-forward|updates-check|updates-apply|firewall-baseline|firewall-validate|firewall-apply|firewall-confirm|firewall-rollback|firewall-status|firewall-boot-restore}" >&2
+			echo "usage: $0 {detect|install <provider>|status <unit>|service <action> <unit>|forward <add|del> <cidr>|subnet-nat <add|del> <cidr>|peer-forward-rules <peer/32> [dest1,dest2,...]|fix-conf-perms <path> [owner]|logs <unit> <lines>|ensure-ip-forward|updates-check|updates-apply|firewall-baseline|firewall-validate|firewall-apply|firewall-confirm|firewall-rollback|firewall-status|firewall-boot-restore}" >&2
 			exit 2
 			;;
 	esac

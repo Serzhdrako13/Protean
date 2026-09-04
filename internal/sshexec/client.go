@@ -73,6 +73,12 @@ func (c *Client) Stats() Stats {
 	}
 }
 
+// User returns the SSH username this client authenticates as -- the
+// account that owns a conf file under sshexec.BootstrapHost's chown-based
+// provisioning model (as opposed to setup-host.sh's group-based one; see
+// Installer.FixConfPerms for why both need to be distinguishable).
+func (c *Client) User() string { return c.cfg.User }
+
 // Ping checks host reachability with a trivial command, for health checks.
 func (c *Client) Ping(ctx context.Context) error {
 	_, err := c.Run(ctx, "true")

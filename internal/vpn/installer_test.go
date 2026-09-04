@@ -151,7 +151,9 @@ func TestFixConfPerms(t *testing.T) {
 	if err := inst.FixConfPerms(nil, "/etc/wireguard/wg0.conf"); err != nil { //nolint:staticcheck
 		t.Fatalf("FixConfPerms: %v", err)
 	}
-	want := "sudo " + InstallerPath + " fix-conf-perms /etc/wireguard/wg0.conf"
+	// fakeInstallerSSH doesn't implement User() -- must fall back to
+	// "protean" (setup-host.sh's own PANEL_USER), not send no owner at all.
+	want := "sudo " + InstallerPath + " fix-conf-perms /etc/wireguard/wg0.conf protean"
 	if f.cmd != want {
 		t.Errorf("cmd = %q, want %q", f.cmd, want)
 	}
@@ -170,6 +172,37 @@ func TestFixConfPerms(t *testing.T) {
 		if err := inst.FixConfPerms(nil, bad); err == nil { //nolint:staticcheck
 			t.Errorf("expected rejection of path %q", bad)
 		}
+	}
+}
+
+// fakeInstallerSSHWithUser additionally implements User(), simulating
+// sshexec.Client's real SSH-username accessor -- FixConfPerms needs this
+// to chown a conf file back to a custom (admin-chosen) service account
+// name on a host provisioned via BootstrapHost's owner-based model,
+// rather than always assuming "protean".
+type fakeInstallerSSHWithUser struct {
+	fakeInstallerSSH
+	user string
+}
+
+func (f *fakeInstallerSSHWithUser) User() string { return f.user }
+
+func TestFixConfPermsUsesRealSSHUser(t *testing.T) {
+	f := &fakeInstallerSSHWithUser{fakeInstallerSSH: fakeInstallerSSH{out: "ok"}, user: "custom-svc"}
+	inst := NewInstaller(f)
+
+	if err := inst.FixConfPerms(nil, "/etc/wireguard/wg0.conf"); err != nil { //nolint:staticcheck
+		t.Fatalf("FixConfPerms: %v", err)
+	}
+	want := "sudo " + InstallerPath + " fix-conf-perms /etc/wireguard/wg0.conf custom-svc"
+	if f.cmd != want {
+		t.Errorf("cmd = %q, want %q", f.cmd, want)
+	}
+
+	// A malicious/malformed SSH username must never reach the shell.
+	f.user = "custom-svc; rm -rf /"
+	if err := inst.FixConfPerms(nil, "/etc/wireguard/wg0.conf"); err == nil { //nolint:staticcheck
+		t.Error("expected rejection of an invalid SSH username")
 	}
 }
 
