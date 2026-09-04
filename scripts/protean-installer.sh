@@ -783,13 +783,37 @@ cmd_peer_forward_rules() {
 
 	# Delete pass: remove every existing rule tagged for this peer,
 	# regardless of how many there were last sync.
+	#
+	# Two real bugs found live 2026-09-04, both silent (this whole block
+	# was a no-op since the feature's first day, never once actually
+	# deleting anything -- every sync just piled fresh rules on top,
+	# discovered only because a THIRD apply finally made the accumulation
+	# visible as duplicate/stale entries):
+	#  1. `iptables -S` quotes the comment value ('--comment
+	#     "protean-peer-fw:1.2.3.4"'), but the old grep pattern searched
+	#     for `--comment $tag` with no quotes -- never matched, so the
+	#     delete loop's input was always empty.
+	#  2. Even with a matching line found, `iptables -D FORWARD
+	#     ${spec#-A FORWARD }` word-splits the quoted comment WITHOUT
+	#     stripping the quote characters (unquoted parameter expansion
+	#     doesn't re-parse shell quoting the way a real command line
+	#     would) -- iptables then looked for a rule whose comment was
+	#     literally `"protean-peer-fw:1.2.3.4"`, quote characters and
+	#     all, which never exists, and silently failed
+	#     ("Bad rule", swallowed by `|| true`). Fixed by feeding the
+	#     stripped spec through eval, which re-parses it as a fresh shell
+	#     command line -- correctly interpreting the quotes this time --
+	#     rather than a bare unquoted expansion. Safe here specifically
+	#     because the content being eval'd is iptables' OWN canonical
+	#     rendering of a rule this exact script previously inserted from
+	#     already-validated peer/destination values, not raw external
+	#     input.
 	local spec
 	while IFS= read -r spec; do
 		[ -n "$spec" ] || continue
-		# shellcheck disable=SC2086
-		iptables -D FORWARD ${spec#-A FORWARD } 2>/dev/null || true
+		eval "iptables -D FORWARD ${spec#-A FORWARD }" 2>/dev/null || true
 	done <<EOF
-$(iptables -S FORWARD 2>/dev/null | grep -F -- "--comment $tag")
+$(iptables -S FORWARD 2>/dev/null | grep -F -- "$tag")
 EOF
 
 	[ -n "$destcsv" ] || return 0
