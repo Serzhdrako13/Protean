@@ -144,6 +144,97 @@ func TestSetPeerForwardRules(t *testing.T) {
 	}
 }
 
+func TestRunVerb(t *testing.T) {
+	f := &fakeInstallerSSH{out: "ok"}
+	inst := NewInstaller(f)
+
+	if _, err := inst.RunVerb(nil, "firewall-status", nil, ""); err != nil { //nolint:staticcheck
+		t.Fatalf("RunVerb: %v", err)
+	}
+	if f.cmd != "sudo "+InstallerPath+" firewall-status" {
+		t.Errorf("cmd = %q", f.cmd)
+	}
+
+	if _, err := inst.RunVerb(nil, "firewall-apply", []string{"30", "22", "22,443"}, ""); err != nil { //nolint:staticcheck
+		t.Fatalf("RunVerb with args: %v", err)
+	}
+	if f.cmd != "sudo "+InstallerPath+" firewall-apply 30 22 22,443" {
+		t.Errorf("cmd with args = %q", f.cmd)
+	}
+
+	if _, err := inst.RunVerb(nil, "firewall-validate", nil, `{"rules":[]}`); err != nil { //nolint:staticcheck
+		t.Fatalf("RunVerb with stdin: %v", err)
+	}
+	want := "sudo " + InstallerPath + " firewall-validate <<'PROTEAN_FW_EOF'\n{\"rules\":[]}\nPROTEAN_FW_EOF"
+	if f.cmd != want {
+		t.Errorf("cmd with stdin = %q, want %q", f.cmd, want)
+	}
+}
+
+// TestRunVerbSelfHeals is the regression test for the real bug: before
+// this existed, api_firewall.go built its own "sudo <path> <verb> ..."
+// command against a raw *sshexec.Client, bypassing Installer.run()'s
+// self-heal entirely -- meaning firewall/updates-apply verbs never got
+// the stale-script recovery every other Installer method has.
+func TestRunVerbSelfHeals(t *testing.T) {
+	f := &sequencedInstallerSSH{results: []struct {
+		out string
+		err error
+	}{
+		{err: usageError{"Process exited with status 2 (stderr: usage: " + InstallerPath + " {detect|install <provider>|...})"}},
+		{}, // the refreshScript push
+		{out: `{"ok":true}`},
+	}}
+	inst := NewInstaller(f)
+
+	out, err := inst.RunVerb(nil, "firewall-status", nil, "") //nolint:staticcheck
+	if err != nil {
+		t.Fatalf("RunVerb: %v", err)
+	}
+	if out != `{"ok":true}` {
+		t.Errorf("out = %q", out)
+	}
+	if len(f.calls) != 3 {
+		t.Fatalf("expected 3 calls (fail, refresh, retry), got %d: %+v", len(f.calls), f.calls)
+	}
+}
+
+func TestEnsureCurrent(t *testing.T) {
+	f := &fakeInstallerSSH{out: `{"os_family":"debian"}`}
+	inst := NewInstaller(f)
+
+	if err := inst.EnsureCurrent(nil); err != nil { //nolint:staticcheck
+		t.Fatalf("EnsureCurrent: %v", err)
+	}
+	if f.cmd != "sudo "+InstallerPath+" detect" {
+		t.Errorf("cmd = %q", f.cmd)
+	}
+}
+
+// TestEnsureCurrentSelfHeals is the regression test for the console
+// updates-apply path: it streams an interactive PTY session, so it can't
+// retry after a stale-script mismatch the way a plain Run-and-capture
+// call does -- EnsureCurrent exists as a pre-flight that still gets the
+// same self-heal, just ahead of time.
+func TestEnsureCurrentSelfHeals(t *testing.T) {
+	f := &sequencedInstallerSSH{results: []struct {
+		out string
+		err error
+	}{
+		{err: usageError{"Process exited with status 2 (stderr: usage: " + InstallerPath + " {detect|install <provider>|...})"}},
+		{}, // the refreshScript push
+		{out: `{"os_family":"debian"}`},
+	}}
+	inst := NewInstaller(f)
+
+	if err := inst.EnsureCurrent(nil); err != nil { //nolint:staticcheck
+		t.Fatalf("EnsureCurrent: %v", err)
+	}
+	if len(f.calls) != 3 {
+		t.Fatalf("expected 3 calls (fail, refresh, retry), got %d: %+v", len(f.calls), f.calls)
+	}
+}
+
 func TestFixConfPerms(t *testing.T) {
 	f := &fakeInstallerSSH{out: "ok"}
 	inst := NewInstaller(f)

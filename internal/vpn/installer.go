@@ -68,7 +68,13 @@ func NewInstaller(ssh installerRunner) *Installer {
 // retry the original command once. Any other failure (a real error from
 // a verb the script DOES recognize) is returned as-is, no retry.
 func (i *Installer) run(ctx context.Context, args string) (string, error) {
-	cmd := "sudo " + InstallerPath + " " + args
+	return i.runCmd(ctx, "sudo "+InstallerPath+" "+args)
+}
+
+// runCmd is run's self-heal wrapper, factored out so RunVerb (which needs
+// a heredoc stdin payload run doesn't support) shares the exact same
+// retry/error-reporting logic rather than duplicating it.
+func (i *Installer) runCmd(ctx context.Context, cmd string) (string, error) {
 	out, err := i.ssh.Run(ctx, cmd)
 	if err != nil && strings.Contains(err.Error(), "usage: "+InstallerPath) {
 		if refreshErr := i.refreshScript(ctx); refreshErr == nil {
@@ -96,6 +102,41 @@ func (i *Installer) run(ctx context.Context, args string) (string, error) {
 func (i *Installer) refreshScript(ctx context.Context) error {
 	encoded := base64.StdEncoding.EncodeToString(hostboot.InstallerScript())
 	_, err := i.ssh.Run(ctx, "echo "+encoded+" | base64 -d | sudo tee "+InstallerPath+" >/dev/null && sudo chmod 750 "+InstallerPath)
+	return err
+}
+
+// RunVerb runs one installer.sh verb with positional args and an optional
+// heredoc stdin payload (the firewall-apply/firewall-validate verbs read a
+// JSON ruleset via stdin), self-healing exactly like every other Installer
+// method. Exported specifically for api_firewall.go's runFirewallVerb,
+// which used to build the same "sudo <path> <verb> <args>" command by
+// hand against a raw *sshexec.Client, bypassing Installer -- and with it,
+// self-heal -- entirely. Callers are unaffected otherwise: this is a thin
+// wrapper they can construct fresh around whatever SSH client they
+// already have (e.g. api_firewall.go's deliberately non-pooled
+// connections for confirm/rollback), not a replacement for it.
+func (i *Installer) RunVerb(ctx context.Context, verb string, args []string, stdin string) (string, error) {
+	cmd := "sudo " + InstallerPath + " " + verb
+	for _, a := range args {
+		cmd += " " + a
+	}
+	if stdin != "" {
+		cmd += " <<'PROTEAN_FW_EOF'\n" + stdin + "\nPROTEAN_FW_EOF"
+	}
+	return i.runCmd(ctx, cmd)
+}
+
+// EnsureCurrent runs a cheap, always-recognized verb through the
+// self-healing run() path purely for its side effect: if the on-host
+// script is stale, this refreshes it. For callers that can't retry after
+// the fact -- api_console.go's updates-apply streams an interactive PTY
+// session live to the admin's browser, so there's no clean "capture
+// output, detect a stale-verb mismatch, retry" step the way a plain
+// Run-and-capture call gets from run() automatically. Call this as a
+// pre-flight before starting such a session so the script is already
+// known-good by the time it does.
+func (i *Installer) EnsureCurrent(ctx context.Context) error {
+	_, err := i.run(ctx, "detect")
 	return err
 }
 

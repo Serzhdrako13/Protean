@@ -275,6 +275,14 @@ func (s *Server) apiConsoleWS(w http.ResponseWriter, r *http.Request) {
 // exactly the reuse it was added for).
 func (s *Server) apiConsoleUpdatesWS(w http.ResponseWriter, r *http.Request) {
 	s.serveConsoleBridge(w, r, "updates.apply.done", func(ctx context.Context, client *sshexec.Client, rows, cols uint16) (*sshexec.Session, error) {
+		// Pre-flight self-heal: updates-apply streams an interactive PTY
+		// session live to the admin's browser, so there's no clean way to
+		// retry after the fact the way a plain Run-and-capture call gets
+		// from Installer.run() automatically on a stale-script mismatch.
+		// Best-effort -- if this itself fails, StartCommand below still
+		// runs and surfaces whatever error results in the stream, same as
+		// before this existed.
+		_ = vpn.NewInstaller(client).EnsureCurrent(ctx)
 		return client.StartCommand(ctx, "sudo "+vpn.InstallerPath+" updates-apply", rows, cols)
 	})
 }

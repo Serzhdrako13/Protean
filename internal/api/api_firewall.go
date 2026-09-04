@@ -59,15 +59,14 @@ type fwRollbackJSON struct {
 // technique sshexec.Client.WriteFile already uses elsewhere, so untrusted
 // ruleset text is never argv or shell-interpreted, just literal heredoc
 // body.
+// runFirewallVerb used to build the "sudo <installer-path> <verb> <args>"
+// command by hand against the raw client, bypassing Installer -- and with
+// it, the self-heal a stale on-host script needs -- entirely. Wrapping
+// the same client in a fresh Installer costs nothing (it's a thin struct)
+// and doesn't change the deliberately non-pooled connection this
+// function's callers rely on for confirm/rollback.
 func runFirewallVerb(ctx context.Context, client *sshexec.Client, verb string, args []string, stdin string) (string, error) {
-	cmd := "sudo " + vpn.InstallerPath + " " + verb
-	for _, a := range args {
-		cmd += " " + a
-	}
-	if stdin != "" {
-		cmd += " <<'PROTEAN_FW_EOF'\n" + stdin + "\nPROTEAN_FW_EOF"
-	}
-	return client.Run(ctx, cmd)
+	return vpn.NewInstaller(client).RunVerb(ctx, verb, args, stdin)
 }
 
 func providerTypeLabel(t string) string {
